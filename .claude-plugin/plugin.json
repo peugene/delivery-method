@@ -1,0 +1,13 @@
+{
+  "name": "delivery-method",
+  "version": "0.1.0",
+  "description": "Méthode de livraison en trois phases pour Claude Code : spécification, implémentation story par story en sessions jetables, recette. Moteur deliveryctl, rôles, commandes, gabarits.",
+  "author": {
+    "name": "peugene",
+    "url": "https://github.com/peugene"
+  },
+  "homepage": "https://github.com/peugene/delivery-method",
+  "repository": "https://github.com/peugene/delivery-method",
+  "license": "MIT",
+  "keywords": ["delivery", "method", "stories", "specification", "qualification", "worktree", "review"]
+}

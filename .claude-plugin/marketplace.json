@@ -1,0 +1,20 @@
+{
+  "name": "delivery-method",
+  "owner": {
+    "name": "peugene",
+    "url": "https://github.com/peugene"
+  },
+  "metadata": {
+    "description": "Marketplace du plugin delivery-method."
+  },
+  "plugins": [
+    {
+      "name": "delivery-method",
+      "source": "./",
+      "description": "Méthode de livraison en trois phases : spécification, implémentation story par story, recette.",
+      "version": "0.1.0",
+      "license": "MIT",
+      "category": "development"
+    }
+  ]
+}

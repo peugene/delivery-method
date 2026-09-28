@@ -1,0 +1,31 @@
+# Réglages du projet pour la méthode de livraison (CONTRACTS.md §3 du plugin).
+# Posé par « deliveryctl init », puis tenu par l'humain et commité.
+# Une clé inconnue fait échouer toutes les commandes du moteur.
+
+repo_role = "impl"             # single | spec | impl : ce que contient le dépôt
+content_language = "fr"        # langue de tout texte lu par un humain (cartes, ordres, comptes rendus)
+release_stage = "pre-release"  # pre-release | released : l'humain seul le change
+external_contracts = []        # détenteurs externes d'un état ou d'une API : l'humain seul l'édite
+forge = "github"               # github | gitlab | none (none : essais et dépôts sans serveur)
+integration = "human"          # human | ai : qui fusionne les demandes de fusion de story
+max_in_flight = 1              # stories en cours pendant un run
+agent_prefix = "dm"            # noms de session : <prefix>-<id>-<role>
+port_prefix = 31               # 10 à 64 ; port d'une story : <port_prefix><numéro sur 3 chiffres>
+
+[commands]                     # le moteur substitue {grep} et {port} et exporte DELIVERY_PORT ; les rôles substituent {selector}
+check = "just check"                    # lint, build, tests unitaires et d'intégration ; jugé sur son code de sortie
+acceptance = "just acceptance {grep}"   # tests d'IHM ; {grep} = @<story de spec>, vide = suite complète
+serve = "just serve {port}"             # lance l'application d'une story sur {port}
+test = "just test {selector}"           # facultatif, permis aux rôles : un test ciblé ({selector} : fichier, classe ou nom de test)
+
+[permissions]
+extra_allow = []               # règles ajoutées aux fichiers de rôle, par exemple "Bash(./gradlew *)"
+
+[levers]                       # vide par défaut ; toute clé écrite ici est visible en revue
+# review_loops = 2             # corrections après une relecture « no » avant l'arrêt
+# verify_attempts = 3          # corrections après une vérification « fail » avant l'arrêt
+# short_path_max_lines = 50    # taille visée d'un changement en voie courte
+# stall_minutes = 20           # minutes sans avancée avant l'alerte « agent bloqué »
+# doc_globs = ["docs/**", "*.md"]   # un diff entièrement ici se vérifie par check seul
+# max_order_lines = 60         # story open avertit au-delà
+# reinforced_risks = { authz = ["bite", "adversarial-review"], data-write = ["adversarial-review"] }

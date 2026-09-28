@@ -1,0 +1,21 @@
+#!/bin/sh
+# deliveryctl launcher. Inside a project, runs the engine copied in the project
+# (.delivery/deliveryctl) so that every session and the CI use the same version; outside a
+# project, runs the engine shipped with the plugin (used by 'deliveryctl init').
+plugin=$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)
+export DELIVERY_PLUGIN_ROOT="$plugin"
+# hooks run in every session where the plugin is enabled: without Python 3.11, stay silent
+if [ "$1" = "hook" ] && ! python3 -I -S -c 'import sys; sys.exit(sys.version_info < (3, 11))' 2>/dev/null; then
+  exit 0
+fi
+# the main checkout, shared by the story worktrees, holds the project's current engine
+common=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
+case "$common" in
+  */.git) root=${common%/.git} ;;
+  *) root=$(git rev-parse --show-toplevel 2>/dev/null) ;;
+esac
+# init and init --upgrade always run the plugin's engine (CONTRACTS.md §2)
+if [ -n "$root" ] && [ -x "$root/.delivery/deliveryctl" ] && [ "$DELIVERY_USE_PLUGIN_ENGINE" != "1" ] && [ "$1" != "init" ]; then
+  exec "$root/.delivery/deliveryctl" "$@"
+fi
+PYTHONPATH="$plugin/engine${PYTHONPATH:+:$PYTHONPATH}" exec python3 -m deliveryctl "$@"

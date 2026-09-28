@@ -1,0 +1,12 @@
+{
+  "name": "spec-acceptance",
+  "private": true,
+  "description": "Suite d'acceptation neutre : elle tourne sans changement contre chaque implémentation, par BASE_URL.",
+  "scripts": {
+    "test": "playwright test",
+    "empty-app": "node fixtures/empty-app/server.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0"
+  }
+}

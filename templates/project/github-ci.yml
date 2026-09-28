@@ -1,0 +1,53 @@
+# Contrôles d'une demande de fusion, posés par « deliveryctl init » ; à compléter pour la pile.
+# Branche story/<id> : check, tests d'IHM de la story de spec de la carte, puis contrôle
+# d'intégration sur le sha de tête. Autre branche : check seul.
+# Les commandes sont lues dans delivery.toml ([commands]) à chaque exécution.
+name: delivery
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # Installer ici la pile du projet (JDK, Node, services de test…).
+      - name: just
+        run: command -v just >/dev/null || python3 -m pip install --quiet rust-just
+      - name: check, acceptance, integration check
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -eu
+          export DELIVERY_PORT="${DELIVERY_PORT:-3999}"
+          cmd() { python3 -c 'import os, sys, tomllib; c = tomllib.load(open("delivery.toml", "rb")).get("commands", {}); print(c.get(sys.argv[1], "").replace("{grep}", sys.argv[2]).replace("{port}", os.environ["DELIVERY_PORT"]))' "$1" "${2:-}"; }
+          check=$(cmd check)
+          [ -n "$check" ] || { echo "delivery.toml: [commands] check is missing" >&2; exit 1; }
+          sh -c "$check"
+          case "$HEAD_REF" in story/*) ;; *) exit 0 ;; esac
+          id=${HEAD_REF#story/}
+          case "$id" in
+            [sta][0-9][0-9][0-9] | [sta][0-9][0-9][0-9][0-9]) ;;
+            *) echo "unexpected story branch: $HEAD_REF" >&2; exit 1 ;;
+          esac
+          spec=""
+          for card in backlog/"$id"-*.md; do
+            if [ -f "$card" ]; then spec=$(sed -n 's/^spec:[[:space:]]*["'\'']\{0,1\}\([a-z0-9]*\).*/\1/p' "$card" | head -n 1); fi
+          done
+          acceptance=$(cmd acceptance "@$spec")
+          if [ -n "$spec" ] && [ -n "$acceptance" ]; then
+            sh -c "$acceptance"
+          else
+            echo "acceptance not run: no spec story on the card of $id, or no acceptance command"
+          fi
+          python3 .delivery/deliveryctl gate "$id" --head "$HEAD_SHA"

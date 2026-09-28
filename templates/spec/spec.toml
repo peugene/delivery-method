@@ -1,0 +1,11 @@
+# Réglages de la spécification (spec/spec.toml), lus par `deliveryctl spec lint` et `spec release`.
+name = "<nom du produit>"
+version = "0.0.0"          # réécrit par `deliveryctl spec release` ; le tag spec-vX.Y.Z fait foi
+locales = ["fr"]           # une copie spec/ui/copy.<locale>.json par langue de l'interface
+
+[neutrality]
+# Le lint refuse dans les stories les mots de technique : stockage, langages, frameworks,
+# protocoles et formats, codes de statut HTTP… Un mot écrit en minuscules vaut pour toutes les
+# casses et pour son pluriel en -s ; un mot qui porte une majuscule ne vaut que tel quel.
+extra = []                 # mots refusés en plus du lexique par défaut
+allow = []                 # mots du lexique qui sont ici des mots du produit (ex. "table" pour un restaurant)
