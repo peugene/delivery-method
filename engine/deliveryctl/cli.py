@@ -22,22 +22,26 @@ def cmd_cards(args) -> int:
     git = Git(cfg.root)
     if args.action == "lint":
         here = Path.cwd() if (Path.cwd() / "backlog").is_dir() else cfg.root    # before a commit
-        problems = cards.lint(cards.load_all(here, cfg.risks))
+        local = cards.load_all(here, cfg.risks)
+        problems = cards.lint(local)
         for where, problem in problems:
-            print(f"{where}: {problem}")
+            print(f"{cards.where_label(where, local)} — {problem}")
+        for where, note in cards.notes(local):
+            print(f"note: {cards.where_label(where, local)} — {note}")
         print("backlog: " + ("red" if problems else "green"))
         return EXIT_RED if problems else EXIT_OK
     all_cards = cards.load_from_rev(git, git.target_ref(), cfg.risks)    # what the run reads
     done = cards.merged_ids(git)
+    known = {c.id: c.title for c in all_cards}
     if args.action == "order":
         for card, deps in cards.order(all_cards, done):
-            waiting = f"  (waits for {', '.join(deps)})" if deps else ""
-            print(f"{card.id}  {card.title}{waiting}")
+            waiting = f" (waits for {cards.labels(deps, known)})" if deps else ""
+            print(f"{cards.label(card.id, card.title)} — {card.kind}, {card.status}{waiting}")
         return EXIT_OK
     for card in all_cards:
         state = "done" if card.id in done else card.status
-        deps = f"  depends on {', '.join(card.depends_on)}" if card.depends_on else ""
-        print(f"{card.id}  {card.kind:7} {state:9} {card.title}{deps}")
+        deps = f", depends on {cards.labels(card.depends_on, known)}" if card.depends_on else ""
+        print(f"{cards.label(card.id, card.title)} — {card.kind}, {state}{deps}")
     return EXIT_OK
 
 
@@ -83,7 +87,9 @@ def _describe(story, cfg, card_id: str) -> str:
     try:
         return story.describe(cfg, card_id)
     except DeliveryError as exc:
-        return f"{card_id}: unknown for now ({exc.message.splitlines()[0]})"
+        from .cards import label_of
+        from .gitops import Git
+        return f"{label_of(Git(cfg.root), card_id)} — unknown for now ({exc.message.splitlines()[0]})"
 
 
 def cmd_verify(args) -> int:
@@ -93,15 +99,15 @@ def cmd_verify(args) -> int:
     cfg = _cfg()
     wt = Git(cfg.root).worktree_for(story_branch(args.id))
     if not wt:
-        raise DeliveryError(3, f"no worktree for {args.id}")
+        raise DeliveryError(3, f"no worktree for {cards.label_of(Git(cfg.root), args.id)}")
     card = story._card(Git(cfg.root), args.id, cfg)
     result = verify(cfg, wt, args.id, card)
-    print(f"{args.id}: verification {result.verdict} ({result.result})")
+    print(f"{cards.label(args.id, card.title)} — verification {result.verdict} ({result.result})")
     return EXIT_OK if result.verdict == "pass" else EXIT_RED
 
 
 def cmd_gate(args) -> int:
-    from . import gate
+    from . import cards, gate
     from .gitops import Git, story_branch
     here = Git(Path.cwd())
     branch = here.branch()
@@ -115,7 +121,7 @@ def cmd_gate(args) -> int:
     problems = gate.check(git, args.id, base=args.base, head=head)
     for problem in problems:
         print(f"- {problem}")
-    print(f"{args.id}: integration check " + ("red" if problems else "green"))
+    print(f"{cards.label_of(git, args.id)} — integration check " + ("red" if problems else "green"))
     return EXIT_RED if problems else EXIT_OK
 
 

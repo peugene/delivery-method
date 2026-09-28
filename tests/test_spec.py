@@ -283,7 +283,7 @@ class SyncTest(RepoCase):
         return git(self.spec_repo, "rev-parse", f"{rev}:spec/stories/s001-create-list.md")
 
     def test_sync_then_verify(self):
-        git(self.repo, "commit", "--quiet", "--allow-empty", "-m", "Merge story/s001: lists",
+        git(self.repo, "commit", "--quiet", "--allow-empty", "-m", "Merge story/s001 : Créer une liste",
             "-m", f"Story: s001\nSpec: s001@0.1.0#{self.blob()[:7]}")
         before = git(self.repo, "rev-parse", "HEAD")
         code, out = run_main("sync", "0.1.0", str(self.spec_repo))

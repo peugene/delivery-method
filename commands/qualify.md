@@ -38,11 +38,11 @@ material may be repaired, and each repair is declared.
    add: ask the owner to add it before `deliveryctl qualify run`. Commit.
 3. **Read.** In `standard`, first run the reading angles as parallel subagents, blind to each
    other. Re-verify each promise of the docs in the code, each fact labelled read, measured or
-   inferred. Each anomaly goes into the report at once as `A-<n>`. Either it becomes a run
-   control (a failure gets its card from the runner), or its `to-triage` card is written at
-   once, then a refuter re-checks it (finding, evidence, severity) and you add its verdict to
-   the card: `REFUTED` is the counter-proof, and the owner drops the card at triage.
-   Fill `## Read`. Commit.
+   inferred. Each anomaly goes into the report at once as `A-<n> : <title>`. Either it becomes a
+   run control (a failure gets its card from the runner), or its `to-triage` card is written at
+   once, then a refuter re-checks it (finding, evidence, severity) and you add its verdict to the
+   card: `REFUTED` is the counter-proof, and the owner drops the card at triage. Fill `## Read`.
+   Commit.
 4. **Order.** Fill `qualification/order.md` in the project language, with the sections of
    the order template: `base:` the commit under test; `## Objective`; `## Decisions` (the
    owner's words, verbatim, dated, or "none"); `## Controls to run` (setup first, teardown last;
@@ -57,8 +57,8 @@ material may be repaired, and each repair is declared.
    run again; a product cause is an anomaly.
 6. **Synthesize.** Reproduce each product failure before counting it (or ask a refuter). Check the
    runner's `Env:`, rows and `## Run`; complete `## Results` for read controls, `## Anomalies`
-   (`A-<n>`, severity, card id or run control), `## Not covered`, the proposed verdict block,
-   `By: qualification-lead`. `Tree:` and `Spec:` come from the engine. Commit.
+   (`A-<n> : <title>`, severity, its card or run control), `## Not covered`, the proposed verdict
+   block, `By: qualification-lead`. `Tree:` and `Spec:` come from the engine. Commit.
 7. **Lint.** `deliveryctl qualify lint <incr>` until exit 0; fix the plan or the report, never
    the product.
 8. **Hand over.** Ask the owner to run `deliveryctl qualify submit <incr>` and to triage each
@@ -74,7 +74,7 @@ material may be repaired, and each repair is declared.
 
 ## Ends with
 A message to the owner, in the project language: proposed verdict and its reason in one line;
-counts pass, fail, blocked, not-run; anomalies by severity with their card ids; entry points not
-covered; decisions awaited, each as one plain sentence with lettered options, their consequence
-and one recommendation; the gesture `deliveryctl qualify submit <incr>`.
+counts pass, fail, blocked, not-run; anomalies by severity, each card as `a<nnn> : <title>`; entry
+points not covered; decisions awaited, each as one plain sentence with lettered options, their
+consequence and one recommendation; the gesture `deliveryctl qualify submit <incr>`.
 Last line: `Outcome: done|blocked|question — <reason>`.

@@ -1,7 +1,7 @@
 ---
 id: a<nnn>
 kind: anomaly
-title: <le défaut en quelques mots>
+title: <le défaut>          # 3 à 8 mots, par exemple : Le partage accepte un compte supprimé
 status: to-triage           # non exécutable avant le tri du decision owner
 depends_on: []
 risks: []                   # les risques touchés par le défaut, par exemple [authz]
@@ -11,6 +11,7 @@ show_plan: false
 found: "<où>@<commit>"      # par exemple story/s004@9c1e2a4, 0.2.0/Q17@9c1e2a4, nightly-<jour>@9c1e2a4
 ---
 <!-- Carte d'anomalie : écrite tout de suite par qui constate le défaut, dans la langue du projet. Aucune correction avant le tri. -->
+<!-- Partout ailleurs, la carte se nomme « a<nnn> : <titre court> », jamais par son seul identifiant. -->
 ## Objective
 <Le comportement attendu, une fois le défaut corrigé.>
 

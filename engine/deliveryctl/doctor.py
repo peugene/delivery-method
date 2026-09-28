@@ -279,7 +279,8 @@ def check_worktrees(ctx):
     merged = cards.merged_ids(ctx.git)
     for card_id in open_ids:
         if card_id in merged:
-            yield "note", f"{card_id} is merged but its worktree remains: deliveryctl story close {card_id}"
+            yield "note", (f"{cards.label_of(ctx.git, card_id)} is merged but its worktree remains: "
+                           f"deliveryctl story close {card_id}")
 
 
 def check_location(ctx):

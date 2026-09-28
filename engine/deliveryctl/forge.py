@@ -9,6 +9,7 @@ import tempfile
 from pathlib import Path
 
 from . import ports
+from .cards import label
 from .config import Config
 from .core import EXIT_PRECONDITION, EXIT_RED, EXIT_TOOL, fail, run
 from .gitops import Git, story_branch
@@ -179,7 +180,7 @@ def _github_checks(rollup: list) -> str:
 
 def request_body(card_id: str, title: str, report: str | None, verification: str | None,
                  review: str | None, gate_problems: list[str]) -> str:
-    parts = [f"# {card_id} — {title}", "",
+    parts = [f"# {label(card_id, title)}", "",
              f"Story folder: `docs/stories/{card_id}/` (order, report, verification, review).", ""]
     parts += ["## Report", "", (report or "_missing_").strip(), ""]
     parts += ["## Verification", "", "```", _tail(verification), "```", ""]

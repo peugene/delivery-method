@@ -23,6 +23,12 @@ est fixé dans [`CONTRACTS.md`](CONTRACTS.md), qui fait foi.
   vérification, un relecteur neuf et une demande de fusion.
 - **Un moteur par projet.** `deliveryctl` (Python, bibliothèque standard seule) est copié dans le
   projet : sessions, CI et tâches planifiées exécutent la même version.
+- **Des noms qui se lisent.** Une carte, une story, une anomalie, un contrôle de recette ou une
+  décision se nomme toujours `<id> : <titre court>` (`s004 : Partager une liste`), jamais par
+  son seul identifiant : comptes rendus, commits, notifications, sorties du moteur. Le titre
+  court est le `title:` de la carte, obligatoire, en quelques mots (3 à 8 visés). Les noms
+  techniques gardent l'identifiant seul : branche `story/s004`, dossier `docs/stories/s004/`,
+  argument `deliveryctl story open s004`.
 
 ## Pour qui
 
@@ -162,8 +168,9 @@ demande de fusion qui porte le changement.
    `docs/campaigns/<campagne>.md` (stories faites, décisions prises en route, cartes différées,
    points pour vous) et vous êtes notifié.
 
-`deliveryctl story status [--watch]` donne l'état de chaque story, la prochaine étape du moteur
-et votre prochain geste. Une story s'arrête sur un point qui vous revient :
+`deliveryctl story status [--watch]` donne l'état de chaque story
+(`s004 : Partager une liste — to-review`), la prochaine étape du moteur et votre prochain geste.
+Une story s'arrête sur un point qui vous revient :
 
 | Arrêt | Votre geste |
 |---|---|
@@ -182,8 +189,9 @@ Une par implémentation et par version livrée, obligatoire avant toute livraiso
 1. `claude --agent delivery-method:qualification-lead`, puis `/delivery-method:qualify 0.2.0`.
    Le lead ouvre la recette (branche `qualification/0.2.0`), dresse la surface depuis le code
    (routes, commandes, tâches planifiées, installation, retrait, mise à jour), écrit les
-   contrôles `Q<n>`, confronte la documentation au code et prépare `qualification/order.md`,
-   qu'il commite avant de lancer l'exécution.
+   contrôles (`Q17 : un compte non invité ne lit pas une liste partagée`), confronte la
+   documentation au code et prépare `qualification/order.md`, qu'il commite avant de lancer
+   l'exécution.
 2. `deliveryctl qualify run 0.2.0` (refusé tant que l'ordre a des modifications non commitées)
    lance un `qualification-runner` jetable : il installe le produit depuis sa documentation, joue
    les contrôles, écrit une carte d'anomalie `to-triage` par défaut du produit, démonte et prouve
@@ -336,9 +344,11 @@ pas renvoyée. `DELIVERY_WINDOW=terminal` remplace `window` le temps d'une comma
 
 Seul le moteur notifie, une fois par événement : ⚠ décision attendue (story arrêtée, plan à voir,
 demande de fusion à relire, borne atteinte, contrôle ou CI rouge, run arrêté), 🚨 agent bloqué,
-⭐ run terminé ou anomalies de nuit à trier. Une session humaine qui s'arrête sur une dernière
-ligne `Outcome: question` vous envoie aussi une notification ⚠ « décision attendue » (hook
-`Stop`), une par message : en spécification, chaque question de l'analyste.
+⭐ run terminé ou anomalies de nuit à trier. Le titre nomme la story :
+`⚠ <dépôt> — s004 : Partager une liste — demande de fusion à relire`. Une session humaine qui
+s'arrête sur une dernière ligne `Outcome: question` vous envoie aussi une notification ⚠
+« décision attendue » (hook `Stop`), une par message : en spécification, chaque question de
+l'analyste.
 
 ### Journal d'expérience
 
@@ -359,12 +369,13 @@ Le moteur lit l'état des stories dans git et dans les fichiers, jamais dans une
 fenêtre montre et lance les sessions, rien de plus. `window = "auto"` prend herdr s'il répond en
 moins de 5 secondes, le terminal sinon.
 
-**herdr.** Un espace de travail par story, `<dépôt>-<id>`, ouvert sur sa copie de travail, avec
-trois volets : `agent` (la session de rôle en cours, exécutant puis relecteur), `status`
-(`deliveryctl story status <id> --watch`) et `tests` (la sortie de la vérification en direct,
-`work/verify.log`). L'état de la story s'affiche dans la barre latérale ; le `technical-lead`
-d'un run a son espace `<dépôt>-lead`. Regardez sans intervenir : ce qui se tape dans une session
-de rôle ne laisse aucune trace dans les fichiers ; passez par la carte ou par l'ordre.
+**herdr.** Un espace de travail par story, `<dépôt>-<id> : <titre>`, ouvert sur sa copie de
+travail, avec trois volets : `agent` (la session de rôle en cours, exécutant puis relecteur),
+`status` (`deliveryctl story status <id> --watch`) et `tests` (la sortie de la vérification en
+direct, `work/verify.log`). L'état de la story s'affiche dans la barre latérale ; le
+`technical-lead` d'un run a son espace `<dépôt>-lead`. Regardez sans intervenir : ce qui se tape
+dans une session de rôle ne laisse aucune trace dans les fichiers ; passez par la carte ou par
+l'ordre.
 
 **Terminal.** Le `technical-lead` d'un run s'exécute dans le terminal qui a lancé
 `deliveryctl run`. Les sessions des stories tournent en arrière-plan ; leur sortie va dans
@@ -440,6 +451,9 @@ Premier réflexe : `deliveryctl doctor`, puis `deliveryctl story status`.
 - Une story fusionnée dans l'interface de la forge ne porte pas le trailer `Spec:`, et
   `docs/conformance.md` la montre non fusionnée : fusionnez par `deliveryctl merge`.
 - Deux stories en parallèle peuvent choisir le même numéro de carte d'anomalie : renumérotez au tri.
+- Le moteur lit les titres des cartes sur la branche cible : une carte qui n'y est pas encore
+  (une anomalie écrite sur une branche de story) se nomme par son identifiant seul jusqu'à sa
+  fusion.
 - Forges : GitHub et GitLab. Suite d'acceptation : Playwright, donc interfaces web. Aucun suivi
   du coût des sessions.
 

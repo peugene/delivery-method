@@ -50,8 +50,8 @@ Fail closed: on the first failure, say why and end with `Outcome: blocked — <r
       - `plan-ready`: the owner reads the plan; note it for the owner and go on.
    f. Read the report with the grid of `work-orders`; carry what it teaches into the next orders.
 4. To defer a card: `status: deferred` in its `backlog/` file, a line `Deferred: <reason>` under
-   `## Technical notes`, one commit, no push; its dependents wait for the owner. Name it by its
-   id (`defer s004: …`), never `story/<id>`: a target history naming the branch counts as merged.
+   `## Technical notes`, one commit (subject `defer <id> : <title>`, never `story/<id>`: a target
+   history naming the branch counts as merged), no push; its dependents wait for the owner.
 5. The next card, while waiting, and only it: do not prepare it. Read it at the head of the
    target branch with `git fetch`, then `git show origin/<target>:<path>` and
    `git grep <pattern> origin/<target>`, never in the main checkout, which may lag behind.
@@ -66,10 +66,10 @@ Fail closed: on the first failure, say why and end with `Outcome: blocked — <r
    running story; `anchored before … was merged` → re-anchor at the target head, update `base:`;
    `already open` → `story wait`; `still running` → wait again. 1: a malformed command or an
    internal error. Other failures and refused commands: note them; go on without, or end blocked.
-8. When nothing is launchable: rewrite `## Run` of the campaign (stories merged or submitted,
-   decisions taken and where they are written, deferred cards and why, refusals met, points for
-   the owner with the gesture each needs) and `## Next`; commit with trailers
-   `Campaign: <name>` and `Agent: technical-lead`, without push.
+8. When nothing is launchable: rewrite `## Run` of the campaign, each card as `<id> : <title>`
+   (stories merged or submitted, decisions taken and where they are written, deferred cards and
+   why, refusals met, points for the owner with the gesture each needs) and `## Next`; commit
+   with trailers `Campaign: <name>` and `Agent: technical-lead`, without push.
 
 ## Outputs
 - One `order.md` per story, committed by the engine at `story open`; deferred cards; the

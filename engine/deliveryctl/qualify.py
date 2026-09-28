@@ -26,7 +26,7 @@ ORDER_FILLED = ("Objective", "Controls to run", "Environment")
 RESULTS = ("pass", "fail", "blocked", "not-run")
 INCR_RX = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,40}$")
 CONTROL_START_RX = re.compile(r"^###\s+Q(\d+)")
-CONTROL_RX = re.compile(r"^###\s+Q(\d+)\s+[—–-]+\s+(.+?)\s+\[(read|run)(,\s*negative)?\]\s*$")
+CONTROL_RX = re.compile(r"^###\s+Q(\d+)(?:\s+[—–-]+|\s*:)\s+(.+?)\s+\[(read|run)(,\s*negative)?\]\s*$")
 FIELD_RX = re.compile(r"^(Targets|Touches|Do|Expect):\s*(.*?)\s*$")
 HEADER_RX = re.compile(r"^(Tree|Spec|Env):\s*(.*?)\s*$")
 NOT_COVERED_RX = re.compile(r"^not covered\s*(?:[—–-]+\s*(.*))?$", re.IGNORECASE)
@@ -40,6 +40,12 @@ def branch_of(incr: str) -> str:
 
 def report_path(incr: str) -> str:
     return f"qualification/reports/{incr}.md"
+
+
+def control_label(number, title: str = "") -> str:
+    """'Q<n> : <short title>' (CONTRACTS.md §15.1); 'Q<n>' alone when the title is unknown."""
+    title = " ".join(str(title or "").split())
+    return f"Q{number} : {title}" if title and not _placeholder(title) else f"Q{number}"
 
 
 def check_increment(value: str) -> str:
@@ -181,16 +187,17 @@ def _tables(lines: list[tuple[int, str]]) -> list[tuple[int, list[str]]]:
 
 
 def lint_plan(text: str) -> tuple[list[tuple[int, str]], dict]:
-    """Problems of plan.md and its controls {number: line}."""
+    """Problems of plan.md and its controls {number: (line, title)}."""
     problems, controls, surface, surface_at = [], {}, [], None
     section, current = "", None
 
     def close(ctrl):
         if not ctrl:
             return
-        problems.extend((ctrl["line"], f"Q{ctrl['n']}: missing '{key}:' line")
+        name = control_label(ctrl["n"], ctrl["title"])
+        problems.extend((ctrl["line"], f"{name} — missing '{key}:' line")
                         for key in ("Targets", "Do", "Expect") if key not in ctrl["fields"])
-        problems.extend((at, f"Q{ctrl['n']}: '{key}:' is not filled")
+        problems.extend((at, f"{name} — '{key}:' is not filled")
                         for key, (at, value) in ctrl["fields"].items() if _blank(value))
 
     for no, line in _numbered(text):
@@ -205,16 +212,18 @@ def lint_plan(text: str) -> tuple[list[tuple[int, str]], dict]:
         start = CONTROL_START_RX.match(line)
         if start:
             match, n = CONTROL_RX.match(line), int(start.group(1))
+            title = match.group(2) if match else ""
             if not match:
-                problems.append((no, "control heading must read '### Q<n> — <title>   [read|run]' "
+                problems.append((no, "control heading must read '### Q<n> : <short title>   [read|run]' "
                                      "(', negative' optional)"))
-            elif _placeholder(match.group(2)):
-                problems.append((no, f"Q{n}: title is not filled"))
+            elif _placeholder(title):
+                problems.append((no, f"Q{n} — title is not filled"))
             if n in controls:
-                problems.append((no, f"Q{n} is already used at line {controls[n]}"))
+                problems.append((no, f"{control_label(n, title)} — number already used by "
+                                     f"{control_label(n, controls[n][1])} (line {controls[n][0]})"))
             else:
-                controls[n] = no
-            current = {"n": n, "line": no, "fields": {}}
+                controls[n] = (no, title)
+            current = {"n": n, "line": no, "title": title, "fields": {}}
             continue
         if section.startswith("Surface"):
             surface.append((no, line))
@@ -292,14 +301,17 @@ def lint_report(text: str, controls: dict, expected_tree: str | None = None,
             continue
         if "/tmp/" in " ".join(cells):
             problems.append((no, "a proof is never a path under /tmp"))
-        match = re.match(r"^Q(\d+)$", cells[0])
+        match = re.match(r"^Q(\d+)(?:\s*:\s*.*)?$", cells[0])    # 'Q<n>' or 'Q<n> : <short title>'
         if not match:
             continue
-        listed.add(int(match.group(1)))
+        n = int(match.group(1))
+        listed.add(n)
         if (cells[2].lower() if len(cells) > 2 else "") not in RESULTS:
-            problems.append((no, f"Q{match.group(1)}: result must be one of {', '.join(RESULTS)}"))
+            problems.append((no, f"{control_label(n, controls.get(n, (0, ''))[1])} — result must be one of "
+                                 f"{', '.join(RESULTS)}"))
     results_at = next((at for h, (at, _) in sections.items() if h.startswith("Results")), 1)
-    problems += [(results_at, f"Q{n} of the plan has no result row") for n in sorted(set(controls) - listed)]
+    problems += [(results_at, f"{control_label(n, controls[n][1])} — control of the plan without a result row")
+                 for n in sorted(set(controls) - listed)]
 
     parsed = vd.parse(_uncomment(text), "qualification")
     at = block_at or last

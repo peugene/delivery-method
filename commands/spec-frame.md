@@ -35,14 +35,16 @@ Fail closed: on the first failure, say why and stop.
    questions, each with lettered options, their consequence and your recommendation.
 5. At the owner's rhythm, after each answer, write `framing.md`:
    - `## Purpose`: the problem and the observable success, in two or three sentences;
-   - `## Firm decisions`: `D<n> — <decision> — "<owner's words>" (<date>)`, one line each;
+   - `## Firm decisions`: `D<n> : <short title> — <decision> — "<owner's words>" (<date>)`,
+     one line each;
    - `## Scope`, `## Exclusions`: what the increment delivers, what it does not;
    - `## To investigate`: technical questions for the technical lead, as the observable
      result they condition;
    - `## Assumptions`: what you assumed without asking, to submit at the GO;
    - `## Deferred`: each point with what would bring it back;
-   - `## Story map`: story ids, one user goal each, functional dependencies, and the firm
-     decisions each story covers.
+   - `## Story map`: each story as `<id> : <short title>` (3 to 8 plain words, what the user
+     gets), its user goal, its functional dependencies and the firm decisions it covers, each
+     named `<id> : <short title>` too.
    Then recap: decided, assumed, deferred, open.
 6. When no observable behaviour of the scope is left open, submit the GO frame: purpose, firm
    decisions, scope, exclusions, assumptions to accept, story map.

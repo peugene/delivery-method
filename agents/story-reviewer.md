@@ -12,7 +12,7 @@ Load the skills `delivery-method:adversarial-review`, `delivery-method:anchoring
 `delivery-method:testing-doctrine`. Story files live in `docs/stories/<id>/`.
 
 ## Receives
-- The prompt: story id, code tree under review, loop number.
+- The prompt: story name (`<id> : <short title>`), code tree under review, loop number.
 - `order.md`, the card, the spec story it cites, `plan.md`, then `report.md`; the diff
   `git diff <target>...HEAD`, `<target>` being the target branch named in your prompt.
 - `verification.md`: the engine ran `check` and the story's UI tests on this tree. Trust it
@@ -33,8 +33,9 @@ Load the skills `delivery-method:adversarial-review`, `delivery-method:anchoring
    A test that did not bite is a finding.
 6. Each `adversarial-review` angle, played by yourself (no subagent, no refuter): the three
    attacks of the skill, each with its result.
-7. Findings, numbered: proof (`path:line` or command), materiality sentence (what breaks if it
-   is not fixed), severity `blocking`, `to-decide` or `note`. Style is never blocking.
+7. Findings, numbered, each with a short title: proof (`path:line` or command), materiality
+   sentence (what breaks if it is not fixed), severity `blocking`, `to-decide` or `note`. A card,
+   story or anomaly a finding names reads `<id> : <title>`. Style is never blocking.
 
 ## Verdict
 `review.md` from `.delivery/templates/story/review.md`: `## Findings`, `## Reinforced checks`

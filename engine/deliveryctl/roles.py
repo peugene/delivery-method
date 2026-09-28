@@ -46,8 +46,9 @@ VERIFICATION = "docs/stories/*/verification.md"
 REVIEW = "docs/stories/*/review.md"
 KIT_SCRIPTS = ["Bash(bash qualification/kit/*)", "Bash(sh qualification/kit/*)", "Bash(./qualification/kit/*)"]
 PROMPTS = {
-    "story-implementer": "Story {id}: read docs/stories/{id}/order.md and carry it out. Mode: {mode}.",
-    "story-reviewer": "Story {id}: review the change at code tree {tree} against the target branch {target}. Loop {loop}.",
+    "story-implementer": "Story {label} — read docs/stories/{id}/order.md and carry it out. Mode: {mode}.",
+    "story-reviewer": "Story {label} — review the change at code tree {tree} against the target branch {target}. "
+                      "Loop {loop}.",
     "technical-lead": "/delivery-method:run {campaign}",
     "qualification-runner": "Qualification {id}: carry out qualification/order.md.",
 }

@@ -10,21 +10,23 @@ Env: <machine, système, navigateur, version installée, commande d'installation
 
 ## Results
 
-<!-- Une ligne par contrôle du plan. Result : pass | fail | blocked | not-run (dire pourquoi).
+<!-- Une ligne par contrôle du plan, nommé « Q<n> : <titre court> » comme dans le plan.
+     Result : pass | fail | blocked | not-run (dire pourquoi).
      Proof : une ligne, commande → résultat ; jamais un chemin sous /tmp. -->
 
 | Q | Mode | Result | Proof |
 |---|---|---|---|
-| <Q1> | <run, negative> | <pass> | <commande → résultat> |
+| <Q1 : un compte non invité ne lit pas une liste partagée> | <run, negative> | <pass> | <commande → résultat> |
 
 ## Anomalies
 
-<!-- A-<n> : contrôle, observé, attendu, reproduction, severity (blocking | to-decide | note),
-     et la carte a<nnn> écrite dans backlog/ au moment du constat (verdict du réfuteur ajouté
-     pour une anomalie de lecture), ou le contrôle run Q<n> qu'elle est devenue. Une anomalie
-     de sécurité est blocking par défaut. « none » s'il n'y en a pas. -->
+<!-- « A-<n> : <titre court> », puis le contrôle « Q<n> : <titre> », observé, attendu,
+     reproduction, severity (blocking | to-decide | note), et la carte « a<nnn> : <titre> »
+     écrite dans backlog/ au moment du constat (verdict du réfuteur ajouté pour une anomalie
+     de lecture), ou le contrôle run « Q<n> : <titre> » qu'elle est devenue. Une anomalie de
+     sécurité est blocking par défaut. « none » s'il n'y en a pas. -->
 
-- <A-1 — Q1 — observé : … — attendu : … — carte : a001 — severity : blocking>
+- <A-1 : le partage accepte un compte supprimé — Q1 : un compte non invité ne lit pas une liste partagée — observé … — attendu … — severity : blocking — carte a001 : Le partage accepte un compte supprimé>
 
 ## Not covered
 

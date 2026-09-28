@@ -4,7 +4,7 @@ FAKE_REVIEW = "no-once" (first review says no), "no" (every review says no), "in
 verdict block is malformed); FAKE_IMPL = "deferred" (implementer defers), "question" (it stops
 on a question), "crash" (it ends without a word); FAKE_BREAK = "1" (the first implementation
 breaks the check), "always" (every one does). Each session appends its role and mode to
-work/fake-modes, one line per session."""
+work/fake-modes, and its prompt to work/fake-prompts, one line per session."""
 
 import os
 import re
@@ -18,9 +18,13 @@ story = root / "docs" / "stories" / card
 marker = story / "work" / "fake-state"
 marker.parent.mkdir(parents=True, exist_ok=True)
 seen = marker.read_text().split() if marker.exists() else []
+found = re.match(r"Story (.+?) — (?:read|review) ", prompt)
+name = found.group(1) if found else card
 mode = prompt.split("Mode: ")[-1] if "Mode: " in prompt else "loop " + prompt.split("Loop ")[-1]
 with open(story / "work" / "fake-modes", "a") as modes:
     modes.write(f"{role} {mode.rstrip('.')}\n")
+with open(story / "work" / "fake-prompts", "a") as prompts:
+    prompts.write(prompt + "\n")
 
 
 def git(*args):
@@ -38,16 +42,16 @@ if role == "story-implementer":
     if os.environ.get("FAKE_IMPL") == "deferred":
         (story / "spec-question.md").write_text("Which order for shared lists?\n")
         (story / "report.md").write_text("## Delivered\nnone\n\nOutcome: deferred — product question\n")
-        commit([f"docs/stories/{card}/spec-question.md", f"docs/stories/{card}/report.md"], "defer")
+        commit([f"docs/stories/{card}/spec-question.md", f"docs/stories/{card}/report.md"], f"defer {name}")
         sys.exit(0)
     if os.environ.get("FAKE_IMPL") == "question":
         (story / "report.md").write_text("## For the decision owner\nwhich order?\n\nOutcome: question — order\n")
-        commit([f"docs/stories/{card}/report.md"], "question")
+        commit([f"docs/stories/{card}/report.md"], f"question {name}")
         sys.exit(0)
     if "plan-first" in prompt:
         (story / "plan.md").write_text("- [ ] append the feature line\n")
         (story / "report.md").write_text("## Delivered\nplan only\n\nOutcome: plan-ready — plan written\n")
-        commit([f"docs/stories/{card}/plan.md", f"docs/stories/{card}/report.md"], "plan")
+        commit([f"docs/stories/{card}/plan.md", f"docs/stories/{card}/report.md"], f"plan {name}")
         sys.exit(0)
     app = root / "src" / "app.txt"
     if "fix-verification" in prompt:
@@ -55,12 +59,12 @@ if role == "story-implementer":
     brk = os.environ.get("FAKE_BREAK")
     broken = brk == "always" or (brk == "1" and "broke" not in seen)
     app.write_text(app.read_text() + ("BROKEN\n" if broken else f"feature {card} {len(seen)}\n"))
-    commit(["src/app.txt"], f"implement {card}")
+    commit(["src/app.txt"], f"implement {name}")
     (story / "report.md").write_text(
         "## Delivered\n- src/app.txt\n\n## Deviations\nnone\n\n## Verified points\n- all confirmed\n\n"
         "## Oracle\n- measured\n\n## Proof\n- check\n\n## Findings\nnone\n\n## For the decision owner\nnone\n\n"
-        f"Outcome: done — {card} implemented ({prompt.split('Mode: ')[-1].rstrip('.')})\n")
-    commit([f"docs/stories/{card}/report.md"], "report")
+        f"Outcome: done — {name} implemented ({prompt.split('Mode: ')[-1].rstrip('.')})\n")
+    commit([f"docs/stories/{card}/report.md"], f"report {name}")
     seen.append("broke" if broken else "impl")
 elif role == "story-reviewer":
     tree = re.search(r"code tree ([0-9a-f]{40})", prompt).group(1)
@@ -71,6 +75,6 @@ elif role == "story-reviewer":
     (story / "review.md").write_text(
         f"## Findings\n1. {'naming' if verdict == 'no' else 'none'}\n\nVerdict: {verdict}\nTree: {tree}\n"
         "Command: true\nResult: exit 0\nBy: story-reviewer\n")
-    commit([f"docs/stories/{card}/review.md"], "review")
+    commit([f"docs/stories/{card}/review.md"], f"review {name}")
     seen.append("reviewed")
 marker.write_text(" ".join(seen))

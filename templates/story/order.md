@@ -7,6 +7,7 @@ path: plan                  # plan | short
 ---
 <!-- Work order, written by the technical-lead in the project language. About max_order_lines lines (default 60): story open warns above. -->
 <!-- base: the commit where the facts below were read, filled by `story prepare`. Keep it. -->
+<!-- Every card, story, anomaly or decision cited below reads `<card id> : <short title>` (`s004 : Share a list`), never the bare id. -->
 ## Objective
 <One sentence: the observable result expected.>
 
@@ -17,7 +18,7 @@ path: plan                  # plan | short
 <Suggested approach and why. The implementer may depart from it and says so in the report.>
 
 ## Constraints
-<Scope, files not to touch, follow-up work not to start, binding choices of the lead with their reason.>
+<Scope, files not to touch, follow-up work not to start (a card as `<card id> : <short title>`), binding choices of the lead with their reason.>
 
 ## Read at base — re-verify, do not trust
 <One fact per line: - <fact> (<path:line>, read | measured | inferred)>

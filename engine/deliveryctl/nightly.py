@@ -28,7 +28,8 @@ PROMPT = (
     "The team triages your cards in the morning, so each card stands on its own. "
     "Scope: read {log} and the code; write only new cards in backlog/. "
     "Group the failing tests by cause and write one anomaly card per distinct fault, "
-    "backlog/<id>-<slug>.md with ids from {next_id} upward: kind: anomaly, status: to-triage, "
+    "backlog/<id>-<slug>.md with ids from {next_id} upward: kind: anomaly, "
+    "title: the fault in 3 to 8 words, status: to-triage, "
     "found: nightly-{day}@{short}, spec: the spec story of the failing test tag (@s004 gives s004); "
     "sections Objective (the fault in one sentence), Context and scope (failing tests, observed "
     "and expected result, log lines), Oracle (the tests that pass once it is fixed). "
@@ -100,7 +101,7 @@ def _run(cfg: Config, day: str, scope: str, port: int) -> int:
                "night-anomalies", f"nightly {day}: suite red at {short}, the runner wrote no card", str(log))
         print(f"nightly {day}: red at {short}, no anomaly card written; log {log}; worktree kept: {wt}")
         return EXIT_RED
-    body = _request_body(day, short, command, res, added, remarks, log)
+    body = _request_body(day, short, command, res, added, remarks, log, cards.titles(main))
     url, note = "", f"forge = none: local branch, merge it with git merge --no-ff {branch}"
     if cfg.forge != "none":
         try:
@@ -109,7 +110,7 @@ def _run(cfg: Config, day: str, scope: str, port: int) -> int:
             note = f"local branch, push failed: {exc.message.splitlines()[0]}"
     where = url or branch
     main.run("worktree", "remove", "--force", str(wt))
-    ids = ", ".join(c.id for c in added)
+    ids = "; ".join(cards.label(c.id, c.title) for c in added)
     notify.notify(cfg.root, f"night:{day}", "night", "anomalies à trier", f"{len(added)} carte(s) : {where}")
     journal.record(journal.event(cfg.root.name, "night-anomalies",
                                  f"{len(added)} anomaly card(s) from the full UI suite at {short}: {ids}",
@@ -184,14 +185,18 @@ def _added_cards(git: Git, base: str) -> tuple[list, list[str]]:
     return added, remarks
 
 
-def _request_body(day, short, command, res, added, remarks, log: Path) -> str:
+def _request_body(day, short, command, res, added, remarks, log: Path, known: dict | None = None) -> str:
+    """Body of the triage merge request; `known` gives the titles of the target branch cards, to
+    name the spec story of each anomaly by the story card of the same number."""
+    known = known or {}
     failed = f", {res['failed']} échec(s)" if res.get("failed") else ""
     lines = [f"# Anomalies du {day}", "",
              f"Suite complète des tests d'IHM rouge sur la branche cible à `{short}` : "
              f"`{command}` → exit {res['exit']}{failed}.", "",
              "Tri à la relecture de cette demande : corriger (maturation puis `ready`), reporter "
              "(`deferred`), abandonner (`dropped`), ou remonter une question de spec.", "", "## Cartes", ""]
-    lines += [f"- `{c.rel}` — {c.title or c.id}" + (f" — spec {c.spec}" if c.spec else "") for c in added]
+    lines += [f"- `{c.rel}` — {cards.label(c.id, c.title)}"
+              + (f" — spec {cards.label(c.spec, known.get(c.spec, ''))}" if c.spec else "") for c in added]
     if remarks:
         lines += ["", "## Points à vérifier", ""] + [f"- {r}" for r in remarks]
     tail = log.read_text(encoding="utf-8", errors="replace").splitlines()[-40:] if log.exists() else []

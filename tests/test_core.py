@@ -177,6 +177,39 @@ src/lists/
         write(self.repo / "src/w.txt", "w\n")
         self.commit_all("a role commit\n\nStory: s004\nAgent: story-implementer")
         self.assertEqual(cards.merged_ids(g, "main"), {"s001", "s002", "s003"})
+        write(self.repo / "src/v.txt", "v\n")
+        self.commit_all("Merge story/s005 : Partager une liste")             # the engine's merge subject
+        write(self.repo / "src/u.txt", "u\n")
+        self.commit_all("s006 : Inviter un membre (story/s006) (#12)")      # its request title, squashed
+        write(self.repo / "src/t.txt", "t\n")
+        self.commit_all("order s007 : Retirer un membre\n\nStory: s007\nAgent: engine")
+        self.assertEqual(cards.merged_ids(g, "main"), {"s001", "s002", "s003", "s005", "s006"})
+
+    def test_title_is_required_and_a_long_one_is_noted(self):
+        write(self.repo / "backlog/s001-sign-in.md", self.READY.replace("s002", "s001")
+              .replace("depends_on: [s001]", "depends_on: []").replace("title: Create a list\n", ""))
+        write(self.repo / "backlog/t003-ci.md", "---\nid: t003\nkind: task\ntitle:   \nstatus: draft\n---\n")
+        long = "Create, rename and archive a list, with its items, from the list page and the menu"
+        write(self.repo / "backlog/s002-create-list.md", self.READY.replace("Create a list", long))
+        all_cards = cards.load_all(self.repo)
+        self.assertEqual(cards.lint(all_cards), [("s001", cards.TITLE_REQUIRED), ("t003", cards.TITLE_REQUIRED)])
+        self.assertEqual(cards.notes(all_cards), [("s002", f"title of {len(long)} characters: a short title "
+                                                           "reads in a few words (3 to 8)")])
+        placeholder = cards.parse(Path("backlog/s002-create-list.md"),
+                                  self.READY.replace("Create a list", "<short title>"))
+        self.assertEqual(placeholder.problems, [])
+        self.assertIn(cards.TITLE_REQUIRED, cards.readiness(placeholder))
+
+    def test_labels(self):
+        self.assertEqual(cards.label("s004", "Partager une liste"), "s004 : Partager une liste")
+        self.assertEqual(cards.label("s004", "  Partager\tune   liste "), "s004 : Partager une liste")
+        for unknown in ("", None, "<titre court>"):
+            self.assertEqual(cards.label("s004", unknown), "s004")
+        self.assertEqual(cards.labels(["s001", "s009"], {"s001": "Sign in, then out"}),
+                         "s001 : Sign in, then out; s009")
+        write(self.repo / "backlog/s002-create-list.md", self.READY.replace("depends_on: [s001]", "depends_on: [s002]"))
+        texts = [p for _, p in cards.lint(cards.load_all(self.repo))]
+        self.assertIn("dependency cycle: s002 : Create a list -> s002 : Create a list", texts)
 
     def test_spec_is_a_spec_story_id(self):
         text = self.READY.replace("spec: s002", "spec: s002 $(touch x)")
@@ -263,7 +296,33 @@ class CliTest(RepoCase):
         self.assertEqual(code, core.EXIT_OK, out)
         self.commit_all("t001 ready")
         git(self.repo, "push", "--quiet", "origin", "main")
-        self.assertIn("t001  task    ready", self.call("cards", "list")[1])
+        self.assertIn("t001 : Create a list — task, ready", self.call("cards", "list")[1])
+
+    def test_cards_name_their_dependencies_and_lint_names_the_card(self):
+        write(self.repo / "delivery.toml", 'repo_role = "impl"\nforge = "none"\n')
+        write(self.repo / "backlog/t001-ci.md", self.CARD)
+        write(self.repo / "backlog/t002-deploy.md", self.CARD.replace("t001", "t002")
+              .replace("Create a list", "Deploy on push").replace("depends_on: []", "depends_on: [t001]"))
+        self.commit_all("cards")
+        git(self.repo, "push", "--quiet", "origin", "main")
+        listed = self.call("cards", "list")[1].splitlines()
+        self.assertEqual(listed, ["t001 : Create a list — task, ready",
+                                  "t002 : Deploy on push — task, ready, depends on t001 : Create a list"])
+        ordered = self.call("cards", "order")[1].splitlines()
+        self.assertEqual(ordered, ["t001 : Create a list — task, ready",
+                                   "t002 : Deploy on push — task, ready (waits for t001 : Create a list)"])
+        write(self.repo / "backlog/t002-deploy.md",
+              self.CARD.replace("t001", "t002").replace("title: Create a list\n", ""))
+        long = "Create, rename and archive a list, with its items, from the list page and the menu"
+        write(self.repo / "backlog/t001-ci.md", self.CARD.replace("Create a list", long))
+        code, out = self.call("cards", "lint")
+        self.assertEqual(code, core.EXIT_RED, out)
+        self.assertIn("t002 — title: a short title is required\n", out)
+        self.assertIn(f"note: t001 : {long} — title of {len(long)} characters", out)
+        write(self.repo / "backlog/t002-deploy.md", self.CARD.replace("t001", "t002"))
+        code, out = self.call("cards", "lint")
+        self.assertEqual(code, core.EXIT_OK, out)                   # a long title is a note, not a problem
+        self.assertIn("note: t001 : ", out)
 
 
 if __name__ == "__main__":

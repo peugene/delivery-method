@@ -35,6 +35,8 @@ Nothing in the repository. A level-2 probe writes only under the session temp di
 - When the source is reachable, prefer a one-minute probe with a witness both ways (one case
   that must pass, one that must fail) to a paragraph of reasoning.
 - When the finding has the better proof, concede it plainly.
+- Name a story, card, control or decision `<id> : <short title>`, as the finding does, never by
+  its bare id.
 
 ## Ends with
 Only this object:

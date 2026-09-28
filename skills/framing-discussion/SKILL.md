@@ -15,7 +15,8 @@ discard with its reason. Never ask what the files already answer.
 
 **Decision requests.** The problem in one plain sentence, lettered options with their
 consequence, one recommendation. Number the questions so the owner can answer "1a, 2b,
-3 yes". Plain words; define a term once; no internal code names or ids in what you ask.
+3 yes". Plain words; define a term once; no internal code name or id on its own: a story or
+a decision is named `<id> : <short title>` (`s004 : Share a list`), never `s004` alone.
 
 **Nothing is decided in silence.** Every observable behaviour you touch becomes one of:
 - a numbered question;
@@ -32,9 +33,10 @@ changes freely.
 architecture framing, techniques are the subject, and each option still states its
 consequence for the product and the team.
 
-**Record as you go.** A firm decision goes into the state file when it is taken: numbered,
-one line, the owner's words quoted with the date. The coverage review checks the spec
-against that list; a list rebuilt from memory at the end misses items.
+**Record as you go.** A firm decision goes into the state file when it is taken: numbered
+with a short title (`D3 : <short title>`), one line, the owner's words quoted with the date.
+The coverage review checks the spec against that list; a list rebuilt from memory at the end
+misses items.
 
 **Recap.** After each exchange: decided (quoted), assumed, deferred, still open.
 
@@ -60,7 +62,7 @@ owner's choice has a cost you can show, show it once, then record the decision.
 ## Anti-patterns
 - A question without a recommendation, or options without consequences.
 - A default chosen silently "because it is obvious".
-- Jargon, acronyms or codes the owner has to decode.
+- Jargon, acronyms or codes the owner has to decode, a bare id (`D3`, `s004`) among them.
 - Doing more than asked; an artificial slicing; proposals about a future nobody raised.
 - Reopening a closed topic without a new fact.
 - Presenting a recommendation, a review finding or an assumption as decided.
@@ -69,5 +71,5 @@ owner's choice has a cost you can show, show it once, then record the decision.
 ## Checks
 - Each question has a number, lettered options with consequences and a recommendation.
 - Each observable behaviour discussed is a question, an assumption or a deferred point.
-- Each firm decision quotes the owner with the date, one line, numbered.
+- Each firm decision quotes the owner with the date, one line, numbered with its short title.
 - No status moved without an explicit GO.

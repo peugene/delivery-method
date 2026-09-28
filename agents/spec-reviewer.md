@@ -34,6 +34,8 @@ Nothing. Your final message is the result.
   finding you cannot evidence. An absence is shown by the search you ran and a known positive
   the same search finds elsewhere.
 - For each finding, say what breaks if it is not fixed.
+- Name a story or a firm decision `<id> : <short title>` (`s004 : Share a list`), never by its
+  bare id, in `target` and `finding`; the path goes in `evidence`.
 - Severity: `blocking` (a team would build the wrong thing, or a criterion cannot be tested);
   `to-decide` (a product question for the owner: give lettered options); `note` (nothing
   breaks); `conforming` (a checked point that holds, for coverage).
@@ -42,7 +44,7 @@ Nothing. Your final message is the result.
 At most 12 non-conforming findings, most severe first, then the conforming ones, as a list:
 
 ```
-[{"target": "spec/stories/s004-share-list.md",
+[{"target": "s004 : Share a list, AC2",
   "finding": "<fact, then what breaks>",
   "evidence": "spec/stories/s004-share-list.md:23",
   "severity": "blocking | to-decide | note | conforming",

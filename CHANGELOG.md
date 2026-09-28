@@ -44,6 +44,11 @@ changement de contrat monte la version mineure ; après 1.0.0, la version majeur
   file locale de secours (`note`, `journal setup`, `flush`, `report`).
 - Gabarits de projet : `delivery.toml`, `CLAUDE.md`, `justfile`, CI GitHub et GitLab.
 - Contrôle du plugin lui-même : `kit lint`.
+- Noms lisibles : une carte, une story, une anomalie, un contrôle de recette ou une décision se
+  nomme `<id> : <titre court>` (`s004 : Partager une liste`) dans les sorties du moteur, les
+  notifications, le journal, les sujets de commit, les demandes de fusion, l'espace de travail
+  d'une story, les consignes des rôles, les prompts et les gabarits ; titre court obligatoire,
+  contrôlé par `cards lint`.
 
 ### Contracts
 
@@ -54,14 +59,22 @@ changement de contrat monte la version mineure ; après 1.0.0, la version majeur
   contrôle d'intégration ; rôles et permissions des sessions de rôle ; gestes humains et verbes
   du moteur ; campagne et run ; notifications et journal ; spécification, versions et copie
   dans un dépôt d'implémentation ; recette ; suite de nuit ; codes de sortie. Points notables :
+  - référence lisible `<id> : <titre court>` dans tout texte lu par un humain ; identifiant seul
+    dans les noms techniques (branche, chemin, trailer, argument) ou quand le titre est inconnu
+    (§1) ;
   - substitutions de `[commands]` : `{grep}` et `{port}` par le moteur, qui exporte
     `DELIVERY_PORT` ; `{selector}` par les rôles (§3) ;
   - `reinforced_risks` : une clé écrite remplace le défaut de ce seul risque ; une liste vide
     retire ses contrôles (§3) ;
   - `notify_cmd` en échec : message sur la sortie d'erreur, sans nouvel essai (§4) ;
   - `spec:` d'une carte : un identifiant de story de spec `s<nnn>` (§5) ;
+  - `title:` d'une carte obligatoire (`cards lint` : `title: a short title is required`), 3 à 8
+    mots visés, noté au-delà de 60 caractères (§5) ;
   - auteur d'un verdict : ligne `By:` et trailer `Agent:` du commit ; registre du moteur de ses
     vérifications et de ses lancements de relecteur, `.delivery/run/verdicts.json` (§6, §10) ;
+  - sujets des commits du moteur `order <id> : <titre>` et `verify <id> : <titre> — pass|fail` ;
+    fusion `Merge story/<id> : <titre>` ; titre de la demande de fusion
+    `<id> : <titre> (story/<id>)` ; report d'une carte `defer <id> : <titre>` (§8) ;
   - `submitted` exige la tête poussée ; fusion automatique sur CI verte seulement (au moins un
     contrôle, tous réussis) ; forge injoignable : `ready-to-submit` sans suite (§9, §12.2) ;
   - relecture sans verdict valide comptée dans `review_loops` ; au plus `review_loops` + 1
@@ -77,8 +90,15 @@ changement de contrat monte la version mineure ; après 1.0.0, la version majeur
     (§12.1) ;
   - `cards list` et `cards order` lisent la branche cible, `cards lint` la copie de travail
     (§12.2) ;
+  - format des sorties de `cards list|order|lint`, `story status|wait|next`, `verify` et `gate`
+    (§12.2) ;
   - `max_in_flight` ne compte ni les stories arrêtées ni les fusionnées (§12.4) ;
   - notifications une par événement, journal indépendant du canal ; `journal report` par le
     lanceur du plugin, hors de tout dépôt (§13) ;
+  - titres des notifications `<id> : <titre> — <quoi>`, titre abrégé au-delà de 90 caractères
+    (§13) ;
   - ordre de recette commité : `qualification/order.md` (§2, §15.3) ;
+  - décision ferme `D<n> : <titre court> — …` (§14.1) ; contrôle de recette
+    `### Q<n> : <titre court>`, lignes de résultat `Q<n> : <titre court>`, anomalies
+    `A-<n> : <titre court>` (§15.1, §15.2) ;
   - suite de nuit : son propre port ; reste d'une nuit du même jour supprimé (§16).

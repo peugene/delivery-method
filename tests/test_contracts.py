@@ -45,7 +45,7 @@ class LocalMergePortTest(RepoCase):
         write(self.repo / "src" / "app.txt", "v2\n")
         self.commit_all("implement s001")
         git(self.repo, "switch", "--quiet", "main")
-        Forge(config.load(self.repo), Git(self.repo)).merge("s001", "Merge story/s001: x", [("Story", "s001")])
+        Forge(config.load(self.repo), Git(self.repo)).merge("s001", "Merge story/s001 : x", [("Story", "s001")])
         port, env = seen.read_text().split()
         self.assertEqual(port, env)
         self.assertRegex(port, r"^310\d\d$")
@@ -99,6 +99,27 @@ class DocsTest(RepoCase):
         with mock.patch("sys.stdin", io.StringIO("{}")), redirect_stdout(out):
             self.assertEqual(hooks.session_start(), 0)
         self.assertIn(qualify.ORDER, out.getvalue())
+
+    def test_contracts_name_cards_like_the_engine(self):
+        from deliveryctl import cards, notify, story
+        text = (ROOT / "CONTRACTS.md").read_text(encoding="utf-8")
+        example = text.split("## 5. Cartes")[1].split("```markdown\n")[1].split("```")[0]
+        card = cards.parse(Path("backlog/s004-partager-une-liste.md"), example)
+        self.assertEqual(card.problems, [])
+        self.assertEqual(cards.label(card.id, card.title), "s004 : Partager une liste")
+        heading = next(line for line in text.splitlines() if line.startswith("### Q17"))
+        self.assertTrue(qualify.CONTROL_RX.match(heading), heading)
+        for promised, built in (
+                ("Merge story/<id> : <titre>", story.merge_subject("s004", "Partager une liste")),
+                ("<id> : <titre> (story/<id>)", story.request_title("s004", "Partager une liste")),
+                ("🚨 <dépôt> — <id> : <titre> — bloqué", notify.subject("s004", "Partager une liste", "bloqué"))):
+            with self.subTest(promised=promised):
+                self.assertIn(promised, text)
+                self.assertEqual(built, promised.replace("<id>", "s004").replace("<titre>", "Partager une liste")
+                                 .replace("🚨 <dépôt> — ", ""))
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        self.assertIn("`<dépôt>-<id> : <titre>`", readme)
+        self.assertIn(cards.TITLE_REQUIRED, text)
 
     def test_no_human_question_silence_claimed(self):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")

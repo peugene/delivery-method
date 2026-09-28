@@ -30,11 +30,14 @@ def card_text(kind: str) -> str:
 
 
 def fill(text: str, sections=("Objective", "Context and scope")) -> str:
-    """Replace the placeholder lines of the given sections, as a lead would."""
+    """Replace the placeholder title and the placeholder lines of the given sections, as a lead
+    would."""
     out, current = [], ""
     for line in text.splitlines():
         heading = re.match(r"^## (.+)$", line)
-        if heading:
+        if not current and line.startswith("title: <"):
+            line = "title: Share a list"
+        elif heading:
             current = heading.group(1)
         elif current in sections and line.startswith("<") and not line.startswith("<!--"):
             line = f"Filled {current.lower()}: src/share/, route POST /lists/{{id}}/share."
@@ -68,6 +71,7 @@ class CardTemplatesTest(unittest.TestCase):
             with self.subTest(kind=kind):
                 text = fm.set_key(card_text(kind), "status", "ready")
                 problems = cards.readiness(self.parse(kind, text))
+                self.assertIn(cards.TITLE_REQUIRED, problems)
                 self.assertIn("'## Objective' is empty", problems)
                 self.assertIn("'## Context and scope' is empty", problems)
 
@@ -273,9 +277,33 @@ class PromptContractTest(unittest.TestCase):
 
     def test_framing_template_follows_the_contract(self):
         body = fm.split(text_of("templates/spec/framing.md"))[1]
-        self.assertIn('D1 — <decision> — "<owner\'s words>" (<date>)', fm.section_get(body, "Firm decisions"))
+        self.assertIn('D1 : <short title> — <decision> — "<owner\'s words>" (<date>)',
+                      fm.section_get(body, "Firm decisions"))
         self.assertIn("technical-lead", fm.section_get(body, "To investigate"))
-        self.assertIn("covers: <D-numbers or none>", fm.section_get(body, "Story map"))
+        story_map = fm.section_get(body, "Story map")
+        self.assertIn("- s001 : <short title", story_map)
+        self.assertIn("covers: <D<n> : short title, or none>", story_map)
+
+    def test_ids_are_named_with_their_short_title(self):
+        # Wherever a person reads it, an identifier is written '<id> : <short title>'.
+        self.assertIn("never by the identifier alone", text_of("rules/rules.md"))
+        for rel, needle in (("templates/impl/card-story.md", "s<nnn> : <titre court>"),
+                            ("templates/impl/card-task.md", "t<nnn> : <titre court>"),
+                            ("templates/impl/card-anomaly.md", "a<nnn> : <titre court>"),
+                            ("templates/story/order.md", "`<card id> : <short title>`"),
+                            ("templates/story/report.md", "`<id> : <short title>`"),
+                            ("templates/story/review.md", "1. <short title> — "),
+                            ("templates/campaign/campaign.md", "« <id> : <titre court> »"),
+                            ("templates/qualification/report.md", "<A-1 : "),
+                            ("templates/spec/review-report.md", "<s001 : <short title>, AC2"),
+                            ("commands/run.md", "`defer <id> : <title>`"),
+                            ("agents/technical-lead.md", "`<id> : <title>`"),
+                            ("agents/product-analyst.md", "`D3 : the sharing rule`")):
+            with self.subTest(rel=rel):
+                self.assertIn(needle, text_of(rel))
+        for kind in CARD_TEMPLATES:
+            with self.subTest(kind=kind):
+                self.assertIn("3 à 8 mots", card_text(kind).split("\n---", 1)[0])
 
 
 if __name__ == "__main__":

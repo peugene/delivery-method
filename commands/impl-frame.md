@@ -34,7 +34,8 @@ Fail closed: on the first failure, say why and stop.
    one ADR per structuring choice, `docs/adr/<nnnn>-<slug>.md` from `adr.md`. Technology lives
    here, never in `spec/`.
 4. Write the cards in `backlog/`, all `status: draft`, from `card-story.md` and `card-task.md`:
-   - one story card per spec story, same id, `spec:` set; its Oracle refers to the spec
+   - each with a `title:` of 3 to 8 plain words, what the user or the team gets;
+   - one story card per spec story, same id and title, `spec:` set; its Oracle refers to the spec
      criteria and adds only the implementation measures, each with its threshold, then
      `Not tested by this card:`;
    - task cards for technical work outside the spec (project skeleton, CI, test harness routes);
@@ -57,7 +58,7 @@ Fail closed: on the first failure, say why and stop.
 - The conventions text, the `test` recipe and any `extra_allow` rule, in the conversation only.
 
 ## Ends with
-A summary: files written, draft cards in dependency order, questions still open, and the
-owner's next gestures: commit the conventions, pass the cards to `ready` by a commit on the
-target branch, then `deliveryctl run --campaign <name>`. Last line:
+A summary: files written, draft cards in dependency order as `<id> : <title>`, questions still
+open, and the owner's next gestures: commit the conventions, pass the cards to `ready` by a
+commit on the target branch, then `deliveryctl run --campaign <name>`. Last line:
 `Outcome: done — <summary>`, or `Outcome: question — <what the owner must decide>`.

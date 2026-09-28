@@ -20,15 +20,15 @@ Load the skill `delivery-method:qualification-doctrine` first; `/delivery-method
 ## May change
 - In `qualification/`: `plan.md`, `order.md`, `reports/<incr>.md` (the runner's records aside),
   `kit/**` (test material), `work/**` (your state, never evidence).
-- New anomaly cards in `backlog/` (`kind: anomaly`, `status: to-triage`), or a counter-proof in one.
+- New `to-triage` anomaly cards in `backlog/`, titled in 3 to 8 words, or a counter-proof in one.
 - Commits on the qualification branch, trailer `Agent: qualification-lead`; never a push.
 
 ## Plan
 - `## Surface` is drawn by reading the code, not the docs: routes, commands, scheduled tasks,
   triggers, installation, removal, upgrade. Each row names its controls or `not covered — <reason>`.
   Redraw it every time: what the code has and the plan lacks is the gap.
-- Controls: `### Q<n> — <claim>   [read|run, negative]` with `Targets:`, `Touches:`, `Do:`,
-  `Expect:`. Numbers are stable and never reused; a retired control says why.
+- Controls: `### Q<n> : <claim in a few words>   [read|run, negative]` with `Targets:`, `Touches:`,
+  `Do:`, `Expect:`. Numbers are stable and never reused; a retired control says why.
 - Negatives by default on each risk declared in the increment's cards (authz: access by a third
   account; migration: populated base; scheduling: clock and restart; others: see the skill).
 - Setup and teardown are controls, run with the kit in the forms `/delivery-method:qualify`
@@ -38,9 +38,9 @@ Load the skill `delivery-method:qualification-doctrine` first; `/delivery-method
 
 ## Read, run, report
 - Reading: re-verify every promise of the docs ("refuses", "rejects", "guarantees") in the code.
-  A reading anomaly gets at once its `A-<n>` line and its `to-triage` card, then the verdict of
-  a `delivery-method:refuter` subagent added to the card (`REFUTED`: the owner drops it at
-  triage); or it becomes a run control instead (submit the input, expect the refusal), no card.
+  A reading anomaly gets at once its `A-<n> : <title>` line and its `to-triage` card, then a
+  `delivery-method:refuter` verdict added to the card (`REFUTED`: the owner drops it at triage);
+  or it becomes a run control instead (submit the input, expect the refusal), no card.
 - Running: the runner carries out `qualification/order.md` (facts to re-verify, a proof line per
   control), committed before `deliveryctl qualify run <incr>`; commit nothing until its `Outcome:`.
 - Reproduce each product failure before counting it; one you cannot reproduce keeps its card,
@@ -55,6 +55,6 @@ Load the skill `delivery-method:qualification-doctrine` first; `/delivery-method
 - Count a result without its proof line, or a reading the code does not confirm.
 
 ## Ends with
-`deliveryctl qualify lint <incr>` at exit 0, then a message to the owner: proposed verdict, counts,
-anomalies by severity, decisions awaited (lettered options, one recommendation), and the gesture
-`deliveryctl qualify submit <incr>`. Last line: `Outcome: done|blocked|question — <reason>`.
+`deliveryctl qualify lint <incr>` at exit 0, then to the owner: proposed verdict, counts, anomalies
+by severity as `a<nnn> : <title>`, decisions awaited (lettered options, one recommendation), the
+gesture `deliveryctl qualify submit <incr>`. Last line: `Outcome: done|blocked|question — <reason>`.

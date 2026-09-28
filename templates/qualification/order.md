@@ -15,7 +15,7 @@ base: <base>
 <Décisions du decision owner qui s'appliquent, citées mot pour mot avec leur date, ou « none ».>
 
 ## Controls to run
-<Numéros du plan dans l'ordre (mise en place d'abord, retrait en dernier), ou « all run controls ».>
+<Contrôles du plan dans l'ordre, chacun « Q<n> : <titre court> » (mise en place d'abord, retrait en dernier), ou « all run controls ».>
 
 ## Environment
 <Montage d'un environnement vierge (guide d'installation suivi à la lettre, ou kit : bash, just --justfile ou docker compose -f sur qualification/kit/), ports, comptes, démontage.>
@@ -29,17 +29,20 @@ base: <base>
 - État de travail (pile, sondes, notes) dans qualification/work/, jamais sous /tmp.
 
 ## Deliverables
-- Dans qualification/reports/<incr>.md, section Results : une ligne par contrôle joué
-  (pass | fail | blocked | not-run) et sa preuve en une ligne, commande → résultat.
+- Dans qualification/reports/<incr>.md, section Results : une ligne par contrôle joué,
+  « Q<n> : <titre court> », son résultat (pass | fail | blocked | not-run) et sa preuve en
+  une ligne, commande → résultat.
 - Section Run du rapport : environnement réellement monté, matériel réparé.
-- Une carte d'anomalie par défaut distinct, écrite dès le constat, et sa ligne A-<n>.
+- Une carte d'anomalie par défaut distinct, écrite dès le constat, et sa ligne
+  « A-<n> : <titre court> ».
 - Commits dans qualification/ et backlog/ seulement.
 
 ## Failure classification
 - `material` : le matériel de recette est en cause (donnée, requête, script ou attendu
   périmé). Le réparer dans qualification/, le déclarer dans la section Run, rejouer.
 - `product` : le produit se comporte mal, ou sa doc promet ce qu'il ne fait pas. Écrire
-  aussitôt backlog/a<nnn>-<slug>.md (kind: anomaly, status: to-triage,
-  found: <incr>/Q<n>@<commit court>, spec: la story visée) ; ne jamais corriger le produit.
+  aussitôt backlog/a<nnn>-<slug>.md (kind: anomaly, title: le défaut en 3 à 8 mots,
+  status: to-triage, found: <incr>/Q<n>@<commit court>, spec: la story visée) ; ne jamais
+  corriger le produit.
 - Un contrôle qui n'a pas pu se jouer est `blocked`, avec ce qui manque.
 - Dans le doute entre `material` et `product` : `product`.

@@ -10,9 +10,8 @@ will answer one. Scope: this story only. Load the skills `delivery-method:anchor
 `delivery-method:testing-doctrine`. Templates: `.delivery/templates/story/`.
 
 ## Receives
-- The prompt: story id and mode, one of `implement`, `resume`, `plan-first`,
-  `implement-approved-plan` (the owner read your plan: carry it out), `fix-verification`,
-  `fix-review`.
+- The prompt: story name (`<id> : <short title>`) and mode: `implement`, `resume`, `plan-first`, `implement-approved-plan`
+  (the owner read your plan: carry it out), `fix-verification`, `fix-review`.
 - `order.md` (it binds you), the card `backlog/<id>-*.md`, the spec story it cites and its
   tagged tests, the `## Project conventions` of `CLAUDE.md`.
 - Then, when they exist: `plan.md` (resume at the first unchecked task), `work/notes.md`,
@@ -36,13 +35,14 @@ will answer one. Scope: this story only. Load the skills `delivery-method:anchor
    one sentence, what the spec says, lettered options with consequences, a recommendation)
    and end `Outcome: deferred`.
 6. An out-of-scope defect: a `## Findings` line, or a new card `backlog/a<nnn>-<slug>.md` from
-   `.delivery/templates/impl/card-anomaly.md` (`status: to-triage`, next free number).
+   `.delivery/templates/impl/card-anomaly.md` (`status: to-triage`, next free number, a `title:`
+   of 3 to 8 words), cited `a<nnn> : <title>` in `## Findings`.
 7. The same red after about three honest attempts: stop, `Outcome: blocked` with the evidence.
 8. Fix modes: fix the cause the verdict names, never the check. Fix every blocking finding;
    carry a `to-decide` one to `## For the decision owner`; a finding you believe wrong gets
    its reason under `## Deviations` and no code change.
-9. Write `report.md` from its template, every section; commit it last, since a later code
-   commit makes its Outcome stale.
+9. Write `report.md` from its template, every section; cite a card, story, anomaly or finding
+   as `<id> : <short title>`. Commit it last: a later code commit makes its Outcome stale.
 
 ## May change
 Code, tests and build files of this worktree; `plan.md`, `report.md`, `spec-question.md` and

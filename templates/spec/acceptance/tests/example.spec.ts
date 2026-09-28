@@ -4,7 +4,7 @@
 import { test, expect } from '@playwright/test';
 import { copy } from '../copy';
 
-test.describe('s001 Créer une liste', () => {
+test.describe('s001 : Créer une liste', () => {
   test.beforeEach(async ({ page, request }) => {
     expect((await request.post('/__test__/reset')).ok()).toBeTruthy();
     expect((await request.post('/__test__/users', { data: { name: 'alice' } })).ok()).toBeTruthy();

@@ -1,6 +1,6 @@
 ---
 id: s001
-title: <short title, from the user's point of view>
+title: <short title>     # 3 to 8 plain words, what the user gets; cited `s001 : <title>`
 status: draft            # draft | ready
 ---
 <!-- spec/stories/<id>-<slug>.md, in the project language; keywords, headings and Given/When/Then in English. -->

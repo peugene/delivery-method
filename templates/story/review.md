@@ -1,5 +1,6 @@
 ## Findings
-1. <finding> — proof: <path:line or command> — matters because: <what breaks if not fixed> — severity: blocking | to-decide | note
+<!-- A card, story or anomaly named in a finding reads `<id> : <short title>` (`s004 : Share a list`), never the bare id. -->
+1. <short title> — <finding> — proof: <path:line or command> — matters because: <what breaks if not fixed> — severity: blocking | to-decide | note
 
 ## Reinforced checks
 - bite: <invariant> — bit | did not bite — `<command>`

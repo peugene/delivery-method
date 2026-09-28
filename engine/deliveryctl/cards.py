@@ -8,7 +8,7 @@ from pathlib import Path
 
 from . import frontmatter as fm
 from .config import RISKS
-from .core import EXIT_ERROR, EXIT_RED, ID_RX, fail
+from .core import EXIT_ERROR, EXIT_RED, ID_RX, DeliveryError, fail
 from .gitops import Git
 
 BACKLOG = "backlog"
@@ -19,6 +19,8 @@ FILE_RX = re.compile(r"^([sta][0-9]{3,4})-[a-z0-9][a-z0-9-]*\.md$")
 MERGE_SUBJECT_RX = re.compile(r"^Merge\b.*?\bstory/([sta][0-9]{3,4})\b")
 SPEC_RX = re.compile(r"^s[0-9]{3,4}$")
 NOT_TESTED_RX = re.compile(r"^\s*[-*]?\s*Not tested by this card\s*:", re.MULTILINE)
+TITLE_REQUIRED = "title: a short title is required"
+LONG_TITLE = 60             # characters: past it, `cards lint` notes the title, without refusing it
 
 
 @dataclass
@@ -91,8 +93,11 @@ def parse(path: Path, text: str, allowed: tuple = RISKS) -> Card:
     spec = str(data.get("spec") or "")
     if spec and not SPEC_RX.match(spec):
         problems.append(f"spec must be a spec story id like s004, got '{spec}'")
+    title = " ".join(str(data.get("title") or "").split())
+    if not title:
+        problems.append(TITLE_REQUIRED)
     return Card(
-        id=card_id, kind=kind, title=str(data.get("title") or ""), status=status,
+        id=card_id, kind=kind, title=title, status=status,
         depends_on=[str(d) for d in deps], risks=declared,
         spec=spec, code=code, show_plan=show_plan,
         found=str(data.get("found") or ""),
@@ -120,6 +125,42 @@ def load_from_rev(git: Git, rev: str, risks: tuple = RISKS) -> list[Card]:
     return cards
 
 
+# -- how a card is named for a human (CONTRACTS.md §5) ----------------------------------------
+_TITLES: dict[str, dict[str, str]] = {}
+
+
+def label(card_id: str, title: str = "") -> str:
+    """'<id> : <short title>'; the identifier alone when the title is unknown or a placeholder."""
+    title = " ".join(str(title or "").split())
+    return f"{card_id} : {title}" if fm.meaningful(title) else card_id
+
+
+def titles(git: Git, rev: str | None = None) -> dict[str, str]:
+    """Titles of the cards of a revision (the target branch by default), by id. Cached per
+    process by the tree of backlog/, so that naming a card costs one git call; empty when the
+    backlog cannot be read (no target branch, no backlog)."""
+    try:
+        rev = rev or git.target_ref()
+        tree = git.run("rev-parse", "--verify", "--quiet", f"{rev}:{BACKLOG}", check=False).stdout.strip()
+        if tree and tree not in _TITLES:
+            names = git.out("ls-tree", "--name-only", tree, check=False).split()
+            found = [parse(Path(BACKLOG) / n, git.show(tree, n) or "") for n in names if n.endswith(".md")]
+            _TITLES[tree] = {c.id: c.title for c in found if c.id}
+    except DeliveryError:
+        return {}
+    return _TITLES.get(tree, {})
+
+
+def label_of(git: Git, card_id: str) -> str:
+    """Label of a card read on the target branch; the identifier alone when it is not there."""
+    return label(card_id, titles(git).get(card_id, ""))
+
+
+def labels(ids, known: dict[str, str]) -> str:
+    """Labels of several cards; '; ' between them, since a title may hold a comma."""
+    return "; ".join(label(i, known.get(i, "")) for i in ids)
+
+
 def find(cards: list[Card], card_id: str) -> Card:
     for card in cards:
         if card.id == card_id:
@@ -142,6 +183,8 @@ def readiness(card: Card) -> list[str]:
             problems.append("'## Oracle' needs a 'Not tested by this card:' line")
     if card.kind == "story" and not card.spec:
         problems.append("a story card names its spec story ('spec: s004')")
+    if card.title and not fm.meaningful(card.title):
+        problems.append(TITLE_REQUIRED)
     return problems
 
 
@@ -164,9 +207,21 @@ def lint(cards: list[Card]) -> list[tuple[str, str]]:
         for dep in card.depends_on:
             if dep not in ids:
                 out.append((card.id, f"depends on unknown card '{dep}'"))
+    known = {c.id: c.title for c in cards}
     for cycle in cycles(cards):
-        out.append((cycle[0], "dependency cycle: " + " -> ".join(cycle)))
+        out.append((cycle[0], "dependency cycle: " + " -> ".join(label(i, known.get(i, "")) for i in cycle)))
     return out
+
+
+def notes(cards: list[Card]) -> list[tuple[str, str]]:
+    """(card id or file, note): remarks that do not make the backlog red."""
+    return [(c.id or c.path.name, f"title of {len(c.title)} characters: a short title reads in a few words (3 to 8)")
+            for c in cards if len(c.title) > LONG_TITLE]
+
+
+def where_label(where: str, cards: list[Card]) -> str:
+    """The card a lint line is about, by its label; a file name stays as it is."""
+    return label(where, next((c.title for c in cards if c.id == where), ""))
 
 
 def cycles(cards: list[Card]) -> list[list[str]]:
@@ -236,5 +291,5 @@ def order(cards: list[Card], done: set[str]) -> list[tuple[Card, list[str]]]:
 def ensure_clean(cards: list[Card]) -> None:
     problems = lint(cards)
     if problems:
-        lines = "\n".join(f"  {where}: {problem}" for where, problem in problems)
+        lines = "\n".join(f"  {where_label(where, cards)} — {problem}" for where, problem in problems)
         fail(EXIT_RED, f"backlog problems:\n{lines}")

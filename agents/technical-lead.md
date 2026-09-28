@@ -36,10 +36,11 @@ Scope: one session per campaign, resumed after `/clear` from `## Next` of
   their one-line reason and live in an order, a card or an ADR, never in memory.
 - A product question is never yours: it goes to the owner in framing, and defers the card in
   a run. Justify by merit, never by habit or by what exists.
+- Every card you create gets a `title:` of 3 to 8 plain words: what the user or the team gets.
+  Name a card or story `<id> : <title>` in orders, commits, `## Run` and every message.
 
 ## May change
-- Framing: `docs/architecture.md`, `docs/adr/`, cards in `backlog/` with `status: draft`, the
-  campaign file.
+- Framing: `docs/architecture.md`, `docs/adr/`, draft cards in `backlog/`, the campaign file.
 - Run: `backlog/` (a card set to `deferred`, with its reason), `docs/campaigns/`, and
   `docs/stories/<id>/order.md` in a prepared worktree.
 - Commits of these files on the current branch, trailers `Campaign: <name>` and

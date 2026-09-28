@@ -24,7 +24,7 @@ Fail closed: on the first failure, say why and stop.
 ## Steps
 1. List what this session decided, assumed, deferred or found that no file holds yet. For
    each point: one line, its destination (file and section), and for a decision the owner's
-   words quoted with the date.
+   words quoted with the date. A card, story or decision is named `<id> : <short title>`.
    - product decision, assumption, deferred point: `framing.md`, its section;
    - open product question: `## Open questions` of the story;
    - technical decision: the card, the order or an ADR; campaign question: `## Questions`;

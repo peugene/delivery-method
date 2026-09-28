@@ -74,7 +74,7 @@ Scope: the `qualification-lead`, the `qualification-runner` and the refuters the
 - Every row of `## Surface` names controls or `not covered — <reason>`.
 - Every risk declared in the increment's cards has at least one negative control.
 - Setup, teardown and every run control have a result and a one-line proof; the counts add up.
-- Every product failure has a `to-triage` card with `found: <incr>/Q<n>@<commit>`.
+- Every product failure has a `to-triage` card with its `title:` and `found: <incr>/Q<n>@<commit>`.
 - `## Read` and `## Run` are filled or say why they are empty.
 - `git status` shows no change outside `qualification/` and new anomaly cards.
 - `deliveryctl qualify lint <incr>` exits 0.

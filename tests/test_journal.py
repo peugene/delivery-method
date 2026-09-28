@@ -94,6 +94,15 @@ class NotifyTest(RepoCase):
         self.assertEqual(self.notify("s001:blocked"), (True, "[notification] ⚠ todo — s001 : blocked — read report.md\n"))
         self.assertEqual(self.notify("s001:blocked"), (False, ""))
 
+    def test_subject_names_the_card_and_shortens_a_long_title(self):
+        self.assertEqual(notify.subject("s004", "Partager une liste", "bloqué"), "s004 : Partager une liste — bloqué")
+        self.assertEqual(notify.subject("s004", "", "bloqué"), "s004 — bloqué")
+        long = "Partager une liste avec un membre de la famille, en lecture seule ou en écriture, depuis le menu"
+        subject = notify.subject("s004", long, "demande de fusion à relire")
+        self.assertEqual(len(subject), notify.SUBJECT_MAX)
+        self.assertTrue(subject.startswith("s004 : Partager une liste avec"), subject)
+        self.assertTrue(subject.endswith("… — demande de fusion à relire"), subject)
+
     def test_failing_notify_cmd_says_so(self):
         cmd = write(self.tmp / "toast", "#!/bin/sh\necho 'cannot open display' >&2\nexit 1\n")
         cmd.chmod(0o755)

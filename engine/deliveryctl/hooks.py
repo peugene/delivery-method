@@ -142,8 +142,11 @@ def _record_refusals(cfg, role: str, scope: str, data: dict) -> None:
         tool_input = use.get("input") or {}
         what = tool_input.get("command") or tool_input.get("file_path") or tool_input.get("path") or ""
         shown.append(f"{use.get('name', '?')}: {' '.join(str(what).split())[:160]}")
+    from . import cards
+    from .gitops import Git
+    scope_name = cards.label_of(Git(cfg.root), scope) if ID_RX.match(scope) else scope
     journal.record(journal.event(cfg.root.name, "refusal",
-                                 f"{role} ({scope}), {len(new)} refusal(s): " + " | ".join(shown),
+                                 f"{role} ({scope_name}), {len(new)} refusal(s): " + " | ".join(shown),
                                  story=scope if ID_RX.match(scope) else "", role=role, evidence=str(path)))
 
 

@@ -7,6 +7,7 @@ lint: <green | red, n findings>
 <!-- refinement/<increment>/reviews/<date>.md, in the project language. The review finds; it does not fix. -->
 <!-- Mandate: the Firm decisions stand; everything the writer derived (bounds, thresholds, assumptions) may be attacked. -->
 <!-- A compatibility finding with no external holder named in external_contracts is a note. -->
+<!-- A story, criterion or decision is named `<id> : <short title>` (`s001 : Create a list, AC2`), never by its bare id. -->
 
 ## Angles
 <One line per angle kept, removed or added for this increment, with the reason in a few words.>
@@ -16,10 +17,10 @@ lint: <green | red, n findings>
 <!-- Refuter: CONFIRMED, or NUANCED with the severity it corrected. -->
 | # | Severity | Target | Finding | Evidence | Recommendation | Refuter |
 |---|---|---|---|---|---|---|
-| 1 | <severity> | <s001 AC2, framing.md Scope…> | <fact, then what breaks> | <path:line, or command and exit code> | <change> | <verdict> |
+| 1 | <severity> | <s001 : <short title>, AC2 · framing.md Scope…> | <fact, then what breaks> | <path:line, or command and exit code> | <change> | <verdict> |
 
 ## For the decision owner
-<Each to-decide finding: the problem in one plain sentence, lettered options with their consequence, one recommendation. "none" if there is none.>
+<Each to-decide finding, with the story or decision it concerns as `<id> : <short title>`: the problem in one plain sentence, lettered options with their consequence, one recommendation. "none" if there is none.>
 
 ## Refuted
 <One line per refuted finding: - <finding> — <the refuter's reason>. "none" if there is none.>

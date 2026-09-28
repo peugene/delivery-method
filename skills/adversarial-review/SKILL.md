@@ -22,7 +22,8 @@ compatibility finding without an external holder named in `external_contracts` i
 
 **Evidence or nothing.** Each finding carries `path:line` or a command with its exit code, and
 what breaks if it is not fixed. An absence is shown by the search run and a known positive
-the same search finds.
+the same search finds. A finding names its target story, card, control or decision
+`<id> : <short title>` (`s004 : Share a list`), never by its bare id.
 
 **Your verdict first.** Write your own verdict before reading the author's report, summary or
 verdict. Then compare, and say where you differ.

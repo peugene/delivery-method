@@ -6,7 +6,7 @@ import os
 import stat
 import sys
 import time
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 
 from support import RepoCase, git, sh, write
@@ -240,15 +240,17 @@ class StoryCycleTest(RepoCase):
         with self.assertRaises(core.DeliveryError) as ctx:
             story.open_story(self.cfg, "s002")
         self.assertIn("re-anchor", ctx.exception.message)
+        self.assertIn("anchored before s001 : Sign in was merged", ctx.exception.message)
 
     def test_open_requires_dependencies_and_order(self):
-        write(self.repo / "backlog/s002-lists.md", CARD.replace("s001", "s002").replace("depends_on: []", "depends_on: [s001]"))
+        write(self.repo / "backlog/s002-lists.md", CARD.replace("s001", "s002").replace("Sign in", "Create a list")
+              .replace("depends_on: []", "depends_on: [s001]"))
         self.commit_all("s002")
         git(self.repo, "push", "--quiet", "origin", "main")
         story.prepare(self.cfg, "s002")
         with self.assertRaises(core.DeliveryError) as ctx:
             story.open_story(self.cfg, "s002")
-        self.assertIn("depends on cards not done", ctx.exception.message)
+        self.assertIn("s002 : Create a list depends on cards not done yet: s001 : Sign in", ctx.exception.message)
 
     # -- chaining in one call (the detached `story next` of the Stop hook) ---------------------
     def test_one_next_verifies_then_starts_the_reviewer(self):
@@ -376,7 +378,7 @@ class StoryCycleTest(RepoCase):
         with self.assertRaises(core.DeliveryError) as ctx:
             self.open("s002")
         self.assertEqual(ctx.exception.code, core.EXIT_PRECONDITION)
-        self.assertIn("in flight: s001", ctx.exception.message)
+        self.assertIn("in flight: s001 : Sign in", ctx.exception.message)
 
     def test_a_stopped_story_does_not_count_in_flight(self):
         write(self.repo / "backlog/s002-lists.md", CARD.replace("s001", "s002"))
@@ -471,6 +473,8 @@ class StoryCycleTest(RepoCase):
         st = story.next_step(self.cfg, "s001")
         self.assertEqual(st.name, "submitted", story.render(st))
         self.assertIn(f"s001:submitted:{st.tree}", self.notified())
+        self.assertIn("pr create --base main --head story/s001 --title s001 : Sign in (story/s001) --body-file",
+                      (self.tmp / "gh-calls").read_text())
         (self.tmp / "gh-state").write_text("DOWN")
         st = story.state(self.cfg, "s001")
         self.assertEqual((st.name, st.engine_next), ("ready-to-submit", ""))
@@ -483,6 +487,52 @@ class StoryCycleTest(RepoCase):
         story.next_step(self.cfg, "s001")
         self.assertEqual(creates(), 1)
         self.assertEqual(git(self.repo, "ls-remote", "origin", "refs/heads/story/s001"), "")
+
+    # -- names: '<id> : <short title>' (CONTRACTS.md §5) -------------------------------------------
+    def test_status_commits_prompts_and_merge_name_the_story(self):
+        self.open()
+        st = self.drive()
+        self.assertEqual(story.render(st).splitlines()[0], "s001 : Sign in — submitted")
+        self.assertEqual(story.describe(self.cfg, "s001").splitlines()[0], "s001 : Sign in — submitted")
+        subjects = git(self.wt(), "log", "--format=%s", "origin/main..HEAD").splitlines()
+        self.assertEqual(subjects[-1], "order s001 : Sign in")
+        self.assertIn("verify s001 : Sign in — pass", subjects)
+        verification = (self.wt() / "docs/stories/s001/verification.md").read_text()
+        self.assertTrue(verification.startswith("# Verification of s001 : Sign in\n"), verification)
+        prompts = (self.wt() / "docs/stories/s001/work/fake-prompts").read_text().splitlines()
+        self.assertEqual(prompts[0], "Story s001 : Sign in — read docs/stories/s001/order.md and carry it out. "
+                                     "Mode: implement.")
+        self.assertTrue(prompts[1].startswith("Story s001 : Sign in — review the change at code tree "), prompts)
+        code, out = self.cli("gate", "s001")
+        self.assertEqual((code, out.splitlines()[-1]), (0, "s001 : Sign in — integration check green"))
+        story.merge(self.cfg, "s001")
+        self.assertEqual(git(self.repo, "log", "-1", "--format=%s"), "Merge story/s001 : Sign in")
+        self.assertIn("s001", cards.merged_ids(story.Git(self.repo)))
+        self.assertTrue(story.close(self.cfg, "s001").startswith("closed s001 : Sign in; work files removed"))
+        self.assertEqual(story.render(story.state(self.cfg, "s001")).splitlines()[0], "s001 : Sign in — closed")
+
+    def cli(self, *argv) -> tuple[int, str]:
+        from deliveryctl import cli
+        out = io.StringIO()
+        with redirect_stdout(out), redirect_stderr(io.StringIO()):
+            code = cli.main(list(argv))
+        return code, out.getvalue()
+
+    def test_notification_and_journal_name_the_story(self):
+        self.configure(levers="verify_attempts = 0\n")
+        self.fake(BREAK="always")
+        self.open()
+        err = io.StringIO()
+        with redirect_stderr(err):
+            story.next_step(self.cfg, "s001")
+        self.assertIn("[notification] ⚠ todo — s001 : Sign in — borne atteinte — read ", err.getvalue())
+        self.assertTrue(self.events("verify-exhausted")[0]["text"].startswith("s001 : Sign in — read "))
+
+    def test_unknown_card_is_named_by_its_id(self):
+        self.assertEqual(cards.label_of(story.Git(self.repo), "s999"), "s999")
+        self.assertEqual(story.render(story.state(self.cfg, "s999")).splitlines()[0], "s999 — none")
+        self.assertEqual(cards.label_of(story.Git(self.tmp), "s001"), "s001")      # not a repository
+        self.assertEqual(cards.label_of(story.Git(self.repo), "s001"), "s001 : Sign in")
 
     def test_transcript_path(self):
         base = self.home / ".claude/projects"

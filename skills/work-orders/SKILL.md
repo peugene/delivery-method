@@ -10,7 +10,8 @@ Scope: one order per card, in the prepared worktree; one card, one logical chang
 
 ## Doctrine
 **Writing the order.** Start from the skeleton written by `story prepare`; project language,
-section names in English, about `max_order_lines` lines (default 60).
+section names in English, about `max_order_lines` lines (default 60). Every card, story,
+anomaly or decision the order cites reads `<id> : <short title>` (`s004 : Share a list`).
 - Frontmatter: keep `id` and `base` (the commit where you read the facts); fill `campaign`;
   `path: short` only when the card has no risk, the change stays under `short_path_max_lines`,
   no data schema or API changes, and `show_plan` is false; otherwise `path: plan`.
@@ -45,7 +46,7 @@ that merge.
    and into the next orders.
 3. `## Oracle`: every line measured, or "not measured" with a reason you accept.
 4. `## Findings` and `## For the decision owner`: carry them to `## Run` of the campaign; a
-   defect not yet in `backlog/` becomes an anomaly card.
+   defect not yet in `backlog/` becomes an anomaly card with a `title:` of 3 to 8 words.
 
 ## Defaults and levers
 - `path: plan` by default; `short` only under the four conditions above.
@@ -62,10 +63,12 @@ that merge.
 - Anchoring several cards ahead; writing a fact that depends on an unmerged card.
 - "TBD", "as usual", "see the code": an order that needs a question is not an order.
 - Two logical changes in one order, or one change spread over two orders.
+- A bare id (`s004`) where the reader needs `s004 : Share a list`.
 
 ## Checks
 - `deliveryctl story open <id>` accepts the order (sections, frontmatter, `base` containing the
   dependencies of the card).
 - Every `Read at base` line has its `path:line` and its label; every deliverable its proof.
 - Every risk of the card has its reinforced check, or the line saying it is only noted.
+- Every card, story, anomaly or decision cited reads `<id> : <short title>`.
 - Nothing in the order depends on an unmerged card.

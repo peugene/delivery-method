@@ -8,6 +8,9 @@ ensuite un changement de contrat est une version majeure.
 
 Conventions : identifiants, clés, noms de section et mots-clés en anglais ; tout texte lu par un
 humain (cartes, ordres, comptes rendus, plans) dans la langue du projet (`content_language`).
+Dans un texte lu par un humain, une carte, une story, une anomalie, un contrôle de recette ou une
+décision se nomme par sa référence lisible `<id> : <titre court>`, jamais par son seul
+identifiant (§1).
 
 ## 1. Vocabulaire
 
@@ -18,6 +21,7 @@ humain (cartes, ordres, comptes rendus, plans) dans la langue du projet (`conten
 | `repo_role` | `single`, `spec`, `impl` : ce que contient le dépôt |
 | `release_stage` | `pre-release`, `released` : avant ou après la première livraison à un tiers |
 | carte | fichier de `backlog/` : `story` (issue de la spec), `task` (travail technique hors spec), `anomaly` (défaut constaté) |
+| référence lisible | `<id> : <titre court>` (identifiant, espace, deux-points, espace, titre court) : `s004 : Partager une liste`, `a003 : Le partage accepte un compte supprimé`, `Q17 : un compte non invité ne lit pas une liste partagée`, `D3 : la règle de partage`. Nom d'une carte, d'une story, d'une anomalie, d'un contrôle de recette ou d'une décision dans tout texte lu par un humain : comptes rendus, ordres, relectures, plans, messages de commit, campagnes, sorties du moteur, notifications, messages au decision owner. Titre inconnu : l'identifiant seul. Les noms techniques gardent l'identifiant seul : branche `story/s004`, chemin `docs/stories/s004/`, trailer `Story: s004`, frontmatter, étiquette de test `@s004`, argument de commande |
 | `Outcome` | fin de travail d'une session : `done`, `blocked`, `deferred`, `plan-ready`, `question` |
 | lead | session de conduite d'une phase : `product-analyst`, `technical-lead`, `qualification-lead` |
 | campagne | objectif d'un lead avec son critère de fin (incrément tagué, lot de cartes fusionné, recette rendue) ; une session de lead par campagne, reprise après `/clear` depuis `## Next` |
@@ -134,7 +138,7 @@ numéro que la story de spec), `t<nnn>` (tâche), `a<nnn>` (anomalie).
 ---
 id: s004
 kind: story            # story | task | anomaly
-title: Partager une liste
+title: Partager une liste   # obligatoire : titre court, quelques mots (3 à 8 visés)
 status: draft          # draft | ready | to-triage | deferred | dropped
 depends_on: []         # identifiants de cartes
 risks: [authz]         # authz | data-write | file-upload | data-leak | migration | api-contract | new-screen | scheduling | realtime | dependency, plus les risques déclarés dans reinforced_risks
@@ -148,6 +152,14 @@ found: ""              # anomalie seulement : <où>@<commit>, par exemple 0.2.0/
 ## Oracle
 ## Technical notes
 ```
+
+**Titre court.** `title:` est obligatoire. `cards lint` refuse une carte sans titre, et une carte
+`ready` dont le titre est resté un gabarit (`<titre court>`) :
+`title: a short title is required`. Au-delà de 60 caractères, il note le titre sans le refuser.
+Le titre dit en quelques mots ce que l'utilisateur ou l'équipe obtient, ou le défaut constaté ;
+une carte de story reprend l'identifiant et le titre de sa story de spec. Il donne la référence
+lisible de la carte (§1). Le moteur lit les titres sur la branche cible : une carte qui n'y est
+pas encore se nomme par son identifiant seul.
 
 **Carte `ready`** : exécutable par un agent de gamme moyenne sans question ni décision.
 - `## Objective` et `## Context and scope` non vides ; fichiers, routes ou composants nommés.
@@ -232,10 +244,11 @@ recommite avec une nouvelle ligne `Outcome:`.
 
 ### 6.4 Relecture — `review.md`
 
-`## Findings` : constats numérotés, chacun avec sa preuve (`chemin:ligne` ou commande), sa
-phrase de matérialité (« ce qui casse si on ne le corrige pas ») et sa sévérité (`blocking`,
-`to-decide`, `note`). `## Reinforced checks` : une ligne par contrôle de l'ordre et par doute
-nommé : `bite: <invariant> — bit | did not bite — <commande>` ou
+`## Findings` : constats numérotés, chacun avec un titre court (`1. <titre court> — …`), sa
+preuve (`chemin:ligne` ou commande), sa phrase de matérialité (« ce qui casse si on ne le
+corrige pas ») et sa sévérité (`blocking`, `to-decide`, `note`). `## Reinforced checks` : une
+ligne par contrôle de l'ordre et par doute nommé :
+`bite: <invariant> — bit | did not bite — <commande>` ou
 `adversarial-review: <angle> — <résultat>`. Puis le bloc de verdict (§7.1). À partir de la
 deuxième boucle, le relecteur ne revoit que les corrections.
 
@@ -310,16 +323,20 @@ session humaine.
 
 ## 8. Commits
 
-- **Commit d'un rôle** : message au présent, corps proportionné à la surprise du changement ;
-  trailers `Story: <id>` et `Agent: <role>` (un lead : `Campaign: <nom>` et `Agent: <role>`).
-- **Commit du moteur** : trailers `Story: <id>` (ou `Campaign: <nom>`) et `Agent: engine`.
+- **Commit d'un rôle** : message au présent, corps proportionné à la surprise du changement,
+  toute carte nommée par sa référence lisible (§1) ; trailers `Story: <id>` et `Agent: <role>`
+  (un lead : `Campaign: <nom>` et `Agent: <role>`). Report d'une carte par le lead : sujet
+  `defer <id> : <titre>`, jamais `story/<id>` (§5, carte faite).
+- **Commit du moteur** : trailers `Story: <id>` (ou `Campaign: <nom>`) et `Agent: engine` ;
+  sujets `order <id> : <titre>` et `verify <id> : <titre> — pass|fail`.
 - **Commit de recette** : `Campaign: qualification-<incr>` (la nuit : `Campaign: nightly-<jour>`) et
   `Agent: <role>` ; jamais de trailer `Story:`.
 - **Fusion par `deliveryctl merge`** : fusion par commit de fusion (jamais squash ni rebase) de
-  la tête contrôlée ; sujet `Merge story/<id>: <titre>` ; trailers `Story: <id>`,
+  la tête contrôlée ; sujet `Merge story/<id> : <titre>` ; trailers `Story: <id>`,
   `Spec: <id>@<version>#<blob court>` (ou `none`), `Approved-By: <email humain | story-reviewer>`,
   `Delivery-Method: <version>`. Une fusion faite dans la forge est admise ; sa traçabilité passe
-  par la demande de fusion, dont le titre finit par `(story/<id>)`.
+  par la demande de fusion, dont le titre est `<id> : <titre> (story/<id>)` et le corps commence
+  par `# <id> : <titre>`.
 
 ## 9. États d'une story
 
@@ -508,13 +525,27 @@ une carte en `ready`, taguer, pousser une branche de lead, passer en `released`,
 | `hook stop`, `hook session-start` | appelés par les hooks du plugin |
 | `kit lint` | contrôle du plugin lui-même |
 
+**Sorties du moteur.** Une carte y est nommée par sa référence lisible (§1) ; plusieurs
+références se séparent par `; `, un titre pouvant contenir une virgule :
+- `cards list` : `<id> : <titre> — <kind>, <status>[, depends on <références>]` ;
+- `cards order` : `<id> : <titre> — <kind>, <status>[ (waits for <références>)]` ;
+- `cards lint` : `<id> : <titre> — <problème>`, puis `note: <id> : <titre> — <remarque>`, sans
+  effet sur le verdict ;
+- `story status`, `story wait`, `story next` : première ligne `<id> : <titre> — <état>` ;
+- `verify`, `gate` : `<id> : <titre> — verification <verdict> (<résultat>)`,
+  `<id> : <titre> — integration check green|red`.
+
+Les formules auxquelles réagit le lead en run restent en anglais, mot pour mot : `already open`,
+`anchored before … was merged`, `still running`, `max_in_flight`, `waits for`.
+
 ### 12.3 Campagne
 
 `docs/campaigns/<nom>.md`, 40 lignes visées : `## Objective`, `## Questions`, `## Run` (réécrite
-en fin de run : stories faites, décisions prises en route, cartes différées, points pour le
-decision owner), `## Next` (prochain pas, fichiers à lire en premier, réécrit à chaque passation).
-Le lead commite sur la branche courante de la copie principale, sans pousser ; ce qu'il produit
-arrive sur la branche cible par un geste humain (commit, ou demande de fusion approuvée).
+en fin de run, chaque carte nommée `<id> : <titre court>` : stories faites, décisions prises en
+route, cartes différées, points pour le decision owner), `## Next` (prochain pas, fichiers à lire
+en premier, réécrit à chaque passation). Le lead commite sur la branche courante de la copie
+principale, sans pousser ; ce qu'il produit arrive sur la branche cible par un geste humain
+(commit, ou demande de fusion approuvée).
 
 ### 12.4 Run
 
@@ -537,10 +568,14 @@ l'est plus, que `notify_cmd` ait réussi ou non (son échec s'affiche sur la sor
 
 | Événement | Titre |
 |---|---|
-| décision attendue (story arrêtée, plan à voir, demande de fusion à relire, borne atteinte, contrôle d'intégration ou CI rouge, vérification impossible, run arrêté, recette à synthétiser, suite de nuit sans test, sans runner ou sans carte, question d'une session humaine) | `⚠ <dépôt> — <id> : <quoi>` |
+| décision attendue (story arrêtée, plan à voir, demande de fusion à relire, borne atteinte, contrôle d'intégration ou CI rouge, vérification impossible, run arrêté, recette à synthétiser, suite de nuit sans test, sans runner ou sans carte, question d'une session humaine) | `⚠ <dépôt> — <id> : <titre> — <quoi>` ; sans carte : `⚠ <dépôt> — <quoi>` |
 | run terminé, avec renvoi à `## Run` | `⭐ <dépôt> — run terminé` |
-| agent bloqué (§9.3) | `🚨 <dépôt> — <id> bloqué` |
+| agent bloqué (§9.3) | `🚨 <dépôt> — <id> : <titre> — bloqué` |
 | anomalies de la nuit prêtes à trier | `⭐ <dépôt> — anomalies à trier` |
+
+Une story fusionnée, avec `notify_story_end` (§4) : `⭐ <dépôt> — <id> : <titre> — fusionnée`.
+Au-delà de 90 caractères pour `<id> : <titre> — <quoi>`, le titre est abrégé par « … » ; titre
+inconnu : `<id> — <quoi>`.
 
 **Journal d'expérience** : événements JSON, lus par l'humain seul, jamais renvoyés aux agents.
 
@@ -569,10 +604,10 @@ ligne `plugin` de `deliveryctl doctor`).
 `refinement/<incr>/framing.md` (80 lignes visées) : frontmatter `id`, `status` (`discussing`,
 `framed`, `closed`), `scope` ; sections `## Purpose`, `## Firm decisions`, `## Scope`,
 `## Exclusions`, `## To investigate`, `## Assumptions`, `## Deferred`, `## Story map`, `## Next`.
-Une décision ferme s'écrit `D<n> — <décision> — « <mots de l'humain> » (<date>)`. Quatre GO
-humains : cadrage (`framed`), revue, clôture (`closed`), publication (tag). En solo, le GO est le
-statut, posé par l'analyste sur message explicite de l'humain ; en équipe, la demande de fusion
-approuvée.
+Une décision ferme s'écrit `D<n> : <titre court> — <décision> — « <mots de l'humain> » (<date>)`.
+Quatre GO humains : cadrage (`framed`), revue, clôture (`closed`), publication (tag). En solo, le
+GO est le statut, posé par l'analyste sur message explicite de l'humain ; en équipe, la demande
+de fusion approuvée.
 
 Rapport de revue : `refinement/<incr>/reviews/<date>.md` (`-2`, `-3` pour une autre revue du même
 jour), terminé par `Max severity: blocking | to-decide | note | none` et `Spec ready: yes | no`
@@ -590,10 +625,11 @@ spec/acceptance/          suite Playwright, harness-contract.md, fixtures/empty-
 spec/CHANGELOG.md
 ```
 
-Story de spec : frontmatter `id`, `title`, `status` (`draft`, `ready`) ; sections
-`## Business rules`, `## Main flow`, `## Extensions`, `## Acceptance criteria`, `## UI contract`,
-`## Outcomes`, `## Out of scope`, `## Open questions`. Une extension est un élément de liste
-`- <n><lettre>. <condition> : …` de `## Extensions` ; un critère :
+Story de spec : frontmatter `id`, `title` (titre court, 3 à 8 mots, repris par la carte de la
+story), `status` (`draft`, `ready`) ; sections `## Business rules`, `## Main flow`,
+`## Extensions`, `## Acceptance criteria`, `## UI contract`, `## Outcomes`, `## Out of scope`,
+`## Open questions`. Une extension est un élément de liste `- <n><lettre>. <condition> : …` de
+`## Extensions` ; un critère :
 `AC<n> @main|@ext-<n><lettre> — Given … When … Then …` (mots-clés en anglais). Un test couvre un
 critère par l'étiquette `@<id>-ac<n>` dans son titre, et porte `@<id>` dans son titre ou dans celui
 d'un `test.describe` du même fichier.
@@ -652,11 +688,12 @@ informe.
 
 `## Surface` : un tableau dressé en lisant le code (routes, commandes, tâches planifiées,
 déclencheurs, installation, retrait, mise à jour), une ligne par point d'entrée avec ses contrôles
-ou `not covered — <raison>`. Puis un contrôle par section :
+(`Q<n> : <titre court>`) ou `not covered — <raison>`. Puis un contrôle par section, son titre
+court étant l'affirmation vérifiée :
 
 ```markdown
-### Q17 — un compte non invité ne lit pas une liste partagée   [run, negative]
-Targets: s004 · GET /lists/{id}
+### Q17 : un compte non invité ne lit pas une liste partagée   [run, negative]
+Targets: s004 : Partager une liste · GET /lists/{id}
 Touches: src/**/share/**
 Do: …
 Expect: …
@@ -667,10 +704,11 @@ Numéros stables, jamais réattribués. Mise en place et retrait sont des contr�
 ### 15.2 Rapport — `qualification/reports/<incr>.md`
 
 En tête `Tree:` (arbre de code du commit dont part la branche de recette), `Spec:`, `Env:` ; un
-tableau `Q | Mode | Result | Proof`, une ligne par contrôle du plan (`Result` : `pass`, `fail`,
-`blocked` ou `not-run` ; `Proof` : une ligne `commande → valeur`) ; les anomalies `A-<n>` ; les
-points d'entrée non couverts ; sections `Read` et `Run` (une section vide dit pourquoi) ; en fin,
-un bloc de verdict proposé (§7.1), `By: qualification-lead`.
+tableau `Q | Mode | Result | Proof`, une ligne par contrôle du plan (`Q` :
+`Q<n> : <titre court>` ; `Result` : `pass`, `fail`, `blocked` ou `not-run` ; `Proof` : une ligne
+`commande → valeur`) ; les anomalies `A-<n> : <titre court>` ; les points d'entrée non couverts ;
+sections `Read` et `Run` (une section vide dit pourquoi) ; en fin, un bloc de verdict proposé
+(§7.1), `By: qualification-lead`.
 
 ### 15.3 Déroulé et verdict
 
@@ -685,9 +723,10 @@ version taguée sans rapport accepté pour son arbre.
 
 ### 15.4 Anomalies
 
-L'agent qui trouve écrit la carte `kind: anomaly`, `status: to-triage`, tout de suite. Le tri est
-la relecture de la demande de fusion qui la porte : corriger (maturation puis `ready`), reporter
-(`deferred`), abandonner (`dropped`), ou remonter une question de spec.
+L'agent qui trouve écrit la carte `kind: anomaly`, `title:` le défaut en 3 à 8 mots,
+`status: to-triage`, tout de suite. Le tri est la relecture de la demande de fusion qui la
+porte : corriger (maturation puis `ready`), reporter (`deferred`), abandonner (`dropped`), ou
+remonter une question de spec.
 
 ## 16. Suite complète de nuit — `deliveryctl nightly`
 

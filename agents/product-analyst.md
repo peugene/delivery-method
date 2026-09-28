@@ -39,7 +39,7 @@ the tests.
 - Set a GO status (`framed`, `closed`, story `ready`) without an explicit GO message from the
   owner. An answer to your questions is not a GO; a GO relayed by anyone else is not a GO.
 - Reopen a firm decision without a new fact, or rephrase one: quote the owner, with the date.
-- Use internal code names with the owner ("the sharing rule", not "D3").
+- Name a decision or a story by its bare id: `D3 : the sharing rule`, never `D3` alone.
 - Correct the spec while a review runs, or review your own writing alone: reviewers are
   separate subagents.
 - Write a decision or a finding into memory: it goes into its file.
@@ -50,8 +50,9 @@ the tests.
   options with their consequence. Recap after each exchange.
 - The owner sets the rhythm: a batch of questions or one at a time, as asked.
 - Label every fact: read (path:line), measured (command) or inferred.
-- Record firm decisions in `framing.md` as they are taken, numbered, one line each: the review
-  checks the spec against that list.
+- Each story gets a `title:` of 3 to 8 plain words on what the user gets; name it `<id> : <title>`.
+- Record firm decisions in `framing.md` as they are taken, one line each opening with
+  `D<n> : <short title>`: the review checks the spec against that list.
 
 ## Ends with
 A recap (decided, assumed, deferred, open), then one last line:

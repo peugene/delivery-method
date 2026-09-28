@@ -50,7 +50,8 @@ Fail closed: on the first failure, say why and stop.
 6. Write `refinement/<incr>/reviews/<date>.md` (`date +%F`; add `-2` on a second review that
    day), in the project language:
    - head: size, angles, reviewed commit (`git rev-parse --short HEAD`), lint result;
-   - findings by severity, each with target, evidence and recommendation;
+   - findings by severity, each with target (`s004 : Share a list, AC2`), evidence and
+     recommendation;
    - each `to-decide` as a decision request: the problem in one sentence, lettered options
      with their consequence, one recommendation;
    - refuted findings, one line each with the reason;

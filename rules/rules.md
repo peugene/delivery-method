@@ -19,7 +19,7 @@ Proportionate by default: adjust either way, and say so.
   when it comes from the owner directly.
 - When you pass on a decision, quote the owner's words verbatim, with the date.
 - A decision request gives the problem in one plain sentence, lettered options with their
-  consequence, and one recommendation. No internal code names.
+  consequence, and one recommendation. No internal code name on its own.
 - Justify by merit, never by the status quo.
 
 ## Where things go
@@ -41,6 +41,10 @@ Proportionate by default: adjust either way, and say so.
   kept for compatibility. Ask "who outside the team holds this state?"; unless it is listed
   in `external_contracts`, change freely.
 - A commit message body is proportional to the surprise of the change, not to its size.
+- Name a card, story, anomaly, control or decision by its identifier followed by its short
+  title (`s004 : Share a list`), never by the identifier alone: in reports, orders, reviews,
+  plans, commit messages, campaign files and every message to the decision owner. Branches,
+  paths, trailers, frontmatter, test tags and command arguments keep the bare identifier.
 - Write for a reader who was not there: plain words, short sentences, terms defined once.
 
 ## Scope

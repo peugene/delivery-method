@@ -22,6 +22,7 @@ from .forge import Forge, request_body
 from .gitops import Git, story_branch, worktree_path
 from .verify import register, registry, story_dir, unregister, verify
 
+STATE_WORDS = {"blocked": "bloquée", "deferred": "différée", "plan-ready": "plan à relire"}
 STOPPED = ("blocked", "deferred", "plan-ready", "verify-exhausted", "review-exhausted")
 TEMPLATES = Path(__file__).resolve().parents[2] / "templates"
 ORDER_SECTIONS = ("Objective", "Decisions", "Proposal", "Constraints",
@@ -32,6 +33,7 @@ ORDER_SECTIONS = ("Objective", "Decisions", "Proposal", "Constraints",
 class State:
     id: str
     name: str
+    title: str = ""
     worktree: Path | None = None
     tree: str = ""
     outcome: tuple | None = None
@@ -96,13 +98,21 @@ def _card(git: Git, card_id: str, cfg: Config | None = None) -> cards.Card:
     return cards.find(cards.load_from_rev(git, git.target_ref(), risks), card_id)
 
 
+def label(st: State) -> str:
+    return cards.label(st.id, st.title)
+
+
+def _labels(cfg: Config, ids) -> str:
+    return cards.labels(ids, cards.titles(Git(cfg.root)))
+
+
 # -- state ----------------------------------------------------------------------------------
 def state(cfg: Config, card_id: str) -> State:
     check_id(card_id)
     main = Git(cfg.root)
     branch = story_branch(card_id)
     wt = main.worktree_for(branch)
-    st = State(id=card_id, name="none", worktree=wt)
+    st = State(id=card_id, name="none", worktree=wt, title=cards.titles(main).get(card_id, ""))
     if card_id in cards.merged_ids(main):
         st.name = "merged" if wt else "closed"
         st.engine_next = "close the worktree" if wt else ""
@@ -224,7 +234,8 @@ def prepare(cfg: Config, card_id: str) -> Path:
     main.fetch()
     card = _card(main, card_id, cfg)
     if card.status != "ready":
-        fail(EXIT_PRECONDITION, f"{card_id} is '{card.status}': only a ready card can be prepared")
+        fail(EXIT_PRECONDITION, f"{cards.label(card_id, card.title)} is '{card.status}': "
+                                "only a ready card can be prepared")
     branch = story_branch(card_id)
     wt = main.worktree_for(branch)
     if not wt:
@@ -268,9 +279,9 @@ def _in_flight(cfg: Config, other_than: str) -> list[str]:
     for cid in open_ids(cfg):
         if cid == other_than:
             continue
-        name = state(cfg, cid).name
-        if name not in STOPPED + ("prepared", "merged", "closed", "none"):
-            out.append(cid)
+        st = state(cfg, cid)
+        if st.name not in STOPPED + ("prepared", "merged", "closed", "none"):
+            out.append(label(st))
     return out
 
 
@@ -280,21 +291,22 @@ def open_story(cfg: Config, card_id: str, order_draft: Path | None = None, start
     main = Git(cfg.root)
     done = cards.merged_ids(main)
     card = _card(main, card_id, cfg)
+    name = cards.label(card_id, card.title)
     if card.status != "ready":
-        fail(EXIT_PRECONDITION, f"{card_id} is '{card.status}': only a ready card can be opened")
+        fail(EXIT_PRECONDITION, f"{name} is '{card.status}': only a ready card can be opened")
     missing = [d for d in card.depends_on if d not in done]
     if missing:
-        fail(EXIT_PRECONDITION, f"{card_id} depends on cards not done yet: {', '.join(missing)}")
+        fail(EXIT_PRECONDITION, f"{name} depends on cards not done yet: {_labels(cfg, missing)}")
     flying = _in_flight(cfg, card_id)
     if len(flying) >= cfg.max_in_flight:
-        fail(EXIT_PRECONDITION, f"max_in_flight = {cfg.max_in_flight}; in flight: {', '.join(flying)}")
+        fail(EXIT_PRECONDITION, f"max_in_flight = {cfg.max_in_flight}; in flight: {'; '.join(flying)}")
     wt = main.worktree_for(story_branch(card_id))
     if not wt:
         prepare(cfg, card_id)
         wt = main.worktree_for(story_branch(card_id))
     git = Git(wt)
     if git.first_commit_files(git.merge_base("HEAD", git.target_ref())):
-        fail(EXIT_PRECONDITION, f"{card_id} is already open")
+        fail(EXIT_PRECONDITION, f"{name} is already open")
     rel = f"{story_dir(card_id)}/order.md"
     order = wt / rel
     if order_draft:
@@ -309,7 +321,7 @@ def open_story(cfg: Config, card_id: str, order_draft: Path | None = None, start
         fail(EXIT_RED, f"order.md: base '{base}' is not a commit of this repository")
     stale = [d for d in card.depends_on if d not in cards.merged_ids(git, base)]
     if stale:
-        fail(EXIT_PRECONDITION, f"order.md was anchored before {', '.join(stale)} was merged: "
+        fail(EXIT_PRECONDITION, f"order.md was anchored before {_labels(cfg, stale)} was merged: "
                                 "re-anchor at the head of the target branch and update 'base'")
     lines = len(text.splitlines())
     if lines > cfg.lever("max_order_lines"):
@@ -318,7 +330,7 @@ def open_story(cfg: Config, card_id: str, order_draft: Path | None = None, start
     head = git.rev(git.target_ref())
     if git.head() != head:
         git.run("reset", "--quiet", "--keep", head)
-    order_sha = git.commit([rel], f"order {card_id}: {card.title}", [("Story", card_id), ("Agent", "engine")])
+    order_sha = git.commit([rel], f"order {name}", [("Story", card_id), ("Agent", "engine")])
     register(cfg.root, card_id, "order", order_sha)
     (wt / story_dir(card_id) / "work").mkdir(parents=True, exist_ok=True)
     ports.port(cfg, card_id)
@@ -351,10 +363,11 @@ def _start_implementer(cfg: Config, st: State, mode: str) -> None:
     if prev and (mode == "resume" or prev.get("step") == step):
         evidence = prev.get("log") or str(transcript_path(prev.get("cwd", ""), prev.get("session_id", "")))
         journal.record(journal.event(
-            cfg.root.name, "resume", f"{st.id}: story-implementer relaunched ({mode}); previous session "
+            cfg.root.name, "resume", f"{label(st)} — story-implementer relaunched ({mode}); previous session "
             f"{prev.get('session_id', '?')} ended without an Outcome", story=st.id, role="story-implementer",
             evidence=evidence))
-    _start(cfg, st.id, "story-implementer", roles.PROMPTS["story-implementer"].format(id=st.id, mode=mode), step)
+    _start(cfg, st.id, "story-implementer",
+           roles.PROMPTS["story-implementer"].format(id=st.id, label=label(st), mode=mode), step)
 
 
 def _alive(cfg: Config, card_id: str) -> list[str]:
@@ -444,7 +457,7 @@ def _advance(cfg: Config, card_id: str, go: bool = False, chained: bool = False)
             if exc.code != EXIT_RED:
                 raise
             notify.notify(cfg.root, f"{card_id}:gate-red:{st.tree}", "decision",
-                          f"{card_id} : contrôle d'intégration rouge", exc.message[:200])
+                          notify.subject(card_id, st.title, "contrôle d'intégration rouge"), exc.message[:200])
             st.detail = exc.message
             return st
         st = state(cfg, card_id)
@@ -465,14 +478,14 @@ def _advance(cfg: Config, card_id: str, go: bool = False, chained: bool = False)
             verify(cfg, st.worktree, card_id, card)
         except DeliveryError as exc:
             notify.notify(cfg.root, f"{card_id}:verify-error:{st.tree}", "decision",
-                          f"{card_id} : vérification impossible", exc.message[:200])
+                          notify.subject(card_id, st.title, "vérification impossible"), exc.message[:200])
             st.detail = f"verification could not run: {exc.message}"
             return st
         return _advance(cfg, card_id, chained=True)
     elif st.name == "to-review":
         register(cfg.root, card_id, "review", {"tree": st.tree, "head": Git(st.worktree).head()})
         _start(cfg, card_id, "story-reviewer", roles.PROMPTS["story-reviewer"].format(
-            id=card_id, tree=st.tree, target=Git(cfg.root).target_ref(), loop=st.review_noes + 1))
+            id=card_id, label=label(st), tree=st.tree, target=Git(cfg.root).target_ref(), loop=st.review_noes + 1))
     elif st.name == "submitted":
         if cfg.integration == "ai":
             if chained:
@@ -483,19 +496,19 @@ def _advance(cfg: Config, card_id: str, go: bool = False, chained: bool = False)
             except Exception as exc:
                 if getattr(exc, "code", None) == EXIT_RED:
                     notify.notify(cfg.root, f"{card_id}:merge-red:{st.tree}", "decision",
-                                  f"{card_id} : CI rouge", str(exc)[:200])
+                                  notify.subject(card_id, st.title, "CI rouge"), str(exc)[:200])
                 elif (st.extra.get("mr") or {}).get("checks") == "none":
                     _ci_absent(cfg, card_id, st)
                 return state(cfg, card_id)
         notify.notify(cfg.root, f"{card_id}:submitted:{st.tree}", "decision",
-                      f"{card_id} : demande de fusion à relire", st.human_next)
+                      notify.subject(card_id, st.title, "demande de fusion à relire"), st.human_next)
     elif st.name in ("blocked", "deferred", "plan-ready"):
         notify.notify(cfg.root, f"{card_id}:{st.name}:{st.tree}", "decision",
-                      f"{card_id} : {st.name}", st.detail[:200] or st.human_next)
+                      notify.subject(card_id, st.title, STATE_WORDS.get(st.name, st.name)), st.detail[:200] or st.human_next)
     elif st.name in ("verify-exhausted", "review-exhausted"):
         if notify.notify(cfg.root, f"{card_id}:{st.name}", "decision",
-                         f"{card_id} : borne atteinte", st.human_next):
-            journal.record(journal.event(cfg.root.name, st.name, f"{card_id}: {st.human_next}", story=card_id))
+                         notify.subject(card_id, st.title, "borne atteinte"), st.human_next):
+            journal.record(journal.event(cfg.root.name, st.name, f"{label(st)} — {st.human_next}", story=card_id))
     elif st.name == "merged" and cfg.integration == "ai":
         close(cfg, card_id)
     return state(cfg, card_id)
@@ -509,7 +522,8 @@ def _ci_absent(cfg: Config, card_id: str, st: State) -> None:
     first = waits.setdefault(key, time.time())
     write_json(path, waits)
     if time.time() - first > cfg.lever("stall_minutes") * 60:
-        notify.notify(cfg.root, f"{card_id}:ci-absent:{st.tree}", "decision", f"{card_id} : CI absente",
+        notify.notify(cfg.root, f"{card_id}:ci-absent:{st.tree}", "decision",
+                      notify.subject(card_id, st.title, "CI absente"),
                       f"aucun contrôle de CI sur la demande de fusion depuis {cfg.lever('stall_minutes')} min")
 
 
@@ -518,7 +532,7 @@ def submit(cfg: Config, card_id: str) -> str:
     main = Git(cfg.root)
     wt = main.worktree_for(story_branch(card_id))
     if not wt:
-        fail(EXIT_PRECONDITION, f"no worktree for {card_id}")
+        fail(EXIT_PRECONDITION, f"no worktree for {cards.label_of(main, card_id)}")
     git = Git(wt)
     problems = gate.check(git, card_id)
     if problems:
@@ -527,7 +541,17 @@ def submit(cfg: Config, card_id: str) -> str:
     own = story_dir(card_id) + "/"
     body = request_body(card_id, card.title, git.show("HEAD", own + "report.md"),
                         git.show("HEAD", own + "verification.md"), git.show("HEAD", own + "review.md"), [])
-    return Forge(cfg, git).open(card_id, f"{card.title} (story/{card_id})", body)
+    return Forge(cfg, git).open(card_id, request_title(card_id, card.title), body)
+
+
+def request_title(card_id: str, title: str) -> str:
+    """'<id> : <title> (story/<id>)': the suffix names the branch of a squash merge (§5)."""
+    return f"{cards.label(card_id, title)} ({story_branch(card_id)})"
+
+
+def merge_subject(card_id: str, title: str) -> str:
+    """'Merge story/<id> : <title>': a subject naming story/<id> marks the card done (§5)."""
+    return f"Merge {cards.label(story_branch(card_id), title)}"
 
 
 def spec_ref(cfg: Config, card: cards.Card) -> str:
@@ -561,7 +585,7 @@ def merge(cfg: Config, card_id: str, by: str = "") -> str:
     main = Git(cfg.root)
     wt = main.worktree_for(story_branch(card_id))
     if not wt:
-        fail(EXIT_PRECONDITION, f"no worktree for {card_id}")
+        fail(EXIT_PRECONDITION, f"no worktree for {cards.label_of(main, card_id)}")
     git = Git(wt)
     problems = gate.check(git, card_id)
     if problems:
@@ -569,11 +593,11 @@ def merge(cfg: Config, card_id: str, by: str = "") -> str:
     card = _card(main, card_id, cfg)
     trailers = [("Story", card_id), ("Spec", spec_ref(cfg, card)),
                 ("Approved-By", by or _owner_email(main)), ("Delivery-Method", VERSION)]
-    summary = Forge(cfg, git).merge(card_id, f"Merge story/{card_id}: {card.title}", trailers,
-                                    head=git.head())
+    summary = Forge(cfg, git).merge(card_id, merge_subject(card_id, card.title), trailers, head=git.head())
     from . import config as config_mod
     if config_mod.machine().get("notify_story_end"):
-        notify.notify(cfg.root, f"{card_id}:merged", "story-end", f"{card_id} fusionnée", card.title)
+        notify.notify(cfg.root, f"{card_id}:merged", "story-end", notify.subject(card_id, card.title, "fusionnée"),
+                      summary)
     return summary
 
 
@@ -589,7 +613,7 @@ def close(cfg: Config, card_id: str) -> str:
     if not merged:
         st = state(cfg, card_id)
         if st.name not in STOPPED:
-            fail(EXIT_PRECONDITION, f"{card_id} is '{st.name}': only a merged or stopped story is closed")
+            fail(EXIT_PRECONDITION, f"{label(st)} is '{st.name}': only a merged or stopped story is closed")
         require_human("deliveryctl story close (stopped story)")
     kept = []
     if wt:
@@ -602,7 +626,7 @@ def close(cfg: Config, card_id: str) -> str:
         main.run("branch", "-D", story_branch(card_id), check=False)
     ports.release(cfg, card_id)
     unregister(cfg.root, card_id)
-    note = f"closed {card_id}" + ("" if merged else " (branch kept)")
+    note = f"closed {cards.label_of(main, card_id)}" + ("" if merged else " (branch kept)")
     if kept:
         note += f"; work files removed: {', '.join(kept[:10])}"
     return note
@@ -648,9 +672,10 @@ def check_stall(cfg: Config, card_id: str) -> list[str]:
         if idle > limit:
             stalled.append(role)
             if notify.notify(cfg.root, f"{card_id}:stall:{info['session_id']}", "stalled",
-                             f"{card_id} bloqué", f"{role} sans avancée depuis {int(idle // 60)} min"):
+                             notify.subject(card_id, cards.titles(git).get(card_id, ""), "bloqué"),
+                             f"{role} sans avancée depuis {int(idle // 60)} min"):
                 journal.record(journal.event(
-                    cfg.root.name, "stall", f"{role} idle for {int(idle // 60)} min", story=card_id,
+                    cfg.root.name, "stall", f"{cards.label_of(Git(cfg.root), card_id)}: {role} idle for {int(idle // 60)} min", story=card_id,
                     evidence=str(transcript_path(info.get("cwd", ""), info["session_id"]))))
     return stalled
 
@@ -665,7 +690,7 @@ def scan(cfg: Config) -> None:
             if st.engine_next and st.name != "submitted" and not _alive(cfg, cid):
                 next_step(cfg, cid)
         except DeliveryError as exc:
-            eprint(f"deliveryctl: {cid}: {exc.message}")
+            eprint(f"deliveryctl: {cards.label_of(Git(cfg.root), cid)}: {exc.message}")
 
 
 def wait(cfg: Config, card_id: str, timeout: int = 540, until: str = "checkpoint") -> State:
@@ -693,7 +718,7 @@ def wait(cfg: Config, card_id: str, timeout: int = 540, until: str = "checkpoint
                 if cfg.integration == "ai":
                     next_step(cfg, card_id)
         except DeliveryError as exc:
-            eprint(f"deliveryctl: {card_id}: {exc.message}")
+            eprint(f"deliveryctl: {label(st)}: {exc.message}")
             st.detail = f"last error, retried: {exc.message.splitlines()[0][:160]}"
         if time.time() >= deadline:
             st.detail = (st.detail + "; " if st.detail else "") + "still running: wait again"
@@ -713,7 +738,7 @@ def describe(cfg: Config, card_id: str) -> str:
 
 
 def render(st: State) -> str:
-    lines = [f"{st.id}: {st.name}"]
+    lines = [f"{label(st)} — {st.name}"]
     if st.worktree:
         lines.append(f"  worktree: {st.worktree}")
     if st.tree:

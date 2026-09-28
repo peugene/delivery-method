@@ -19,8 +19,8 @@ would one acceptance suite judge both? A sentence that fits one stack only is a 
 | a job every morning at 9 | a reminder shows when the due time of the task is reached |
 | error 404 on an unknown list | the person sees `list.not_found` and no task of that list |
 
-**Story file** `spec/stories/<id>-<slug>.md`: frontmatter `id`, `title`, `status`
-(`draft` | `ready`); sections in this order:
+**Story file** `spec/stories/<id>-<slug>.md`: frontmatter `id`, `title` (a short title, 3 to 8
+plain words on what the user gets), `status` (`draft` | `ready`); sections in this order:
 - `## Business rules`: `BR-1`, `BR-2`… one observable rule each.
 - `## Main flow`: numbered steps; every visible text is a key in backticks (`share.open`).
 - `## Extensions`: `2a.` one alternative or failure each, with what the person sees.
@@ -41,7 +41,7 @@ the rule that produces them.
 the locales of `spec/spec.toml`. A domain word that looks technical goes to the glossary.
 
 **One story, one user goal.** Dependencies are functional: B needs A when a person must do A
-before B makes sense.
+before B makes sense. A story is named `<id> : <title>` wherever it is cited, never by its id.
 
 **Ready.** A story is `ready` when a team on any stack can build it without a product
 question: `## Open questions` empty, its assumptions accepted by the owner, `deliveryctl spec

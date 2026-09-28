@@ -29,14 +29,14 @@ owner, gives the corrections; otherwise, the stories.
 1. Read `framing.md` (firm decisions, scope, exclusions, assumptions, story map),
    `spec/product/`, the existing stories and the copy files.
 2. For each story of the map (or the one given), write `spec/stories/<id>-<slug>.md` with
-   `status: draft`: business rules, main flow, extensions, criteria, UI contract, outcomes,
-   out of scope, open questions.
+   `status: draft` and the short title of the map as `title:` (3 to 8 plain words): business
+   rules, main flow, extensions, criteria, UI contract, outcomes, out of scope, open questions.
 3. Add each UI key to every `spec/ui/copy.<locale>.json`; a new domain term to the glossary.
 4. Anything you had to settle becomes an open question of the story, or an assumption added
    to `framing.md`, both submitted to the owner.
 5. Run `deliveryctl spec lint`; fix; exempt only with a reason.
-6. Commit (`Campaign: <incr>`, `Agent: product-analyst`); recap the stories, the open
-   questions numbered with a recommendation, the lint result; propose
+6. Commit (`Campaign: <incr>`, `Agent: product-analyst`); recap the stories as
+   `<id> : <title>`, the open questions numbered with a recommendation, the lint result; propose
    `/delivery-method:spec-review <incr>`.
 
 **Corrections and close** (after a review report in `refinement/<incr>/reviews/`):

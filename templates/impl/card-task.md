@@ -1,7 +1,7 @@
 ---
 id: t<nnn>
 kind: task
-title: <titre court>
+title: <titre court>        # 3 à 8 mots : ce que l'utilisateur ou l'équipe obtient
 status: draft               # draft ; le passage en ready est un commit du decision owner
 depends_on: []              # cartes à fusionner avant celle-ci
 risks: []                   # authz | data-write | file-upload | data-leak | migration | api-contract | new-screen | scheduling | realtime | dependency
@@ -10,6 +10,7 @@ code: true                  # false : carte sans code (documentation, chapeau) ;
 show_plan: false            # true par exception : l'exécutant s'arrête sur son plan
 ---
 <!-- Carte de tâche : travail technique hors spec (outillage, CI, harnais de test, enquête, documentation). -->
+<!-- Partout ailleurs, la carte se nomme « t<nnn> : <titre court> », jamais par son seul identifiant. -->
 ## Objective
 <Le résultat observable attendu, en une ou deux phrases.>
 

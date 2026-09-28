@@ -8,9 +8,23 @@ import subprocess
 from pathlib import Path
 
 from . import config
+from .cards import label
 from .core import eprint, file_lock, now_iso, read_json, run_dir, write_json
 
 ICONS = {"decision": "⚠", "done": "⭐", "stalled": "🚨", "night": "⭐", "story-end": "⭐"}
+SUBJECT_MAX = 90            # characters of a subject naming a card, the shortened title included
+
+
+def subject(card_id: str, title: str, what: str) -> str:
+    """Subject of a toast about a card: '<id> : <title> — <what>' (CONTRACTS.md §13). A long
+    title is shortened with an ellipsis so that the subject stays within SUBJECT_MAX
+    characters; an unknown title leaves '<id> — <what>'."""
+    head, tail = f"{card_id} : ", f" — {what}"
+    title = " ".join(str(title or "").split())
+    room = max(SUBJECT_MAX - len(head) - len(tail), 12)
+    if len(title) > room:
+        title = title[:room - 1].rstrip() + "…"
+    return label(card_id, title) + tail
 
 
 def notify(root: Path, key: str, kind: str, subject: str, message: str) -> bool:

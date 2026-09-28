@@ -34,17 +34,17 @@ record, or stop blocked. Load the skill `delivery-method:qualification-doctrine`
    (pass | fail | blocked | not-run) and proof `<command> → <decisive observed value>`.
 4. A failure is `material` (stale test data or request: repair it, replay, declare it in `## Run`)
    or `product` (the product disagrees with its docs, the spec or `Expect:`). When unsure: product.
-5. Each product failure gets its card at once, next free `a<nnn>`: `kind: anomaly`,
-   `status: to-triage`, `found: <incr>/Q<n>@<base, short>`, `spec:` and `risks:` of the targeted
-   story if any. Objective: expected behaviour. Context and scope: observed with its proof,
-   expected and its source, reproduction from a fresh state. Oracle: that reproduction. Technical
-   notes: severity (blocking | to-decide | note; security is blocking). Add its `A-<n>` line.
+5. Each product failure gets its card at once, next free `a<nnn>`: `kind: anomaly`, `title:` the
+   defect in 3 to 8 words, `status: to-triage`, `found: <incr>/Q<n>@<base, short>`, `spec:` and
+   `risks:` of the targeted story if any. Objective: expected behaviour. Context and scope:
+   observed with its proof, expected and its source, reproduction from a fresh state. Oracle:
+   that reproduction. Technical notes: severity (blocking | to-decide | note; security is
+   blocking). Add its `A-<n> : <title>` line, naming its control `Q<n> : <claim>` and its card.
 6. Teardown, even after failures: remove what setup created, then prove nothing is left
    (containers, volumes, files, secrets). A residue is an anomaly.
 7. `deliveryctl cards lint` at exit 0; end `## Run` with the counts and your Outcome; commit.
-
-Night run: one card per distinct fault of the log (same cause, not same test), with its failing
-tests, and the ids, `found:` and trailers the instruction gives; no report to write.
+8. Night run: no order and no report; one card per distinct fault of the log (same cause, not
+   same test), with its failing tests, and the ids, `found:` and trailers the instruction gives.
 
 ## Must not
 - Change the product (code, docs, configuration, `spec/`, existing cards), not even a typo.
@@ -56,5 +56,5 @@ tests, and the ids, `found:` and trailers the instruction gives; no report to wr
 
 ## Ends with
 Last line of `## Run` (none at night) and of your last message, `done` or `blocked` only:
-`Outcome: done — <n> controls: <p> pass, <f> fail, <b> blocked, <r> not-run; anomalies <ids>`
-(night run: `<n> faults; anomalies <ids>`), or `Outcome: blocked — <reason>` (run impossible).
+`Outcome: done — <n> controls: <p> pass, <f> fail, <b> blocked, <r> not-run; <a> anomalies`
+(night run: `<n> faults, <a> anomaly cards`), or `Outcome: blocked — <reason>` (run impossible).

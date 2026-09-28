@@ -6,7 +6,7 @@ import re
 from datetime import datetime, timedelta, timezone
 from unittest import mock
 
-from support import RepoCase, write
+from support import RepoCase, git, write
 
 from deliveryctl import config, roles
 from deliveryctl.window import mentions
@@ -65,6 +65,38 @@ class RolesTest(RepoCase):
         lead = self.perms("technical-lead")["permissions"]
         self.assertEqual(lead["additionalDirectories"], [str(self.tmp / "todo-wt")])
         self.assertNotIn("additionalDirectories", self.perms("story-implementer")["permissions"])
+
+
+class NamesTest(RepoCase):
+    """Role prompts and the story window name the card by its label (CONTRACTS.md §5)."""
+
+    def test_prompts_carry_the_label(self):
+        prompt = roles.PROMPTS["story-implementer"].format(id="s004", label="s004 : Partager une liste",
+                                                           mode="implement")
+        self.assertEqual(prompt, "Story s004 : Partager une liste — read docs/stories/s004/order.md and carry it "
+                                 "out. Mode: implement.")
+        prompt = roles.PROMPTS["story-reviewer"].format(id="s004", label="s004 : Partager une liste",
+                                                        tree="t" * 40, target="origin/main", loop=1)
+        self.assertTrue(prompt.startswith("Story s004 : Partager une liste — review the change at code tree"))
+
+    def test_story_window_is_named_by_the_card(self):
+        write(self.repo / "backlog/s004-share.md", "---\nid: s004\nkind: story\ntitle: Partager une liste\n"
+                                                   "status: draft\nspec: s004\n---\n")
+        self.commit_all("card")
+        git(self.repo, "push", "--quiet", "origin", "main")
+        module = importlib.import_module(f"deliveryctl.window.{mentions.NAME}")
+        win = getattr(module, mentions.NAME.capitalize() + "Window")(self.repo)
+        calls = []
+
+        def fake(*args, **_):
+            calls.append(args)
+            return {}                     # no workspace id: open_story stops after the creation
+        with mock.patch.object(module, "_" + mentions.NAME, side_effect=fake):
+            win.open_story("s004", self.tmp / "todo-wt" / "s004")
+            win.open_story("s009", self.tmp / "todo-wt" / "s009")
+            win.open_story("0.2.0", self.tmp / "todo-wt" / "qualification-0.2.0")
+        labels = [args[args.index("--label") + 1] for args in calls if args[:2] == ("workspace", "create")]
+        self.assertEqual(labels, ["todo-s004 : Partager une liste", "todo-s009", "todo-0.2.0"])
 
 
 class StartingSessionTest(RepoCase):

@@ -85,8 +85,13 @@ class HerdrWindow(Window):
         lay = self.layout(card_id)
         if lay.get("agent") and self._pane_alive(lay["agent"]):
             return
-        label = f"{self.root.name}-{card_id}"
-        created = _herdr("workspace", "create", "--cwd", str(worktree), "--label", label, "--no-focus")
+        from ..cards import label, titles
+        from ..core import ID_RX
+        from ..gitops import Git
+        is_card = bool(ID_RX.match(card_id))
+        # the workspace is named like the card: '<repo>-<id> : <short title>'
+        name = label(f"{self.root.name}-{card_id}", titles(Git(self.root)).get(card_id, "") if is_card else "")
+        created = _herdr("workspace", "create", "--cwd", str(worktree), "--label", name, "--no-focus")
         ws = _find(created, "workspace_id")
         if not ws:
             return
@@ -94,8 +99,6 @@ class HerdrWindow(Window):
         agent = next((p["pane_id"] for p in _find(panes, "panes") or [] if p.get("workspace_id") == ws), None)
         if not agent:
             return
-        from ..core import ID_RX
-        is_card = bool(ID_RX.match(card_id))
         status = tests = None
         if is_card:
             status = _find(_herdr("pane", "split", agent, "--direction", "right", "--no-focus"), "pane_id")

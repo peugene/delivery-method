@@ -12,6 +12,7 @@ from pathlib import Path
 
 from . import ports
 from . import verdict as vd
+from .cards import label
 from .config import Config
 from .core import (EXIT_PRECONDITION, EXIT_RED, clean_env, fail, file_lock, glob_match, now_iso, read_json,
                    run_dir, write_json)
@@ -155,7 +156,8 @@ def verify(cfg: Config, worktree: Path, card_id: str, card, port: int | None = N
     seconds = sum(r["seconds"] for r in results)
     parts.append(f"{seconds // 60}m{seconds % 60:02d}s")
     result = "; ".join(parts)
-    lines = [f"# Verification of {card_id}", "", f"- Date: {now_iso()}", f"- Base: {base}", ""]
+    name = label(card_id, card.title)
+    lines = [f"# Verification of {name}", "", f"- Date: {now_iso()}", f"- Base: {base}", ""]
     for r in results:
         lines.append(f"- `{r['command']}` → exit {r['exit']} in {r['seconds']}s")
     if untracked:
@@ -167,7 +169,7 @@ def verify(cfg: Config, worktree: Path, card_id: str, card, port: int | None = N
     path = worktree / story_dir(card_id) / "verification.md"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("\n".join(lines) + "\n" + block, encoding="utf-8")
-    sha = git.commit([str(path.relative_to(worktree))], f"verify {card_id}: {'pass' if ok else 'fail'}",
+    sha = git.commit([str(path.relative_to(worktree))], f"verify {name} — {'pass' if ok else 'fail'}",
                      [("Story", card_id), ("Agent", "engine")])
     register(cfg.root, card_id, "verification", sha)
     return vd.parse(path.read_text(encoding="utf-8"), "verification")

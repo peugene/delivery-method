@@ -132,12 +132,31 @@ class QualifyTest(QualifyCase):
     def test_lint_catches_duplicate_numbers(self):
         wt, tree = self.opened()
         self.fill(wt, tree, plan=PLAN.replace("### Q2", "### Q1"))
-        self.assertRegex(self.problems(), r"plan\.md:\d+: Q1 is already used at line \d+")
+        self.assertRegex(self.problems(), r"plan\.md:\d+: Q1 : a stranger cannot read a list — number already "
+                                          r"used by Q1 : the owner reads a list \(line \d+\)")
 
     def test_lint_catches_missing_expect(self):
         wt, tree = self.opened()
         self.fill(wt, tree, plan=PLAN.replace("Expect: 404\n", ""))
-        self.assertIn("Q2: missing 'Expect:' line", self.problems())
+        self.assertIn("Q2 : a stranger cannot read a list — missing 'Expect:' line", self.problems())
+
+    def test_control_heading_with_a_colon_and_control_labels(self):
+        wt, tree = self.opened()
+        self.fill(wt, tree, plan=PLAN.replace("### Q2 — a stranger", "### Q2 : a stranger"))
+        self.assertEqual(self.problems(), "")
+        self.assertEqual(qualify.control_label(17, "un compte non invité ne lit pas une liste partagée"),
+                         "Q17 : un compte non invité ne lit pas une liste partagée")
+        self.assertEqual(qualify.control_label(17, "<title>"), "Q17")
+
+    def test_result_rows_name_their_control(self):
+        wt, tree = self.opened()
+        report = (REPORT.replace("| Q1 | run | pass", "| Q1 : the owner reads a list | run | pass")
+                  .replace("| Q2 | run, negative | pass", "| Q2 : a stranger cannot read a list | run, negative | ok"))
+        self.fill(wt, tree, report=report)
+        problems = self.problems()
+        self.assertNotIn("Q1", problems)
+        self.assertIn("Q2 : a stranger cannot read a list — result must be one of", problems)
+        self.assertNotIn("without a result row", problems)
 
     def test_lint_catches_malformed_control_heading(self):
         wt, tree = self.opened()
@@ -164,7 +183,7 @@ class QualifyTest(QualifyCase):
                   .replace("By: qualification-lead", "By: qualification-runner"))
         self.fill(wt, tree, report=report)
         problems = self.problems()
-        self.assertIn("Q1: result must be one of pass, fail, blocked, not-run", problems)
+        self.assertIn("Q1 : the owner reads a list — result must be one of pass, fail, blocked, not-run", problems)
         self.assertIn("a proof is never a path under /tmp", problems)
         self.assertIn("a qualification verdict is proposed by: qualification-lead", problems)
 
@@ -175,7 +194,7 @@ class QualifyTest(QualifyCase):
         self.fill(wt, tree, plan=plan, report=report)
         problems = self.problems()
         self.assertIn("entry point without a control", problems)
-        self.assertIn("Q2 of the plan has no result row", problems)
+        self.assertIn("Q2 : a stranger cannot read a list — control of the plan without a result row", problems)
 
     def refused(self, needle):
         with self.assertRaises(core.DeliveryError) as ctx:
@@ -272,8 +291,20 @@ class NightlyRedTest(QualifyCase):
     def test_red_suite_gives_anomaly_cards_on_a_branch(self):
         code, out = self.quiet(nightly.run, self.cfg)
         self.assertEqual(code, core.EXIT_RED, out)
-        self.assertIn("1 anomaly card(s) (a001)", out)
+        self.assertIn("1 anomaly card(s) (a001 : Sign in fails)", out)
         self.assertIn("Agent: qualification-runner", self.check_card())
+
+    def test_request_body_names_the_cards(self):
+        path = self.tmp / "nightly.log"
+        card = nightly.cards.parse(Path("backlog/a001-sign-in-fails.md"),
+                                   "---\nid: a001\nkind: anomaly\ntitle: Sign in fails\nstatus: to-triage\n"
+                                   "spec: s001\nfound: nightly-x@abc\n---\n")
+        body = nightly._request_body(core.today(), "abc1234", "just acceptance", {"exit": 1}, [card], [], path,
+                                     {"s001": "Sign in"})
+        self.assertIn("- `backlog/a001-sign-in-fails.md` — a001 : Sign in fails — spec s001 : Sign in", body)
+
+    def test_runner_is_asked_for_a_short_title(self):
+        self.assertIn("title: the fault in 3 to 8 words", nightly.PROMPT)
 
     def test_engine_commits_cards_left_by_the_runner(self):
         os.environ["FAKE_RUNNER_NO_COMMIT"] = "1"

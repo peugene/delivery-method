@@ -80,7 +80,7 @@ class OpenTest(ForgeCase):
     def test_merged_request_is_neither_pushed_nor_opened_again(self):
         self.gh(view="MERGED")
         with self.assertRaises(core.DeliveryError) as ctx:
-            self.forge.open("s001", "Sign in (story/s001)", "body")
+            self.forge.open("s001", "s001 : Sign in (story/s001)", "body")
         self.assertEqual(ctx.exception.code, core.EXIT_PRECONDITION)
         self.assertIn("already merged", ctx.exception.message)
         self.assertEqual(self.remote_branch(), "")
@@ -88,19 +88,24 @@ class OpenTest(ForgeCase):
 
     def test_open_request_is_pushed_and_reused(self):
         self.gh(view="OPEN")
-        self.assertEqual(self.forge.open("s001", "Sign in (story/s001)", "body"), "https://forge.test/pr/7")
+        self.assertEqual(self.forge.open("s001", "s001 : Sign in (story/s001)", "body"), "https://forge.test/pr/7")
         self.assertTrue(self.remote_branch())
         self.assertFalse(any(c.startswith("pr create") for c in self.calls()))
 
     def test_new_request_is_pushed_then_created(self):
-        self.assertEqual(self.forge.open("s001", "Sign in (story/s001)", "body"), "https://forge.test/pr/8")
+        self.assertEqual(self.forge.open("s001", "s001 : Sign in (story/s001)", "body"), "https://forge.test/pr/8")
         self.assertTrue(self.remote_branch())
         self.assertTrue(any(c.startswith("pr create") for c in self.calls()))
 
 
 class MergeTest(ForgeCase):
     def merge(self):
-        return self.forge.merge("s001", "Merge story/s001: Sign in", [("Story", "s001")], head="abc")
+        return self.forge.merge("s001", "Merge story/s001 : Sign in", [("Story", "s001")], head="abc")
+
+    def test_request_body_names_the_story(self):
+        body = forge.request_body("s001", "Sign in", "Outcome: done — x", None, None, [])
+        self.assertTrue(body.startswith("# s001 : Sign in\n"), body)
+        self.assertTrue(forge.request_body("s001", "", None, None, None, []).startswith("# s001\n"))
 
     def test_merges_only_on_a_green_ci(self):
         for rollup, code in (([], core.EXIT_PRECONDITION),
@@ -137,18 +142,18 @@ class LocalMergeTest(RepoCase):
     def test_interrupted_check_aborts_the_merge(self):
         with mock.patch.object(forge, "run", side_effect=KeyboardInterrupt):
             with self.assertRaises(KeyboardInterrupt):
-                self.forge.merge("s001", "Merge story/s001: Sign in", [("Story", "s001")])
+                self.forge.merge("s001", "Merge story/s001 : Sign in", [("Story", "s001")])
         self.assert_untouched()
 
     def test_refused_commit_aborts_the_merge(self):
         write(self.repo / ".git" / "hooks" / "commit-msg", "#!/bin/sh\nexit 1\n").chmod(0o755)
         with self.assertRaises(core.DeliveryError):
-            self.forge.merge("s001", "Merge story/s001: Sign in", [("Story", "s001")])
+            self.forge.merge("s001", "Merge story/s001 : Sign in", [("Story", "s001")])
         self.assert_untouched()
 
     def test_green_check_merges(self):
         self.assertIn("merged story/s001 into main (local)",
-                      self.forge.merge("s001", "Merge story/s001: Sign in", [("Story", "s001")]))
+                      self.forge.merge("s001", "Merge story/s001 : Sign in", [("Story", "s001")]))
         self.assertIn("Story: s001", git(self.repo, "log", "-1", "--format=%B"))
 
 
