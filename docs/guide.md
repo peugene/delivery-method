@@ -1,0 +1,270 @@
+# Guide : une spec, deux implémentations
+
+Ce guide suit la méthode de bout en bout sur un cas concret : une liste de tâches (TODO) spécifiée
+une fois, puis implémentée deux fois, sur deux piles différentes. Pour chaque phase : un schéma,
+puis les commandes du plugin (tapées dans une session Claude) et celles du moteur `deliveryctl`
+(tapées dans le shell). Les formats exacts sont dans [`CONTRACTS.md`](../CONTRACTS.md).
+
+## Le cas : trois dépôts
+
+| Dépôt | `repo_role` | Contenu |
+|---|---|---|
+| `todo-spec` | `spec` | la spécification, neutre en technologie, et sa suite de tests d'IHM Playwright |
+| `todo-kotlin` | `impl` | une implémentation Kotlin (Ktor, pages Thymeleaf et HTMX) |
+| `todo-supabase` | `impl` | une implémentation Next.js et Supabase |
+
+Les stories de la spec : `s001 : Se connecter`, `s002 : Créer une liste`,
+`s003 : Gérer les tâches d'une liste`, `s004 : Partager une liste`,
+`s005 : Synchroniser en direct`, `s006 : Rappeler les échéances`.
+
+```mermaid
+flowchart LR
+    subgraph SPEC["todo-spec — phase spécification"]
+        F[Cadrage d'un incrément] --> W[Stories et tests d'IHM] --> R[Revue] --> T["Tag spec-v0.1.0"]
+    end
+    T -- "deliveryctl spec sync 0.1.0" --> K
+    T -- "deliveryctl spec sync 0.1.0" --> S
+    subgraph K["todo-kotlin"]
+        K1[Implémentation story par story] --> K2[Recette]
+    end
+    subgraph S["todo-supabase"]
+        S1[Implémentation story par story] --> S2[Recette]
+    end
+    K1 -. "question produit : spec-question.md" .-> F
+    S1 -. "question produit : spec-question.md" .-> F
+    K2 -. "« la spec est muette »" .-> F
+```
+
+La spec est la même pour les deux implémentations : chaque dépôt `impl` en garde une copie exacte
+d'une version publiée (`spec/` et `spec.lock`), et la même suite de tests d'IHM juge les deux.
+Aucun agent n'écrit dans un autre dépôt : une question produit remonte par un fichier que vous
+portez au cadrage suivant.
+
+## 0. Équiper les trois dépôts
+
+Dans chaque dépôt, une fois :
+
+| Où | Commande | Effet |
+|---|---|---|
+| shell | `claude plugin marketplace add peugene/delivery-method` | déclare la marketplace |
+| shell | `claude plugin install delivery-method@delivery-method --scope project` | active le plugin pour le projet |
+| session Claude | `/delivery-method:init` | cinq questions, puis `deliveryctl init` : `delivery.toml`, `.delivery/`, `CLAUDE.md`, `.claude/settings.json`, `.gitignore`, `justfile`, CI ; un squelette `spec/` pour `todo-spec` |
+| shell | `deliveryctl doctor` | diagnostic en lecture seule |
+
+Réponses types : `todo-spec` → rôle `spec` ; `todo-kotlin` → rôle `impl`, `check = "just check"`
+(Gradle : lint, build, tests), `acceptance = "just acceptance {grep}"`, `serve = "just serve {port}"`,
+`test = "just test {selector}"` ; `todo-supabase` → rôle `impl`, mêmes recettes écrites pour npm et
+Supabase en local. Relisez les fichiers posés, écrivez les recettes du `justfile`, commitez.
+
+## 1. Phase spécification — dans `todo-spec`
+
+Régime : **on discute, rien ne se tranche en silence.** L'analyste produit recommande ; vous
+décidez. Quatre GO humains jalonnent un incrément.
+
+```mermaid
+flowchart TD
+    A["/delivery-method:spec-frame 01-core"] --> B{GO de cadrage}
+    B -- "framing.md : framed" --> C["/delivery-method:spec-write 01-core"]
+    C --> L["deliveryctl spec lint"]
+    L --> D["/delivery-method:spec-review 01-core"]
+    D --> E{GO de revue}
+    E --> G["/delivery-method:spec-write 01-core<br/>applique vos décisions"]
+    G --> H{GO de clôture}
+    H -- "stories ready, framing.md : closed" --> I["/delivery-method:spec-write 01-core --acceptance"]
+    I --> J["/delivery-method:spec-review 01-core --acceptance"]
+    J --> K["deliveryctl spec release"]
+    K --> M{GO de publication}
+    M -- "vous tapez les commandes affichées" --> N["tag spec-v0.1.0"]
+```
+
+Exemple : l'incrément `01-core` couvre `s001 : Se connecter`, `s002 : Créer une liste` et
+`s003 : Gérer les tâches d'une liste`.
+
+1. `claude --agent delivery-method:product-analyst`, puis `/delivery-method:spec-frame 01-core`.
+   L'analyste lit l'existant, pose des questions numérotées avec sa recommandation (« une liste
+   sans tâche peut-elle être supprimée ? a) oui b) non, recommandation : a »), et écrit vos réponses
+   mot pour mot dans `refinement/01-core/framing.md`. Vous donnez le GO de cadrage en le disant.
+2. `/delivery-method:spec-write 01-core` écrit `spec/stories/s002-create-list.md` (règles, parcours,
+   extensions, critères `AC1 @main — Given … When … Then …`, contrat d'IHM, libellés dans
+   `spec/ui/copy.fr.json`). `deliveryctl spec lint` refuse une fuite technique (« table », « REST »,
+   un code HTTP) et une extension sans critère.
+3. `/delivery-method:spec-review 01-core` annonce la taille (approfondie par défaut) et les angles
+   (couverture, implémentabilité sur deux piles, testabilité, neutralité). Un relecteur par angle,
+   un réfuteur par constat ; le rapport daté finit par `Spec ready: yes | no`.
+4. Après le GO de clôture, `--acceptance` écrit les tests Playwright : un test par critère, étiqueté
+   `@s002` et `@s002-ac1`, qui passe par l'interface et le harnais (`reset`, `users`, `login-as`).
+   Ils sont tous rouges contre l'application vide : c'est attendu.
+5. `deliveryctl spec release` calcule la version (`0.1.0` pour la première), écrit le
+   `spec/CHANGELOG.md` et affiche les commandes de commit, de tag `spec-v0.1.0` et de push.
+
+| Session Claude | Rôle |
+|---|---|
+| `/delivery-method:spec-frame <incr>` | cadrage avec l'analyste produit, jusqu'au GO |
+| `/delivery-method:spec-write <incr> [--acceptance]` | stories, libellés, puis tests d'IHM |
+| `/delivery-method:spec-review <incr> [deep\|standard\|light] [--acceptance]` | revue contradictoire |
+| `/delivery-method:handoff <incr>` | avant un `/clear` : range ce qui a été décidé, donne la ligne de reprise |
+
+| Shell | Rôle |
+|---|---|
+| `deliveryctl spec lint` | schéma, neutralité, un test par critère, aucune étiquette orpheline |
+| `deliveryctl spec release [version]` | version calculée, CHANGELOG, commandes de tag affichées (geste humain) |
+
+## 2. Phase implémentation — dans `todo-kotlin`, puis `todo-supabase`
+
+Régime : **on tranche et on documente, ou on diffère.** Les sessions de rôle ne posent jamais de
+question. Une story = une copie de travail git (`todo-kotlin-wt/s002`), une branche
+`story/s002`, un ordre de travail, un exécutant, une vérification, un relecteur neuf, une demande
+de fusion.
+
+### 2.1 Copier la spec et cadrer
+
+```sh
+deliveryctl spec sync 0.1.0 --source git@github.com:<vous>/todo-spec.git
+deliveryctl spec verify
+```
+
+Puis `claude --agent delivery-method:technical-lead` et `/delivery-method:impl-frame kotlin-01`.
+Le lead propose l'architecture (`docs/architecture.md`), un ADR par choix structurant (Ktor,
+Thymeleaf et HTMX, migrations Flyway), les conventions du projet, et une carte par story en
+`draft` :
+
+```markdown
+---
+id: s002
+kind: story
+title: Créer une liste
+status: draft
+depends_on: [s001]
+risks: []
+spec: s002
+---
+## Objective
+## Context and scope
+## Oracle
+```
+
+**Votre GO** : passer les cartes validées en `status: ready` et commiter sur la branche cible.
+Côté `todo-supabase`, le cadrage produit une autre architecture (Next.js, Supabase, règles
+d'accès en base) mais les mêmes stories de spec.
+
+### 2.2 Le run
+
+```mermaid
+flowchart TD
+    R["deliveryctl run --campaign kotlin-01"] --> L["technical-lead<br/>deliveryctl cards order"]
+    L --> P["deliveryctl story prepare s002<br/>copie de travail + squelette d'ordre"]
+    P --> A["le lead lit le code réel<br/>et écrit order.md"]
+    A --> O["deliveryctl story open s002<br/>ordre commité, exécutant lancé"]
+    O --> I["story-implementer<br/>plan, un commit vert par tâche, report.md"]
+    I --> V["deliveryctl verify s002<br/>check + tests d'IHM @s002"]
+    V -- rouge --> I
+    V -- vert --> RV["story-reviewer neuf<br/>review.md, morsures si risque"]
+    RV -- non --> I
+    RV -- oui --> S["deliveryctl submit s002<br/>contrôle, push, demande de fusion"]
+    S --> H{"vous relisez et fusionnez<br/>deliveryctl merge s002"}
+    H --> C["deliveryctl story close s002"]
+    C --> L
+    I -. "question produit" .-> Q["spec-question.md<br/>story différée"]
+```
+
+Pendant que `s002 : Créer une liste` tourne, le lead lit déjà la carte suivante
+(`s003 : Gérer les tâches d'une liste`) dans la dernière version du code, sans rien lancer.
+Une story s'arrête sur un point qui vous revient, et vous recevez un toast :
+
+| Toast | Votre geste |
+|---|---|
+| `⚠ todo-kotlin — s002 : Créer une liste — demande de fusion à relire` | relire, puis fusionner |
+| `⚠ todo-kotlin — s004 : Partager une liste — différée` | lire `report.md` et `spec-question.md`, porter la question au cadrage de spec |
+| `⚠ … — plan à relire` (carte `show_plan: true`) | lire `plan.md`, puis `deliveryctl story next s004 --go` |
+| `⚠ … — borne atteinte` | lire `verification.md` ou `review.md` |
+| `🚨 … — bloqué` | regarder la session : aucune avancée depuis 20 minutes |
+| `⭐ todo-kotlin — run terminé` | lire la section `## Run` de `docs/campaigns/kotlin-01.md` |
+
+`s004 : Partager une liste` porte le risque `authz` : le relecteur fait une morsure (il casse
+volontairement le contrôle d'accès, vérifie qu'un test échoue, puis restaure) et une relecture
+contradictoire de l'angle « que voit un compte non invité ? ».
+
+| Session Claude | Rôle |
+|---|---|
+| `/delivery-method:impl-frame <campagne>` | cadrage d'architecture, cartes en brouillon |
+| `/delivery-method:run <campagne>` | procédure du lead en run (lancée par `deliveryctl run`) |
+| `/delivery-method:handoff <campagne>` | passation avant un `/clear` |
+
+| Shell | Rôle |
+|---|---|
+| `deliveryctl spec sync <version> --source <url>` | copie d'une version publiée de la spec (geste humain) |
+| `deliveryctl spec verify` | `spec/` identique à la version verrouillée |
+| `deliveryctl cards list \| order \| lint` | cartes de la branche cible, ordre lançable, contrôle |
+| `deliveryctl run [--campaign <nom>]` | lance le technical-lead (geste humain) |
+| `deliveryctl story status [<id>] [--watch]` | état, prochaine étape, votre prochain geste |
+| `deliveryctl story prepare \| open \| next \| wait \| close <id>` | cycle d'une story (le lead s'en sert en run) |
+| `deliveryctl verify <id>` | vérification par le moteur |
+| `deliveryctl gate <id>` | contrôle d'intégration (aussi en CI) |
+| `deliveryctl submit <id>` | push et demande de fusion |
+| `deliveryctl merge <id>` | fusion (geste humain) |
+
+## 3. Phase recette — dans chaque implémentation
+
+Régime : **on constate et on consigne.** Le produit ne change pas pendant une recette ; chaque
+défaut devient une carte d'anomalie triée par vous. Une recette par implémentation : celle de
+`todo-kotlin` et celle de `todo-supabase` n'ont ni la même surface ni la même installation.
+
+```mermaid
+flowchart TD
+    Q["/delivery-method:qualify 0.1.0"] --> O["deliveryctl qualify open 0.1.0<br/>branche qualification/0.1.0"]
+    O --> P["qualification-lead<br/>surface lue dans le code, contrôles Q1, Q2…"]
+    P --> OR["qualification/order.md commité"]
+    OR --> RUN["deliveryctl qualify run 0.1.0<br/>qualification-runner jetable"]
+    RUN --> X["installation depuis la doc, contrôles,<br/>cartes d'anomalie to-triage, retrait"]
+    X --> REP["rapport et verdict proposé<br/>deliveryctl qualify lint 0.1.0"]
+    REP --> SUB["deliveryctl qualify submit 0.1.0"]
+    SUB --> V{"votre approbation<br/>= verdict"}
+    V --> TRI["tri : corriger, reporter,<br/>abandonner, ou remonter à la spec"]
+```
+
+Exemple de contrôle : `Q4 : un compte non invité ne lit pas une liste partagée`
+(`[run, negative]`, vise `s004`). S'il échoue dans `todo-kotlin`, le runner écrit
+`a001 : Une liste partagée est lisible sans invitation` en `to-triage`. Si le même défaut existe
+dans `todo-supabase`, la spec est muette sur ce cas : la question remonte au prochain incrément de
+`todo-spec`.
+
+| Session Claude | Rôle |
+|---|---|
+| `/delivery-method:qualify <incr>` | recette menée par le qualification-lead |
+
+| Shell | Rôle |
+|---|---|
+| `deliveryctl qualify open <incr>` | copie de travail et squelettes |
+| `deliveryctl qualify run <incr>` | lance l'exécutant de recette |
+| `deliveryctl qualify lint <incr>` | contrôle du plan et du rapport |
+| `deliveryctl qualify submit <incr>` | demande de fusion du rapport (geste humain) |
+| `deliveryctl qualify close <incr>` | range la copie de travail |
+
+## 4. La nuit — suite complète des tests d'IHM
+
+Une story ne joue que ses propres tests d'IHM. La suite complète tourne la nuit, sur la dernière
+version de la branche cible de chaque implémentation.
+
+```mermaid
+flowchart LR
+    C["cron : deliveryctl nightly"] --> T["suite complète Playwright"]
+    T -- verte --> J["résumé au journal"]
+    T -- rouge --> A["qualification-runner :<br/>une carte d'anomalie par défaut"]
+    A --> M["demande de fusion<br/>« Anomalies du jour »"]
+    M --> N["⭐ anomalies à trier"]
+    N --> TRI["tri du matin : relecture de la demande"]
+```
+
+| Shell | Rôle |
+|---|---|
+| `deliveryctl nightly` | suite complète, anomalies par demande de fusion (geste humain, en cron) |
+| `deliveryctl note "<texte>"` | une note au journal d'expérience |
+| `deliveryctl journal report` | lire le journal, hors de tout dépôt |
+
+## 5. Faire évoluer la spec
+
+`todo-spec` publie `spec-v0.2.0` avec `s004 : Partager une liste` et `s005 : Synchroniser en
+direct`. Dans chaque implémentation, `deliveryctl spec sync 0.2.0` met à jour `spec/`, et
+`docs/conformance.md` dit, story par story, si l'implémentation est `conforming`, `outdated` (la
+story de spec a changé depuis sa fusion) ou `not merged`. Une synchronisation ne met jamais la
+branche cible au rouge : la conformité baisse, et elle se lit.

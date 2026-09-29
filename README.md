@@ -106,6 +106,9 @@ même version dans `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.jso
 
 ## Démarrage rapide
 
+Pour un parcours complet et illustré, une spec et deux implémentations d'une liste de tâches,
+avec le schéma de chaque phase et ses commandes : [`docs/guide.md`](docs/guide.md).
+
 Les commandes `/delivery-method:…` se tapent dans une session Claude, les commandes
 `deliveryctl …` dans le shell. Avant un `/clear`, `/delivery-method:handoff` range dans les
 fichiers ce qui a été décidé et donne la ligne de reprise.
