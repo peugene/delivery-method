@@ -37,6 +37,68 @@ def write(path: Path, text: str) -> Path:
     return path
 
 
+# A fake 'gh' that plays GitHub against the local bare 'origin': a merge request per branch,
+# its CI read from FAKE_FORGE_DIR/checks (green by default; 'down' in that file makes the forge
+# unreachable), and a merge that really merges the branch into the target branch of origin.
+FAKE_FORGE = r'''#!PYTHON
+import json, os, subprocess, sys, tempfile
+from pathlib import Path
+home = Path(os.environ["FAKE_FORGE_DIR"])
+store = home / "requests.json"
+requests = json.loads(store.read_text()) if store.exists() else {}
+with (home / "calls").open("a") as fh:
+    fh.write(" ".join(sys.argv[1:]) + "\n")
+checks = (home / "checks").read_text().strip() if (home / "checks").exists() else "green"
+args = sys.argv[1:]
+def opt(name):
+    return args[args.index(name) + 1] if name in args else ""
+def git(*argv, cwd=None):
+    return subprocess.run(["git", *argv], cwd=cwd, check=True, capture_output=True, text=True).stdout.strip()
+if checks == "down":
+    sys.exit("HTTP 503: service unavailable")
+if args[:2] == ["pr", "view"]:
+    req = requests.get(args[2])
+    if not req:
+        sys.exit('no pull requests found for branch "%s"' % args[2])
+    rollup = {"green": [{"conclusion": "SUCCESS"}], "red": [{"conclusion": "FAILURE"}],
+              "pending": [{"status": "IN_PROGRESS"}], "none": []}[checks]
+    print(json.dumps({"url": req["url"], "state": req["state"], "statusCheckRollup": rollup,
+                      "mergeStateStatus": "CLEAN"}))
+elif args[:2] == ["pr", "create"]:
+    head = opt("--head")
+    url = "https://forge.test/pr/%d" % (len(requests) + 1)
+    requests[head] = {"url": url, "state": "OPEN", "base": opt("--base"), "title": opt("--title")}
+    store.write_text(json.dumps(requests))
+    print(url)
+elif args[:2] == ["pr", "merge"]:
+    branch = args[2]
+    req = requests[branch]
+    origin = git("remote", "get-url", "origin")
+    with tempfile.TemporaryDirectory() as tmp:
+        git("clone", "--quiet", "--branch", req["base"], origin, tmp)
+        git("fetch", "--quiet", "origin", branch, cwd=tmp)
+        head = opt("--match-head-commit")
+        if head and git("rev-parse", "FETCH_HEAD", cwd=tmp) != head:
+            sys.exit("head commit does not match")
+        git("merge", "--quiet", "--no-ff", "FETCH_HEAD", "-m", opt("--subject"), "-m", opt("--body"), cwd=tmp)
+        git("push", "--quiet", "origin", req["base"], cwd=tmp)
+    req["state"] = "MERGED"
+    store.write_text(json.dumps(requests))
+else:
+    sys.exit(2)
+'''
+
+
+def fake_forge(tmp: Path) -> Path:
+    """Put the fake 'gh' first on PATH; returns its folder (calls, checks, requests.json)."""
+    home = tmp / "forge"
+    tool = write(home / "bin" / "gh", FAKE_FORGE.replace("PYTHON", sys.executable, 1))
+    tool.chmod(0o755)
+    os.environ["FAKE_FORGE_DIR"] = str(home)
+    os.environ["PATH"] = f"{home / 'bin'}{os.pathsep}{os.environ['PATH']}"
+    return home
+
+
 class RepoCase(unittest.TestCase):
     """Each test gets a bare 'origin', a main checkout with one commit on 'main', and an
     isolated HOME / XDG dirs so no user setting leaks in or out."""
@@ -71,6 +133,7 @@ class RepoCase(unittest.TestCase):
         git(self.repo, "remote", "add", "origin", str(self.origin))
         git(self.repo, "push", "--quiet", "-u", "origin", "main")
         git(self.repo, "remote", "set-head", "origin", "main")
+        self.forge_dir = fake_forge(self.tmp)  # never the real forge, whatever a test sets
         self.cwd_backup = os.getcwd()
         os.chdir(self.repo)
 

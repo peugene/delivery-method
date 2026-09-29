@@ -34,23 +34,6 @@ class NightlyPortTest(QualifyCase):
         self.assertNotIn(f"nightly-{core.today()}", ports)
 
 
-class LocalMergePortTest(RepoCase):
-    def test_check_on_the_merged_tree_gets_the_story_port(self):
-        seen = self.tmp / "seen"
-        write(self.repo / "delivery.toml", 'repo_role = "impl"\nforge = "none"\n[commands]\n'
-                                           f'check = "echo {{port}} $DELIVERY_PORT > {seen}"\n')
-        write(self.repo / ".gitignore", ".delivery/run/\n")
-        self.commit_all("setup")
-        git(self.repo, "switch", "--quiet", "-c", "story/s001")
-        write(self.repo / "src" / "app.txt", "v2\n")
-        self.commit_all("implement s001")
-        git(self.repo, "switch", "--quiet", "main")
-        Forge(config.load(self.repo), Git(self.repo)).merge("s001", "Merge story/s001 : x", [("Story", "s001")])
-        port, env = seen.read_text().split()
-        self.assertEqual(port, env)
-        self.assertRegex(port, r"^310\d\d$")
-
-
 class CiTemplateTest(RepoCase):
     """The CI reads the card's spec as the engine does, and substitutes {port}."""
 

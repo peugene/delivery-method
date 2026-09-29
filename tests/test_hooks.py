@@ -78,7 +78,7 @@ class StopHookTest(unittest.TestCase):
 class HookInRepoTest(RepoCase):
     def setUp(self):
         super().setUp()
-        write(self.repo / "delivery.toml", 'repo_role = "impl"\nforge = "none"\n[commands]\ncheck = "true"\n')
+        write(self.repo / "delivery.toml", 'repo_role = "impl"\nforge = "github"\n[commands]\ncheck = "true"\n')
         write(self.repo / ".gitignore", ".delivery/run/\n")
         self.commit_all("setup")
 

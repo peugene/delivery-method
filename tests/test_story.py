@@ -1,4 +1,4 @@
-"""End-to-end story cycle with a fake agent, local forge, terminal-free fake window."""
+"""End-to-end story cycle with a fake agent, a fake GitHub, terminal-free fake window."""
 
 import io
 import json
@@ -84,10 +84,10 @@ class StoryCycleTest(RepoCase):
         write(self.repo / ".gitignore", ".delivery/run/\ndocs/stories/*/work/\n")
         self.configure()
 
-    def configure(self, top="", commands="", levers="", forge="none"):
+    def configure(self, top="", commands="", levers=""):
         check = "grep -q BROKEN src/app.txt && exit 1 || echo '1 passed'"
         write(self.repo / "delivery.toml",
-              f'repo_role = "impl"\nforge = "{forge}"\nintegration = "human"\n{top}'
+              f'repo_role = "impl"\nforge = "github"\nintegration = "human"\n{top}'
               f'[commands]\ncheck = "{check}"\n{commands}[levers]\n{levers}')
         self.commit_all("settings")
         git(self.repo, "push", "--quiet", "origin", "main")
@@ -127,14 +127,15 @@ class StoryCycleTest(RepoCase):
         order.write_text((text or ORDER).replace("{base}", base).replace("s001", card))
         return story.open_story(self.cfg, card, start=start)
 
-    def test_nominal_cycle_and_local_merge(self):
+    def test_nominal_cycle_and_merge(self):
         self.open()
         st = self.drive()
         self.assertEqual(st.name, "submitted", story.render(st))
         wt = Path(st.worktree)
         self.assertEqual(gate.check(story.Git(wt), "s001"), [])
         summary = story.merge(self.cfg, "s001")
-        self.assertIn("merged story/s001", summary)
+        self.assertIn("merged https://forge.test/pr/1", summary)
+        git(self.repo, "pull", "--quiet", "--ff-only")
         log = git(self.repo, "log", "-1", "--format=%B")
         self.assertIn("Story: s001", log)
         self.assertIn("Approved-By: owner@example.test", log)
@@ -234,7 +235,7 @@ class StoryCycleTest(RepoCase):
         self.open()
         self.drive()
         story.merge(self.cfg, "s001")
-        git(self.repo, "push", "--quiet", "origin", "main")
+        git(self.repo, "pull", "--quiet", "--ff-only")
         order = story.prepare(self.cfg, "s002")
         order.write_text(ORDER.replace("{base}", old_base).replace("s001", "s002"))
         with self.assertRaises(core.DeliveryError) as ctx:
@@ -257,7 +258,7 @@ class StoryCycleTest(RepoCase):
         self.open()
         self.assertEqual(story.state(self.cfg, "s001").name, "to-verify")
         st = story.next_step(self.cfg, "s001")
-        self.assertEqual(st.name, "submitted", story.render(st))
+        self.assertEqual(st.name, "ready-to-submit", story.render(st))
         self.assertIn("story-reviewer loop 1", self.modes())
 
     def test_after_stop_runs_next_then_sweeps(self):
@@ -460,7 +461,6 @@ class StoryCycleTest(RepoCase):
 
     # -- forge: submitted, unreachable, merged with the branch deleted --------------------------
     def test_forge_submission_outage_and_merge(self):
-        self.configure(forge="github")
         bin_dir = self.tmp / "bin"
         gh = write(bin_dir / "gh", FAKE_GH.format(python=sys.executable, state=str(self.tmp / "gh-state"),
                                                   calls=str(self.tmp / "gh-calls")))
@@ -506,6 +506,7 @@ class StoryCycleTest(RepoCase):
         code, out = self.cli("gate", "s001")
         self.assertEqual((code, out.splitlines()[-1]), (0, "s001 : Sign in — integration check green"))
         story.merge(self.cfg, "s001")
+        git(self.repo, "pull", "--quiet", "--ff-only")
         self.assertEqual(git(self.repo, "log", "-1", "--format=%s"), "Merge story/s001 : Sign in")
         self.assertIn("s001", cards.merged_ids(story.Git(self.repo)))
         self.assertTrue(story.close(self.cfg, "s001").startswith("closed s001 : Sign in; work files removed"))

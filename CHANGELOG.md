@@ -17,7 +17,7 @@ changement de contrat monte la version mineure ; après 1.0.0, la version majeur
 - Cartes du backlog (`story`, `task`, `anomaly`) : `cards list`, `cards lint`, `cards order`.
 - Cycle d'une story dans sa copie de travail git : `story prepare`, `open`, `status`, `next`,
   `wait`, `close` ; vérification (`verify`), contrôle d'intégration (`gate`), demande de fusion
-  (`submit`) et fusion (`merge`), sur GitHub, GitLab ou sans forge.
+  (`submit`) et fusion (`merge`), sur GitHub ou GitLab ; toute story passe par une demande de fusion.
 - Run du `technical-lead` (`run`, `campaign open`) et commande `/delivery-method:run`.
 - Sessions de rôle lancées par le moteur, avec un fichier de permissions généré par rôle ;
   enchaînement par le hook `Stop`, rappel de l'état après une compaction, alerte sur un agent

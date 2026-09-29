@@ -184,7 +184,7 @@ def run_main(action, version=None, source=None):
 class ReleaseTest(RepoCase):
     def setUp(self):
         super().setUp()
-        write(self.repo / "delivery.toml", 'repo_role = "spec"\nforge = "none"\n')
+        write(self.repo / "delivery.toml", 'repo_role = "spec"\nforge = "github"\n')
         make_spec(self.repo)
         self.commit_all("spec")
 
@@ -220,7 +220,7 @@ class ReleaseTest(RepoCase):
         self.assertIn("- s001-ac3 @main — Given a, When b, Then c", changelog)
 
     def test_released_refuses_a_lower_level_without_override(self):
-        write(self.repo / "delivery.toml", 'repo_role = "spec"\nforge = "none"\nrelease_stage = "released"\n')
+        write(self.repo / "delivery.toml", 'repo_role = "spec"\nforge = "github"\nrelease_stage = "released"\n')
         self.commit_all("released")
         git(self.repo, "tag", "-a", "spec-v1.0.0", "-m", "spec 1.0.0")
         write(self.repo / "spec/stories/s001-create-list.md", STORY.replace("dans ses listes", "en tête de ses listes"))
@@ -276,7 +276,7 @@ class SyncTest(RepoCase):
         write(self.spec_repo / "refinement/01/framing.md", "---\nid: 01\nstatus: closed\n---\n")
         self.commit_all("spec", cwd=self.spec_repo)
         git(self.spec_repo, "tag", "-a", "spec-v0.1.0", "-m", "spec 0.1.0")
-        write(self.repo / "delivery.toml", 'repo_role = "impl"\nforge = "none"\n')
+        write(self.repo / "delivery.toml", 'repo_role = "impl"\nforge = "github"\n')
         self.commit_all("impl")
 
     def blob(self, rev="spec-v0.1.0"):
@@ -325,7 +325,7 @@ class SyncTest(RepoCase):
         with self.assertRaises(core.DeliveryError) as ctx:
             run_main("sync", "0.1.0")
         self.assertIn("no source", ctx.exception.message)
-        write(self.repo / "delivery.toml", 'repo_role = "spec"\nforge = "none"\n')
+        write(self.repo / "delivery.toml", 'repo_role = "spec"\nforge = "github"\n')
         self.commit_all("spec role")
         with self.assertRaises(core.DeliveryError) as ctx:
             run_main("sync", "0.1.0", str(self.spec_repo))

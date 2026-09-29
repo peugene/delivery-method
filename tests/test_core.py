@@ -286,7 +286,7 @@ class CliTest(RepoCase):
         self.assertEqual(self.call("--version")[0], core.EXIT_OK)
 
     def test_cards_list_reads_the_target_branch(self):
-        write(self.repo / "delivery.toml", 'repo_role = "impl"\nforge = "none"\n')
+        write(self.repo / "delivery.toml", 'repo_role = "impl"\nforge = "github"\n')
         self.commit_all("settings")
         git(self.repo, "push", "--quiet", "origin", "main")
         write(self.repo / "backlog/t001-ci.md", self.CARD)          # ready in the checkout only
@@ -299,7 +299,7 @@ class CliTest(RepoCase):
         self.assertIn("t001 : Create a list — task, ready", self.call("cards", "list")[1])
 
     def test_cards_name_their_dependencies_and_lint_names_the_card(self):
-        write(self.repo / "delivery.toml", 'repo_role = "impl"\nforge = "none"\n')
+        write(self.repo / "delivery.toml", 'repo_role = "impl"\nforge = "github"\n')
         write(self.repo / "backlog/t001-ci.md", self.CARD)
         write(self.repo / "backlog/t002-deploy.md", self.CARD.replace("t001", "t002")
               .replace("Create a list", "Deploy on push").replace("depends_on: []", "depends_on: [t001]"))

@@ -196,33 +196,29 @@ def _submission(cfg: Config, main: Git, git: Git, st: State) -> State:
     The forge is asked even when the remote branch is gone (deleted at the merge); a request
     counts as submitted only when the pushed head is the local head."""
     card_id, branch = st.id, story_branch(st.id)
-    if cfg.forge == "none":
-        st.name = "submitted"
-    else:
-        try:
-            proc = main.run("ls-remote", "origin", f"refs/heads/{branch}", check=False, timeout=60)
-            if proc.returncode != 0:
-                fail(EXIT_TOOL, (proc.stderr or proc.stdout).strip() or "git ls-remote origin failed")
-            remote = proc.stdout.split()
-            mr = Forge(cfg, git).find(card_id)
-        except DeliveryError as exc:
-            st.name = "ready-to-submit"
-            st.detail = f"forge unreachable: retry ({exc.message.splitlines()[0][:160]})"
-            return st
-        if mr and mr["state"] == "merged":
-            st.name = "merged"
-            st.engine_next = "close the worktree"
-            return st
-        pushed = bool(remote) and remote[0] == git.head()
-        st.name = "submitted" if pushed and mr and mr["state"] in ("open", "opened") else "ready-to-submit"
-        st.extra["mr"] = mr
+    try:
+        proc = main.run("ls-remote", "origin", f"refs/heads/{branch}", check=False, timeout=60)
+        if proc.returncode != 0:
+            fail(EXIT_TOOL, (proc.stderr or proc.stdout).strip() or "git ls-remote origin failed")
+        remote = proc.stdout.split()
+        mr = Forge(cfg, git).find(card_id)
+    except DeliveryError as exc:
+        st.name = "ready-to-submit"
+        st.detail = f"forge unreachable: retry ({exc.message.splitlines()[0][:160]})"
+        return st
+    if mr and mr["state"] == "merged":
+        st.name = "merged"
+        st.engine_next = "close the worktree"
+        return st
+    pushed = bool(remote) and remote[0] == git.head()
+    st.name = "submitted" if pushed and mr and mr["state"] in ("open", "opened") else "ready-to-submit"
+    st.extra["mr"] = mr
     if st.name == "ready-to-submit":
         st.engine_next = f"deliveryctl submit {card_id}"
     elif cfg.integration == "ai":
         st.engine_next = f"deliveryctl merge {card_id} when the CI is green"
     else:
-        st.human_next = (f"deliveryctl merge {card_id}" if cfg.forge == "none"
-                         else f"review and merge the merge request of {branch}")
+        st.human_next = f"review and merge the merge request of {branch}"
     return st
 
 

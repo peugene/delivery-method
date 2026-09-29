@@ -33,8 +33,8 @@ Fail closed: on the first failure, say why and stop.
       elsewhere), `impl` (builds a spec published by another repository).
    2. Content language (`--language`): code of the language of every text a human reads
       (cards, orders, reports); recommend the language the owner writes in.
-   3. Forge (`--forge`): `github`, `gitlab`, or `none` (no merge request, local merge; trials
-      and repositories without a server); recommend the one of `origin`, `none` without it.
+   3. Forge (`--forge`): `github` or `gitlab`; recommend the one of `origin`. Without an
+      `origin` remote, stop: the repository needs one on GitHub or GitLab first.
    4. Check (`--check`): lint, build, unit and integration tests, judged on its exit code.
       Default `just check`; in a `spec` repository, a recipe running
       `./.delivery/deliveryctl spec lint` is enough.

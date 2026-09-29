@@ -74,7 +74,7 @@ class QualifyCase(RepoCase):
     def setUp(self):
         super().setUp()
         write(self.repo / "delivery.toml",
-              f'repo_role = "impl"\nforge = "none"\n[commands]\ncheck = "true"\n'
+              f'repo_role = "impl"\nforge = "github"\n[commands]\ncheck = "true"\n'
               f'acceptance = "{self.acceptance}"\n')
         write(self.repo / ".gitignore", ".delivery/run/\nqualification/work/\n")
         self.commit_all("setup")
@@ -236,7 +236,7 @@ class QualifyTest(QualifyCase):
             for path in (root / folder).rglob("*.md"):
                 self.assertNotIn("qualification/work/order.md", path.read_text(encoding="utf-8"), path)
 
-    def test_submit_is_human_and_local_without_forge(self):
+    def test_submit_is_human_and_opens_a_merge_request(self):
         wt, tree = self.opened()
         self.fill(wt, tree)
         git(wt, "add", "qualification")
@@ -248,7 +248,8 @@ class QualifyTest(QualifyCase):
             self.assertEqual(ctx.exception.code, core.EXIT_REFUSED)
         finally:
             os.environ.pop("DELIVERY_ROLE")
-        self.assertIn("forge = none", qualify.submit(self.cfg, "0.1.0"))
+        self.assertEqual(qualify.submit(self.cfg, "0.1.0"), "https://forge.test/pr/1")
+        self.assertIn("pr create", (self.forge_dir / "calls").read_text())
 
     def test_invalid_increment(self):
         with self.assertRaises(core.DeliveryError):

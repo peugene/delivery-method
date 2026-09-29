@@ -24,7 +24,7 @@ def denied(perms: dict, command: str) -> bool:
 class RolesTest(RepoCase):
     def setUp(self):
         super().setUp()
-        write(self.repo / "delivery.toml", 'repo_role = "impl"\nforge = "none"\n[commands]\ncheck = "true"\n')
+        write(self.repo / "delivery.toml", 'repo_role = "impl"\nforge = "github"\n[commands]\ncheck = "true"\n')
         self.cfg = config.load(self.repo)
         self.wt = self.tmp / "todo-wt" / "s001"
 

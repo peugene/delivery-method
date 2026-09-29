@@ -165,11 +165,11 @@ def detect_forge(root: Path) -> str:
     proc = run(["git", "remote", "get-url", "origin"], cwd=root, check=False)
     url = proc.stdout.strip().lower()
     if proc.returncode != 0 or not url:
-        return "none"
+        fail(EXIT_PRECONDITION, "no 'origin' remote: add the GitHub or GitLab repository as origin first")
     for kind in ("github", "gitlab"):
         if kind in url:
             return kind
-    fail(EXIT_PRECONDITION, "cannot tell the forge from the origin URL: pass --forge github|gitlab|none")
+    fail(EXIT_PRECONDITION, "cannot tell the forge from the origin URL: pass --forge github|gitlab")
 
 
 def agent_prefix(name: str) -> str:

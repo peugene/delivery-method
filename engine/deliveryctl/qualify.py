@@ -372,8 +372,6 @@ def submit(cfg: Config, incr: str) -> str:
     _, problems = lint(cfg, incr)
     if problems:
         fail(EXIT_RED, "qualification lint is red:\n  " + "\n  ".join(problems))
-    if cfg.forge == "none":
-        return f"forge = none: {branch} stays local; the decision owner merges it (git merge --no-ff {branch})"
     return Forge(cfg, git).open_branch(branch, f"Recette {incr} ({branch})", body)
 
 

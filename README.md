@@ -47,7 +47,7 @@ implémentations peuvent suivre la même spec. Moins adapté : un prototype jeta
 | Python 3.11 ou plus | moteur `deliveryctl`, sans dépendance à installer |
 | just | recettes `check`, `acceptance`, `serve` (paquet de la distribution, ou `pipx install rust-just`) |
 | Node.js, version LTS | suite d'acceptation Playwright |
-| gh ou glab, authentifié | demandes de fusion sur GitHub ou GitLab (sauf `forge = "none"`) |
+| gh ou glab, authentifié | demandes de fusion sur GitHub ou GitLab |
 | herdr, facultatif | fenêtres de suivi des stories ; sans lui, mode terminal |
 | psql et Docker, facultatifs | journal d'expérience en PostgreSQL |
 
@@ -68,7 +68,7 @@ Pour un essai sans installation : `claude --plugin-dir /chemin/vers/delivery-met
 
 **2. Équiper le dépôt.** Dans une session Claude ouverte à la racine de la copie principale,
 tapez `/delivery-method:init`. La commande pose cinq questions (contenu du dépôt ; langue du
-contenu ; forge `github`, `gitlab` ou `none` ; commande `check` ; commandes `acceptance` et
+contenu ; forge `github` ou `gitlab` ; commande `check` ; commandes `acceptance` et
 `serve`), recommande une réponse pour chacune, lance `deliveryctl init` et affiche le bilan.
 `init` n'écrase rien et ne commite rien. Il pose `delivery.toml` (réglages du projet),
 `.delivery/` (copie du moteur, règles communes, gabarits), un `justfile` d'amorce dont les

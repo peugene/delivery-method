@@ -99,7 +99,7 @@ class OrderAndCampaignTest(RepoCase):
         super().setUp()
         os.environ["DELIVERY_FAKE_WINDOW"] = "1"
         write(self.repo / "delivery.toml",
-              'repo_role = "impl"\nforge = "none"\n[commands]\ncheck = "true"\n')
+              'repo_role = "impl"\nforge = "github"\n[commands]\ncheck = "true"\n')
         card = fm.set_key(fill(card_text("story").replace("s004", "s001")), "status", "ready")
         write(self.repo / "backlog/s001-share.md", card)
         write(self.repo / ".gitignore", ".delivery/run/\ndocs/stories/*/work/\ndocs/campaigns/work/\n")

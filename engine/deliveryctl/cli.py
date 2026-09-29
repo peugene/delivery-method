@@ -301,7 +301,7 @@ def build() -> argparse.ArgumentParser:
     s = sub.add_parser("init", help="install or upgrade the method in this repository (human)")
     s.add_argument("--role", choices=["single", "spec", "impl"])
     s.add_argument("--language")
-    s.add_argument("--forge", choices=["github", "gitlab", "none"])
+    s.add_argument("--forge", choices=["github", "gitlab"])
     s.add_argument("--check")
     s.add_argument("--acceptance")
     s.add_argument("--serve")

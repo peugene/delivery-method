@@ -102,12 +102,11 @@ def _run(cfg: Config, day: str, scope: str, port: int) -> int:
         print(f"nightly {day}: red at {short}, no anomaly card written; log {log}; worktree kept: {wt}")
         return EXIT_RED
     body = _request_body(day, short, command, res, added, remarks, log, cards.titles(main))
-    url, note = "", f"forge = none: local branch, merge it with git merge --no-ff {branch}"
-    if cfg.forge != "none":
-        try:
-            url, note = Forge(cfg, git).open_branch(branch, f"Anomalies du {day}", body), ""
-        except DeliveryError as exc:
-            note = f"local branch, push failed: {exc.message.splitlines()[0]}"
+    url, note = "", ""
+    try:
+        url = Forge(cfg, git).open_branch(branch, f"Anomalies du {day}", body)
+    except DeliveryError as exc:
+        note = f"local branch, push failed: {exc.message.splitlines()[0]}"
     where = url or branch
     main.run("worktree", "remove", "--force", str(wt))
     ids = "; ".join(cards.label(c.id, c.title) for c in added)

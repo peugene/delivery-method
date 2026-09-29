@@ -95,18 +95,18 @@ class InitTest(RepoCase):
 
     def test_conflict_is_listed_and_nothing_is_written(self):
         write(self.repo / ".claude" / "settings.json", json.dumps({"enabledPlugins": {init.PLUGIN_KEY: False}}))
-        code, out = self.cli("init", "--role", "impl", "--forge", "none")
+        code, out = self.cli("init", "--role", "impl", "--forge", "github")
         self.assertEqual(code, 3)
         self.assertIn("enabledPlugins.delivery-method@delivery-method: false", out)
         self.assertFalse((self.repo / "delivery.toml").exists())
         self.assertFalse((self.repo / ".delivery").exists())
 
     def test_role_is_required_and_dry_run_writes_nothing(self):
-        code, out = self.cli("init", "--forge", "none")
+        code, out = self.cli("init", "--forge", "github")
         self.assertEqual(code, 3)
         self.assertIn("--role", out)
         before = snapshot(self.repo)
-        code, out = self.cli("init", "--role", "spec", "--forge", "none", "--dry-run")
+        code, out = self.cli("init", "--role", "spec", "--forge", "github", "--dry-run")
         self.assertEqual(code, 0, out)
         self.assertIn("created  delivery.toml", out)
         self.assertEqual(snapshot(self.repo), before)
@@ -169,7 +169,7 @@ class InitTest(RepoCase):
 
     def test_doctor_notes_a_version_tag_without_accepted_report(self):
         from deliveryctl.gitops import Git
-        code, _ = self.cli("init", "--role", "impl", "--forge", "none")
+        code, _ = self.cli("init", "--role", "impl", "--forge", "github")
         self.assertEqual(code, 0)
         self.commit_all("equip")
         git(self.repo, "tag", "v0.1.0")
@@ -201,7 +201,7 @@ class InitTest(RepoCase):
         self.assertIn("warn: .gitlab-ci.yml does not include .gitlab/delivery-ci.yml", out)
 
     def test_doctor_notes_a_repository_claude_code_does_not_trust(self):
-        code, _ = self.cli("init", "--role", "impl", "--forge", "none")
+        code, _ = self.cli("init", "--role", "impl", "--forge", "github")
         self.assertEqual(code, 0)
         write(self.tmp / "bin" / "claude", "#!/bin/sh\nexit 0\n").chmod(0o755)
         os.environ.update(PATH=f"{self.tmp / 'bin'}{os.pathsep}{os.environ['PATH']}", DELIVERY_WINDOW="auto")

@@ -73,7 +73,7 @@ repo_role = "impl"             # single | spec | impl
 content_language = "fr"
 release_stage = "pre-release"  # pre-release | released — humain seulement
 external_contracts = []        # détenteurs externes d'un état ou d'une API — humain seulement
-forge = "github"               # github | gitlab | none (none : essais et dépôts sans serveur)
+forge = "github"               # github | gitlab ; toute story passe par une demande de fusion
 integration = "human"          # human | ai
 max_in_flight = 1              # stories en cours pendant un run (§12.4)
 agent_prefix = "tk"            # noms de session : <prefix>-<id>-<role>
@@ -92,7 +92,7 @@ extra_allow = []               # règles ajoutées aux fichiers de rôle, par ex
 ```
 
 **Substitutions.** Le moteur substitue `{grep}` et `{port}` dans ce qu'il lance (`verify`, suite
-de nuit, fusion locale) et exporte `DELIVERY_PORT` ; les rôles substituent `{selector}`, et
+de nuit) et exporte `DELIVERY_PORT` ; les rôles substituent `{selector}`, et
 `{port}` par la valeur de `DELIVERY_PORT`, présente dans leur session. Le port d'une story lui est
 réservé de `story open` à `story close` ; la suite de nuit prend `<port_prefix>999`, ou le suivant
 libre. La CI posée par `init` substitue `{grep}`, et `{port}` par `DELIVERY_PORT` (3999 par défaut).
@@ -111,9 +111,9 @@ Une clé inconnue fait échouer toute commande. La branche cible se déduit de `
 défaut, de la branche cible fournie par la CI (`GITHUB_BASE_REF`,
 `CI_MERGE_REQUEST_TARGET_BRANCH_NAME`) ; sinon `main`, puis `master`.
 
-`forge = "none"` déroge à la demande de fusion systématique : pas de demande de fusion, fusion
-locale par `deliveryctl merge` avec revalidation de `check` sur l'arbre fusionné. Il sert aux
-essais du kit et aux dépôts sans serveur.
+Le dépôt a un remote `origin` sur GitHub ou GitLab ; `init` refuse un dépôt sans `origin`. Il
+n'y a pas de fusion locale : une story, une recette ou une suite de nuit passe toujours par une
+demande de fusion.
 
 ## 4. Réglages de machine
 

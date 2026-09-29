@@ -36,7 +36,7 @@ TOP_SCHEMA = {
     "content_language": (str, None, "en"),
     "release_stage": (str, ("pre-release", "released"), "pre-release"),
     "external_contracts": (list, None, []),
-    "forge": (str, ("github", "gitlab", "none"), "github"),
+    "forge": (str, ("github", "gitlab"), "github"),
     "integration": (str, ("human", "ai"), "human"),
     "max_in_flight": (int, None, 1),
     "agent_prefix": (str, None, ""),

@@ -1,6 +1,5 @@
 """Merge requests with a fake 'gh' on PATH (no network): merge only on a green CI, never push
-again a branch whose request is merged, tell 'no request' from 'forge unreachable'; the local
-merge never leaves the main checkout half-merged."""
+again a branch whose request is merged, tell 'no request' from 'forge unreachable'."""
 
 import json
 import os
@@ -119,44 +118,3 @@ class MergeTest(ForgeCase):
         self.gh(view="OPEN", rollup=[{"status": "COMPLETED", "conclusion": "SUCCESS"}])
         self.assertEqual(self.merge(), "merged https://forge.test/pr/7")
         self.assertIn("--match-head-commit abc", [c for c in self.calls() if c.startswith("pr merge")][0])
-
-
-class LocalMergeTest(RepoCase):
-    def setUp(self):
-        super().setUp()
-        write(self.repo / "delivery.toml", 'repo_role = "impl"\nforge = "none"\n[commands]\ncheck = "true"\n')
-        write(self.repo / ".gitignore", ".delivery/run/\n")
-        self.commit_all("setup")
-        git(self.repo, "switch", "--quiet", "-c", "story/s001")
-        write(self.repo / "src" / "app.txt", "v2\n")
-        self.commit_all("implement s001")
-        git(self.repo, "switch", "--quiet", "main")
-        self.head = git(self.repo, "rev-parse", "HEAD")
-        self.forge = Forge(config.load(self.repo), Git(self.repo))
-
-    def assert_untouched(self):
-        self.assertFalse((self.repo / ".git" / "MERGE_HEAD").exists())
-        self.assertEqual(git(self.repo, "status", "--porcelain", "--untracked-files=no"), "")
-        self.assertEqual(git(self.repo, "rev-parse", "HEAD"), self.head)
-
-    def test_interrupted_check_aborts_the_merge(self):
-        with mock.patch.object(forge, "run", side_effect=KeyboardInterrupt):
-            with self.assertRaises(KeyboardInterrupt):
-                self.forge.merge("s001", "Merge story/s001 : Sign in", [("Story", "s001")])
-        self.assert_untouched()
-
-    def test_refused_commit_aborts_the_merge(self):
-        write(self.repo / ".git" / "hooks" / "commit-msg", "#!/bin/sh\nexit 1\n").chmod(0o755)
-        with self.assertRaises(core.DeliveryError):
-            self.forge.merge("s001", "Merge story/s001 : Sign in", [("Story", "s001")])
-        self.assert_untouched()
-
-    def test_green_check_merges(self):
-        self.assertIn("merged story/s001 into main (local)",
-                      self.forge.merge("s001", "Merge story/s001 : Sign in", [("Story", "s001")]))
-        self.assertIn("Story: s001", git(self.repo, "log", "-1", "--format=%B"))
-
-
-if __name__ == "__main__":
-    import unittest
-    unittest.main()

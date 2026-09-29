@@ -1,5 +1,4 @@
-"""Merge requests on the forge (GitHub through `gh`, GitLab through `glab`), or a local merge
-when `forge = "none"` (CONTRACTS.md §9, §12)."""
+"""Merge requests on the forge: GitHub through `gh`, GitLab through `glab` (CONTRACTS.md §9, §12)."""
 
 from __future__ import annotations
 
@@ -8,7 +7,6 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from . import ports
 from .cards import label
 from .config import Config
 from .core import EXIT_PRECONDITION, EXIT_RED, EXIT_TOOL, fail, run
@@ -25,10 +23,10 @@ class Forge:
         self.kind = cfg.forge
 
     def _tool(self) -> str:
-        tool = {"github": "gh", "gitlab": "glab"}.get(self.kind)
-        if tool and not shutil.which(tool):
+        tool = {"github": "gh", "gitlab": "glab"}[self.kind]
+        if not shutil.which(tool):
             fail(EXIT_TOOL, f"forge = {self.kind} needs the '{tool}' command")
-        return tool or ""
+        return tool
 
     # -- merge request ----------------------------------------------------------------------
     def find(self, card_id: str) -> dict | None:
@@ -70,9 +68,7 @@ class Forge:
         return None
 
     def open(self, card_id: str, title: str, body: str) -> str:
-        """Push the story branch and open its merge request; returns its URL (or a note)."""
-        if self.kind == "none":
-            return f"forge = none: merge locally with 'deliveryctl merge {card_id}'"
+        """Push the story branch and open its merge request; returns its URL."""
         return self.open_branch(story_branch(card_id), title, body)
 
     def open_branch(self, branch: str, title: str, body: str) -> str:
@@ -105,8 +101,6 @@ class Forge:
         """Merge a story whose merge request is green, by a merge commit of the checked head;
         returns a one-line summary."""
         body = "\n".join(f"{k}: {v}" for k, v in trailers)
-        if self.kind == "none":
-            return self._merge_local(card_id, subject, body)
         mr = self.find(card_id)
         if not mr or mr["state"] not in ("open", "opened"):
             fail(EXIT_PRECONDITION, f"no open merge request for {story_branch(card_id)}")
@@ -126,36 +120,6 @@ class Forge:
         run(args, cwd=self.git.cwd)
         self.git.fetch()
         return f"merged {mr['url']}"
-
-    def _merge_local(self, card_id: str, subject: str, body: str) -> str:
-        """Local merge in the main checkout, re-checked on the merged tree before committing."""
-        main = self.cfg.root
-        git = Git(main)
-        target = git.target_branch()
-        if git.branch() != target:
-            fail(EXIT_PRECONDITION, f"the main checkout must be on '{target}' to merge locally")
-        if [p for p in git.dirty() if not p.startswith(".delivery/run/")]:
-            fail(EXIT_PRECONDITION, "the main checkout has uncommitted changes")
-        branch = story_branch(card_id)
-        proc = git.run("merge", "--no-ff", "--no-commit", branch, check=False)
-        if proc.returncode != 0:
-            git.run("merge", "--abort", check=False)
-            fail(EXIT_RED, f"merge conflict with {branch}: rebase the story, then verify and review again")
-        # from here, any way out but the commit (red check, timeout, Ctrl-C, a refusing commit
-        # hook) aborts the merge: the main checkout never stays half-merged
-        try:
-            port = ports.port(self.cfg, card_id)
-            check = self.cfg.command("check", port=port)
-            if check:
-                res = run(check, cwd=main, check=False, timeout=3600, env={"DELIVERY_PORT": str(port)})
-                if res.returncode != 0:
-                    fail(EXIT_RED, f"'{check}' is red on the merged tree: merge aborted")
-            message = subject + "\n\n" + body + "\n"
-            git.run("commit", "--quiet", "-m", message)
-        except BaseException:
-            git.run("merge", "--abort", check=False)
-            raise
-        return f"merged {branch} into {target} (local)"
 
 
 def _github_checks(rollup: list) -> str:

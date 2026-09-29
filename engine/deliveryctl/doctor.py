@@ -122,8 +122,7 @@ def check_machine(ctx):
 
 def check_remote(ctx):
     if not ctx.git.has_remote():
-        level = "note" if ctx.cfg and ctx.cfg.forge == "none" else "warn"
-        yield level, "no 'origin' remote: story branches cannot be pushed nor merge requests opened"
+        yield "warn", "no 'origin' remote: story branches cannot be pushed nor merge requests opened"
         return
     proc = ctx.git.run("symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD", check=False)
     if proc.returncode == 0:
