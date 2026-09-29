@@ -54,6 +54,14 @@ class RolesTest(RepoCase):
                         "git log --oneline -3", "docker compose up -d --force-recreate"):
             self.assertFalse(denied(perms, command), command)
 
+    def test_archived_brainstorms_are_out_of_reach(self):
+        for role in roles.UNATTENDED:
+            perms = self.perms(role)
+            self.assertIn("Read(**/docs/maybe/**)", perms["permissions"]["deny"], role)
+            self.assertTrue(denied(perms, "cat docs/maybe/2026-01-01-idea.md"), role)
+            self.assertTrue(denied(perms, "grep -r cache docs/maybe/"), role)
+            self.assertFalse(denied(perms, "cat docs/stories/s001/order.md"), role)
+
     def test_runner_runs_the_kit_and_recreates_containers(self):
         perms = self.perms("qualification-runner")
         for rule in ("Bash(bash qualification/kit/*)", "Bash(sh qualification/kit/*)", "Bash(./qualification/kit/*)"):

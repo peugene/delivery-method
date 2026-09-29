@@ -473,8 +473,8 @@ quel que soit le lanceur. Ses règles de chemin sont absolues (`//<chemin>/…`)
 le test ciblé) et `extra_allow`, `deliveryctl story status` et `cards list|order|lint`. Refus :
 `Agent`, `Workflow`, `SendMessage`, `Monitor`, `CronCreate`, `RemoteTrigger`, `PushNotification`,
 `AskUserQuestion`, `WebSearch` ; l'écriture dans `spec/`, `.delivery/`, `.claude/`,
-`delivery.toml`, `CLAUDE.md` ; la lecture de `~/.ssh/`, `~/.config/gh/`, `**/.env.secrets` et du
-journal ; `git push`, `git reset --hard`, `--no-verify`, `--amend`, `git commit -n`, les options
+`delivery.toml`, `CLAUDE.md` ; la lecture de `~/.ssh/`, `~/.config/gh/`, `**/.env.secrets`, du
+journal et des brainstormings archivés (`docs/maybe/`, outils de lecture et shell) ; `git push`, `git reset --hard`, `--no-verify`, `--amend`, `git commit -n`, les options
 `--force` et `-f` de git, les écritures par `sort -o` et `git … --output` ; les gestes humains
 (§12.1) ; toute commande du multiplexeur.
 

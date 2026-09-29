@@ -35,6 +35,9 @@ changement de contrat monte la version mineure ; après 1.0.0, la version majeur
   d'anomalie arrivent par demande de fusion.
 - Rôles : `product-analyst`, `spec-reviewer`, `refuter`, `technical-lead`, `story-implementer`,
   `story-reviewer`, `qualification-lead`, `qualification-runner`.
+- Skill `brainstorm`, lancé par le seul decision owner : explorer une idée sans rien engager,
+  puis oublier, archiver dans `docs/maybe/` ou cadrer ; ce dossier est hors de portée des
+  sessions de rôle et hors de toute décision.
 - Skills : `framing-discussion`, `spec-writing`, `acceptance-by-role`, `adversarial-review`,
   `anchoring`, `testing-doctrine`, `work-orders`, `qualification-doctrine`.
 - Règles communes à toutes les sessions d'un projet (`rules/rules.md`).

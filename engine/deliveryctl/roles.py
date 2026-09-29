@@ -34,6 +34,8 @@ DENY_BASH = ["git push", "git reset --hard", "git clean", "git rebase", "git che
              "deliveryctl nightly", "deliveryctl qualify submit", "claude"]
 SECRET_READS = ["~/.ssh/**", "~/.config/gh/**", "~/.config/glab-cli/**", "**/.env.secrets",
                 "~/.local/state/delivery-method/**"]
+# archived brainstorms stay outside every decision (skill brainstorm)
+ARCHIVE = "docs/maybe"
 PROTECTED = ["spec/**", "spec.lock", ".delivery/**", ".claude/**", "delivery.toml", "CLAUDE.md",
              "**/CLAUDE.md"]
 # refusals that a prefix rule misses: an option after other arguments (--amend, -n for
@@ -121,7 +123,8 @@ def permissions(cfg: Config, role: str, worktree: Path, scope: str) -> dict:
     deny = list(DENY_TOOLS)
     deny += _bash(DENY_BASH)
     deny += DENY_PATTERNS
-    deny += [f"Read({p})" for p in SECRET_READS]
+    deny += [f"Read({p})" for p in SECRET_READS + [f"**/{ARCHIVE}/**"]]
+    deny += [f"Bash(*{ARCHIVE}*)"]
     deny += _write(wt, PROTECTED)
     extra = {}
     if role == "story-implementer":

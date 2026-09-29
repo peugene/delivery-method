@@ -18,7 +18,7 @@ AGENT_KEYS = {"name", "description", "tools", "disallowedTools", "model", "effor
 AGENT_SECTIONS = ("Receives", "May change", "Must not", "Ends with")
 COMMAND_KEYS = {"description", "argument-hint", "allowed-tools", "model"}
 COMMAND_SECTIONS = ("Contract", "Preconditions", "Steps", "Outputs", "Ends with")
-SKILL_KEYS = {"name", "description"}
+SKILL_KEYS = {"name", "description", "argument-hint", "disable-model-invocation"}
 SKILL_SECTIONS = ("When to use", "Doctrine", "Defaults and levers", "Anti-patterns", "Checks")
 GENERIC_PROVENANCE = (r"\b20\d\d-\d\d-\d\d\b", r"\bincident\b", r"\b[A-Z]{2,4} l\.\s?\d")
 

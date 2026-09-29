@@ -56,6 +56,38 @@ Réponses types : `todo-spec` → rôle `spec` ; `todo-kotlin` → rôle `impl`,
 `test = "just test {selector}"` ; `todo-supabase` → rôle `impl`, mêmes recettes écrites pour npm et
 Supabase en local. Relisez les fichiers posés, écrivez les recettes du `justfile`, commitez.
 
+## Explorer une idée, à n'importe quelle phase
+
+Avant qu'une idée devienne du travail, vous pouvez y réfléchir avec Claude sans rien engager :
+aucune mémoire, aucune note, aucun fichier pendant la discussion. Claude reformule l'idée, donne
+un avis franc, propose deux ou trois angles, puis avance à votre rythme, une ou deux questions
+par tour. La discussion se clôt sur votre mot.
+
+```mermaid
+flowchart LR
+    A["/delivery-method:brainstorm &lt;idée&gt;"] --> B[discussion<br/>rien n'est écrit]
+    B --> C{votre mot}
+    C -- oublier --> D[aucune trace]
+    C -- archiver --> E["docs/maybe/2026-10-02-rappels.md<br/>hors de toute décision"]
+    C -- cadrer --> F["décisions validées seulement<br/>→ spec-frame ou impl-frame"]
+```
+
+| Où | Commande | Effet |
+|---|---|---|
+| session Claude, tout dépôt | `/delivery-method:brainstorm <idée>` | ouvre la discussion |
+| même session | « oublier », « archiver » ou « cadrer » | clôt : rien, une archive, ou le passage au cadrage |
+| shell | `git add docs/maybe/… && git commit` | garde l'archive, si vous le voulez ; le commit est votre geste |
+
+Deux exemples sur le banc :
+
+- Dans `todo-spec`, `/delivery-method:brainstorm des rappels pour les tâches échues`. Vous
+  concluez que l'idée vaut un incrément, mais sans notification par e-mail : « cadrer ». La
+  seule décision validée, « rappel dans l'application, pas d'e-mail », ouvre
+  `/delivery-method:spec-frame 02-rappels`. Les pistes écartées ne sont reprises nulle part.
+- Dans `todo-supabase`, `/delivery-method:brainstorm passer la liste partagée en temps réel`.
+  Rien n'est mûr : « archiver ». Le fichier de `docs/maybe/` reste consultable par l'équipe ;
+  aucun agent ne le lit de lui-même, et les sessions de rôle ne peuvent pas le lire.
+
 ## 1. Phase spécification — dans `todo-spec`
 
 Régime : **on discute, rien ne se tranche en silence.** L'analyste produit recommande ; vous

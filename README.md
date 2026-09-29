@@ -113,6 +113,11 @@ Les commandes `/delivery-method:…` se tapent dans une session Claude, les comm
 `deliveryctl …` dans le shell. Avant un `/clear`, `/delivery-method:handoff` range dans les
 fichiers ce qui a été décidé et donne la ligne de reprise.
 
+Pour réfléchir à une idée avant d'en faire du travail, à n'importe quelle phase :
+`/delivery-method:brainstorm <idée>`. Rien n'est écrit pendant la discussion ; à la fin, vous
+choisissez d'oublier, d'archiver dans `docs/maybe/` (dossier qu'aucun agent ne lit de lui-même)
+ou de cadrer, et seules les décisions que vous avez validées passent au cadrage.
+
 ### Spécification (dépôt `spec` ou `single`)
 
 Une spécification se construit par incréments (`01-core`, `02-partage`…), mûris dans
@@ -236,6 +241,7 @@ cron doit tourner (`sudo service cron start`) et la machine virtuelle être acti
 | `/delivery-method:run <campagne>` | `technical-lead`, de rôle | le run ; lancée par `deliveryctl run`, jamais à la main |
 | `/delivery-method:qualify <incr>` | `qualification-lead` | recette d'un incrément |
 | `/delivery-method:handoff [<incr>\|<campagne>]` | tout lead, humaine | passation avant `/clear` |
+| `/delivery-method:brainstorm <idée>` | humaine, tout dépôt | explorer une idée sans rien engager ; clôture : oublier, archiver dans `docs/maybe/` ou cadrer |
 
 ## Rôles
 
