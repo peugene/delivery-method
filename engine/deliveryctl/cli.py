@@ -72,7 +72,10 @@ def cmd_story(args) -> int:
         for i in ids:
             print(story.describe(cfg, i))
     elif action == "next":
-        print(story.render(story.next_step(cfg, args.id, go=args.go)))
+        if args.relaunch:
+            print(story.render(story.relaunch(cfg, args.id)))
+        else:
+            print(story.render(story.next_step(cfg, args.id, go=args.go)))
     elif action == "wait":
         st = story.wait(cfg, args.id, timeout=args.timeout, until=args.until)
         print(story.render(st))
@@ -237,6 +240,8 @@ def build() -> argparse.ArgumentParser:
     s.add_argument("--no-start", action="store_true", help="open without starting the implementer")
     s.add_argument("--order", help="order draft to commit as docs/stories/<id>/order.md")
     s.add_argument("--go", action="store_true", help="continue after plan-ready (human gesture)")
+    s.add_argument("--relaunch", action="store_true",
+                   help="abandon the cloud implementer and start a new one (human gesture)")
     s.add_argument("--timeout", type=int, default=540)
     s.add_argument("--until", choices=["checkpoint", "merged"], default="checkpoint")
     s.set_defaults(func=cmd_story)

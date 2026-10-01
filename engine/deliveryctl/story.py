@@ -10,6 +10,7 @@ import re
 import subprocess
 import sys
 import time
+from datetime import datetime, timezone
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -17,7 +18,7 @@ from . import VERSION, cards, frontmatter as fm, gate, journal, notify, ports, r
 from . import verdict as vd
 from .config import Config
 from .core import (EXIT_PRECONDITION, EXIT_RED, EXIT_REFUSED, EXIT_TOOL, DeliveryError, check_id, clean_env,
-                   eprint, fail, file_lock, read_json, require_human, run_dir, write_json)
+                   eprint, fail, file_lock, now_iso, read_json, require_human, run_dir, write_json)
 from .forge import Forge, request_body
 from .gitops import Git, story_branch, worktree_path
 from .window.cloud import CloudWindow
@@ -108,7 +109,17 @@ def _labels(cfg: Config, ids) -> str:
 
 
 # -- state ----------------------------------------------------------------------------------
-def state(cfg: Config, card_id: str) -> State:
+def state(cfg: Config, card_id: str, refused: bool = True) -> State:
+    """The state of a story. `refused=False` ignores the refusal of cloud commits (§9), to see
+    what the story would be doing without it."""
+    st = _state(cfg, card_id, refused)
+    held = (CloudWindow(cfg.root).session(card_id, "story-implementer") or {}).get("held")
+    if held and not st.extra.get("refused"):
+        st.detail = (st.detail + "; " if st.detail else "") + held
+    return st
+
+
+def _state(cfg: Config, card_id: str, refused: bool) -> State:
     check_id(card_id)
     main = Git(cfg.root)
     branch = story_branch(card_id)
@@ -122,6 +133,14 @@ def state(cfg: Config, card_id: str) -> State:
         st.detail = "no worktree"
         return st
     git = Git(wt)
+    entry = CloudWindow(cfg.root).session(card_id, "story-implementer") or {}
+    if refused and entry.get("rejected"):
+        st.name = "blocked"
+        st.detail = "cloud commits refused: " + "; ".join(entry["rejected"])
+        st.human_next = (f"inspect {entry.get('rejected_branch')} (session {entry.get('url')}), "
+                         f"then: deliveryctl story next {card_id} --relaunch")
+        st.extra["refused"] = True
+        return st
     base = git.merge_base("HEAD", git.target_ref())
     own = story_dir(card_id) + "/"
     reg = registry(cfg.root)
@@ -361,12 +380,12 @@ def _is_cloud(cfg: Config, role: str) -> bool:
     return role == "story-implementer" and cfg.implementer == "cloud"
 
 
-def _start_implementer(cfg: Config, st: State, mode: str) -> None:
+def _start_implementer(cfg: Config, st: State, mode: str, record: bool = True) -> None:
     """Start the implementer; a relaunch after a session of the same step that ended without
     an Outcome (a crash, a kill, a lost turn) is a resume, carried to the journal (§13)."""
     step = f"{mode}@{st.extra.get('step', '')}"
     prev = window.get(cfg.root).session(st.id, "story-implementer")
-    if prev and (mode == "resume" or prev.get("step") == step):
+    if record and prev and (mode == "resume" or prev.get("step") == step):
         evidence = prev.get("log") or prev.get("url") or str(
             transcript_path(prev.get("cwd", ""), prev.get("session_id", "")))
         journal.record(journal.event(
@@ -376,6 +395,15 @@ def _start_implementer(cfg: Config, st: State, mode: str) -> None:
     template = roles.CLOUD_PROMPT if _is_cloud(cfg, "story-implementer") else roles.PROMPTS["story-implementer"]
     _start(cfg, st.id, "story-implementer",
            template.format(id=st.id, label=label(st), mode=mode, port=ports.port(cfg, st.id)), step)
+
+
+def _implementer_mode(cfg: Config, st: State) -> str:
+    if st.name == "fixing":
+        return st.fix_mode
+    card = _card(Git(cfg.root), st.id, cfg)
+    if card.show_plan and not (st.worktree / story_dir(st.id) / "plan.md").exists():
+        return "plan-first"
+    return "implement" if st.name == "open" else "resume"
 
 
 def _alive(cfg: Config, card_id: str) -> list[str]:
@@ -446,7 +474,10 @@ def next_step(cfg: Config, card_id: str, go: bool = False) -> State:
     """Do what the state calls for (CONTRACTS.md §9). Idempotent: nothing happens while a
     role session of the story is alive and working, or while another process advances it."""
     with file_lock(run_dir(cfg.root) / "locks" / f"{card_id}.lock", blocking=False) as got:
-        return _advance(cfg, card_id, go) if got else state(cfg, card_id)
+        if not got:
+            return state(cfg, card_id)
+        pull_cloud(cfg, card_id)
+        return _advance(cfg, card_id, go)
 
 
 def _advance(cfg: Config, card_id: str, go: bool = False, chained: bool = False) -> State:
@@ -471,14 +502,8 @@ def _advance(cfg: Config, card_id: str, go: bool = False, chained: bool = False)
             st.detail = exc.message
             return st
         st = state(cfg, card_id)
-    if st.name in ("open", "implementing"):
-        card = _card(Git(cfg.root), card_id, cfg)
-        mode = "implement" if st.name == "open" else "resume"
-        if card.show_plan and not (st.worktree / story_dir(card_id) / "plan.md").exists():
-            mode = "plan-first"
-        _start_implementer(cfg, st, mode)
-    elif st.name == "fixing":
-        _start_implementer(cfg, st, st.fix_mode)
+    if st.name in ("open", "implementing", "fixing"):
+        _start_implementer(cfg, st, _implementer_mode(cfg, st))
     elif st.name == "plan-ready" and go:
         require_human("deliveryctl story next --go")
         _start_implementer(cfg, st, "implement-approved-plan")
@@ -512,7 +537,7 @@ def _advance(cfg: Config, card_id: str, go: bool = False, chained: bool = False)
                 return state(cfg, card_id)
         notify.notify(cfg.root, f"{card_id}:submitted:{st.tree}", "decision",
                       notify.subject(card_id, st.title, "demande de fusion à relire"), st.human_next)
-    elif st.name in ("blocked", "deferred", "plan-ready"):
+    elif st.name in ("blocked", "deferred", "plan-ready") and not st.extra.get("refused"):
         notify.notify(cfg.root, f"{card_id}:{st.name}:{st.tree}", "decision",
                       notify.subject(card_id, st.title, STATE_WORDS.get(st.name, st.name)), st.detail[:200] or st.human_next)
     elif st.name in ("verify-exhausted", "review-exhausted"):
@@ -666,6 +691,151 @@ def _progress(git: Git, wt: Path, card_id: str, info: dict) -> float:
     return max(stamps)
 
 
+# -- the cloud implementer's commits (CONTRACTS.md §9) ---------------------------------------------
+CLOUD_FETCH_EVERY = 60          # seconds between two fetches for one story
+CLOUD_REFSPECS = ("+refs/heads/claude/*:refs/remotes/origin/claude/*", "+refs/heads/story/*:refs/remotes/origin/story/*")
+
+
+def _epoch(stamp: str | None) -> float:
+    try:
+        return datetime.fromisoformat(str(stamp).replace("Z", "+00:00")).timestamp()
+    except ValueError:
+        return 0.0
+
+
+def _iso(epoch: float) -> str:
+    return datetime.fromtimestamp(epoch, timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _save_entry(cfg: Config, card_id: str, info: dict) -> None:
+    reg = CloudWindow(cfg.root).sessions(card_id)
+    reg["story-implementer"] = info
+    write_json(run_dir(cfg.root) / "sessions" / f"{card_id}.json", reg)
+
+
+def pull_cloud(cfg: Config, card_id: str) -> None:
+    """Bring the commits of a live cloud implementer into the story's working copy, once they
+    pass the reception control; an unreachable remote is reported and left for the next sweep."""
+    info = CloudWindow(cfg.root).session(card_id, "story-implementer")
+    if not info or info.get("window") != "cloud" or info.get("ended") or not info.get("head"):
+        return
+    main = Git(cfg.root)
+    wt = main.worktree_for(story_branch(card_id))
+    if not wt:
+        return
+    with file_lock(run_dir(cfg.root) / "locks" / f"{card_id}-pull.lock", blocking=False) as got:
+        if not got or time.time() - float(info.get("fetched_at", 0)) < CLOUD_FETCH_EVERY:
+            return
+        info["fetched_at"] = time.time()
+        _save_entry(cfg, card_id, info)
+        try:
+            main.run("fetch", "--quiet", "origin", *CLOUD_REFSPECS, timeout=120)
+            found = _cloud_candidate(main, card_id, info)
+            if found:
+                _receive(cfg, main, Git(wt), card_id, info, *found)
+        except DeliveryError as exc:
+            eprint(f"deliveryctl: {cards.label_of(main, card_id)}: cloud commits: {exc.message.splitlines()[0][:160]}")
+
+
+def _cloud_candidate(main: Git, card_id: str, info: dict) -> tuple[str, str] | None:
+    """(ref, tip) of the branch with the most new commits: origin/story/<id>, or an
+    origin/claude/* whose new commits all carry this session's trailer."""
+    head, session = info["head"], info["session_id"]
+    refs = [f"origin/{story_branch(card_id)}"] + main.out(
+        "for-each-ref", "--format=%(refname:short)", "refs/remotes/origin/claude/").split()
+    best, most = None, 0
+    for ref in refs:
+        tip = main.rev(ref)
+        if not tip or tip == head or not main.is_ancestor(head, tip):
+            continue
+        if ref.startswith("origin/claude/") and not all(
+                value.rstrip("/").rsplit("/", 1)[-1] == session
+                for value in gate.trailers(main, head, tip, "Claude-Session").values()):
+            continue
+        count = len(main.out("rev-list", f"{head}..{tip}").split())
+        if count > most:
+            best, most = (ref, tip), count
+    return best
+
+
+def reception_problems(git: Git, card_id: str, head: str, tip: str, local: str) -> list[str]:
+    """Why head..tip may not enter the story's working copy. A cloud session obeys no
+    permission rule of the role, and the author of a verdict is declared by a trailer the
+    implementer could write itself: the commits are checked as the integration check would."""
+    problems = []
+    if git.out("rev-list", "--merges", f"{head}..{tip}"):
+        problems.append("the range holds a merge commit")
+    if not git.is_ancestor(local, tip):
+        problems.append("the tip does not descend from the head of the story")
+    stories, agents = gate.trailers(git, head, tip, "Story"), gate.agents(git, head, tip)
+    for sha in stories:
+        if stories[sha] != card_id or agents.get(sha) != "story-implementer":
+            problems.append(f"commit {sha[:8]} lacks the trailers 'Story: {card_id}' and 'Agent: story-implementer'")
+    own = story_dir(card_id) + "/"
+    for _, path in git.diff_status(head, tip):
+        if path in (own + "verification.md", own + "review.md"):
+            problems.append(f"touches {path}: only the engine and the reviewer write it")
+    return problems + gate.diff_problems(git, card_id, head, tip)
+
+
+def _receive(cfg: Config, main: Git, git: Git, card_id: str, info: dict, ref: str, tip: str) -> None:
+    problems = reception_problems(git, card_id, info["head"], tip, git.head())
+    title = cards.titles(main).get(card_id, "")
+    if problems:
+        info.update(ended=now_iso(), ended_reason="refused", rejected=problems, rejected_branch=ref)
+        _save_entry(cfg, card_id, info)
+        notify.notify(cfg.root, f"{card_id}:cloud-refused:{info['session_id']}", "decision",
+                      notify.subject(card_id, title, "commits du cloud refusés"), "; ".join(problems)[:200])
+        journal.record(journal.event(
+            cfg.root.name, "refusal", f"{cards.label(card_id, title)} — cloud commits refused: " + "; ".join(problems[:5]),
+            story=card_id, role="story-implementer", evidence=f"{ref} — {info.get('url')}"))
+        return
+    try:
+        if git.dirty():
+            raise DeliveryError(EXIT_PRECONDITION, "the working copy has uncommitted changes")
+        git.run("merge", "--quiet", "--ff-only", tip)
+    except DeliveryError as exc:
+        info["held"] = (f"cloud commits waiting on {ref}: not brought into the working copy "
+                        f"({exc.message.splitlines()[0][:120]}); retried at the next sweep")
+        _save_entry(cfg, card_id, info)
+        return
+    info.pop("held", None)
+    info.update(head=tip, last_commit_at=_iso(git.commit_time(tip)))
+    _save_entry(cfg, card_id, info)
+    if ref.startswith("origin/claude/"):
+        main.run("push", "--quiet", "origin", "--delete", ref.split("/", 1)[1], check=False, timeout=120)
+    st = state(cfg, card_id)
+    if st.outcome and st.fresh:
+        info.update(ended=now_iso(), ended_reason="outcome")
+        _save_entry(cfg, card_id, info)
+
+
+def relaunch(cfg: Config, card_id: str) -> State:
+    """Abandon the cloud implementer of a story (still without end, or refused) and start a new
+    one from the local head: a human gesture (§12.1)."""
+    require_human("deliveryctl story next --relaunch")
+    check_id(card_id)
+    info = CloudWindow(cfg.root).session(card_id, "story-implementer") or {}
+    if info.get("window") != "cloud" or (info.get("ended") and not info.get("rejected")):
+        fail(EXIT_PRECONDITION, f"{cards.label_of(Git(cfg.root), card_id)} has no cloud implementer to relaunch "
+                                "(only one without an end, or whose commits were refused)")
+    with file_lock(run_dir(cfg.root) / "locks" / f"{card_id}.lock", blocking=False) as got:
+        if not got:
+            fail(EXIT_PRECONDITION, "another process advances this story: retry")
+        st = state(cfg, card_id, refused=False)
+        if st.name not in ("open", "implementing", "fixing"):
+            fail(EXIT_PRECONDITION, f"{label(st)} is '{st.name}': no implementer is due")
+        info.pop("rejected", None)
+        info.update(ended=now_iso(), ended_reason="abandoned")
+        _save_entry(cfg, card_id, info)
+        journal.record(journal.event(
+            cfg.root.name, "resume", f"{label(st)} — story-implementer relaunched by hand; the cloud session "
+            f"{info.get('session_id', '?')} is abandoned", story=card_id, role="story-implementer",
+            evidence=info.get("url") or ""))
+        _start_implementer(cfg, st, _implementer_mode(cfg, st), record=False)
+        return state(cfg, card_id)
+
+
 def check_stall(cfg: Config, card_id: str) -> list[str]:
     """One alert per live session without progress for stall_minutes (CONTRACTS.md §9.3)."""
     win = window.get(cfg.root)
@@ -676,19 +846,22 @@ def check_stall(cfg: Config, card_id: str) -> list[str]:
     limit = cfg.lever("stall_minutes") * 60
     stalled = []
     for role, info in win.sessions(card_id).items():
-        if info.get("window") == "cloud":       # nothing of a cloud session shows here before it ends
-            continue
+        cloud = info.get("window") == "cloud"
         if not info.get("session_id") or window.owner(cfg.root, info).role_alive(card_id, role) is False:
             continue
-        idle = time.time() - _progress(git, wt, card_id, info)
+        if cloud:       # its progress is the push of the story and what was retrieved since
+            idle = time.time() - max(_epoch(info.get("pushed_at")), _epoch(info.get("last_commit_at")))
+        else:
+            idle = time.time() - _progress(git, wt, card_id, info)
         if idle > limit:
             stalled.append(role)
+            where = f" — {info.get('url')}" if cloud else ""
             if notify.notify(cfg.root, f"{card_id}:stall:{info['session_id']}", "stalled",
                              notify.subject(card_id, cards.titles(git).get(card_id, ""), "bloqué"),
-                             f"{role} sans avancée depuis {int(idle // 60)} min"):
+                             f"{role} sans avancée depuis {int(idle // 60)} min{where}"):
                 journal.record(journal.event(
                     cfg.root.name, "stall", f"{cards.label_of(Git(cfg.root), card_id)}: {role} idle for {int(idle // 60)} min", story=card_id,
-                    evidence=str(transcript_path(info.get("cwd", ""), info["session_id"]))))
+                    evidence=info["url"] if cloud else str(transcript_path(info.get("cwd", ""), info["session_id"]))))
     return stalled
 
 
@@ -697,6 +870,7 @@ def scan(cfg: Config) -> None:
     error on one story (forge or network down) is reported and the sweep goes on."""
     for cid in open_ids(cfg):
         try:
+            pull_cloud(cfg, cid)
             check_stall(cfg, cid)
             st = state(cfg, cid)
             if st.engine_next and st.name != "submitted" and not _alive(cfg, cid):
@@ -716,6 +890,7 @@ def wait(cfg: Config, card_id: str, timeout: int = 540, until: str = "checkpoint
     st = state(cfg, card_id)
     while True:
         try:
+            pull_cloud(cfg, card_id)
             st = state(cfg, card_id)
             if st.name in stops:
                 return st
@@ -741,6 +916,7 @@ def wait(cfg: Config, card_id: str, timeout: int = 540, until: str = "checkpoint
 
 def describe(cfg: Config, card_id: str) -> str:
     """State plus the role sessions running, for status displays."""
+    pull_cloud(cfg, card_id)
     st = state(cfg, card_id)
     alive = _alive(cfg, card_id) if st.worktree else []
     if alive:

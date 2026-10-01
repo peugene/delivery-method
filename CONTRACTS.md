@@ -404,9 +404,50 @@ compte comme vivante. Chaque entrée du registre (`.delivery/run/sessions/<id>.j
 `window`, la fenêtre qui la détient (`cloud`, `herdr`, `terminal`), et c'est cette fenêtre que le
 moteur interroge, non celle de la machine. Une entrée `cloud` porte aussi `session_id`, `url`
 (sans paramètres), `head` (le commit poussé) et `pushed_at` ; elle est vivante tant qu'elle n'a
-pas de champ `ended`. Une session cloud ne s'arrête pas d'ici (`stop_role` ne fait rien) et
-rien de sa progression n'est lisible tant qu'elle n'est pas rapatriée : le balayage de §9.3 ne
-l'alerte pas. `story status` en montre l'URL. L'exécutant relancé après une session du même pas finie sans `Outcome`
+pas de champ `ended`. Une session cloud ne s'arrête pas d'ici (`stop_role` ne fait rien), et le
+moteur n'en lit la progression qu'en rapatriant ses commits (ci-dessous) : elle prend fin quand
+ses commits sont acceptés et que `report.md` porte un `Outcome` frais (§9), quand ils sont
+refusés, ou par `story next --relaunch` (§12.1) ; chaque fin pose `ended` et sa raison
+(`ended_reason` : `outcome`, `refused`, `abandoned`). Le moteur ne lance jamais un second
+exécutant tant que l'entrée n'a pas de `ended` : deux sessions ne travaillent jamais sur une
+même story. `story status` en montre l'URL.
+
+**Rapatriement des commits du cloud.** La session cloud pousse son travail sur sa propre branche
+`claude/<nom>`, créée depuis `story/<id>`, et chacun de ses commits porte le trailer
+`Claude-Session: https://claude.ai/code/session_<id>`. Pour une story dont l'entrée `story-implementer`
+est `cloud` sans `ended`, le moteur récupère `origin` (dont `+refs/heads/claude/*`), au plus une
+fois par minute et par story (l'heure est dans l'entrée), avant de lire l'état dans `story next`,
+à chaque tour de `story wait`, dans le balayage et dans `story status`. Un échec de réseau ou de
+forge s'affiche et le balayage continue. Les candidats sont `origin/story/<id>` et chaque
+`origin/claude/*` dont la pointe descend de `head` de l'entrée et dont tous les commits après `head`
+portent le trailer `Claude-Session:` de cette session ; le candidat qui a le plus de ces commits
+l'emporte ; rien de neuf : rien ne se passe.
+
+*Contrôle à la réception*, sur `head..pointe`, avant que rien n'entre dans la copie de travail :
+une session cloud n'obéit à aucune règle de permission du rôle, et l'auteur d'un verdict se
+déclare par un trailer que l'exécutant pourrait écrire lui-même. Refus si la plage contient un
+commit de fusion ; si la pointe ne descend pas de la tête locale de la story ; si un commit n'a pas
+les trailers `Story: <id>` et `Agent: story-implementer` (§8) ; si le diff touche `verification.md` ou
+`review.md` de la story, un chemin protégé du contrôle d'intégration, le dossier d'une autre story,
+ou `backlog/` autrement que par des cartes d'anomalie à trier ajoutées (les règles 4 et 5 de §10,
+les mêmes fonctions).
+
+*Accepté* : la copie de travail de la story, qui doit être propre, avance en avance rapide
+jusqu'à la pointe (sinon elle reste en l'état, la raison s'ajoute au détail de la story et le
+balayage suivant réessaie) ; l'entrée reçoit le nouveau `head` et l'heure du dernier commit
+(`last_commit_at`) ; la branche `claude/*` distante, si elle était le candidat, est supprimée. Si
+`report.md` porte alors un `Outcome` frais, l'entrée reçoit `ended` : l'exécutant a fini, la story
+s'enchaîne.
+
+*Refusé* : aucune avance rapide ; l'entrée reçoit `ended` et `rejected` (les problèmes) ; la story
+est `blocked`, les problèmes en détail, et le prochain geste humain nomme la branche à inspecter et
+la relance (`story next <id> --relaunch`) ; une notification ⚠ « commits du cloud refusés » ; un
+événement `refusal` du journal (§13) dont la preuve est la branche et l'URL de la session.
+
+*Ce qui se perd* : les refus de permission d'un exécutant cloud n'atteignent pas le journal ; son
+transcript reste dans le cloud. Ses obstacles ne se lisent que dans `report.md`.
+
+L'exécutant relancé après une session du même pas finie sans `Outcome`
 (crash, arrêt, tour perdu) est une reprise, portée au journal (`resume`).
 
 ### 9.2 Enchaînement
@@ -444,7 +485,10 @@ order.md, plan.md, work/notes.md, then git status » (le `qualification-runner` 
 `story wait`, `story status --watch` et `hook stop` balaient les stories ouvertes. Une session
 vivante sans avancée depuis `stall_minutes` déclenche une seule alerte 🚨 et un événement
 `stall` ; avancée = le plus récent de son transcript, de son journal de sortie, du dernier commit
-de la branche et des fichiers de `docs/stories/<id>/`. Une story dont l'état appelle une suite
+de la branche et des fichiers de `docs/stories/<id>/`. Pour un exécutant cloud, avancée = le plus
+récent de `pushed_at` et de l'heure de son dernier commit rapatrié (`last_commit_at`) ; passé
+`stall_minutes`, une seule alerte 🚨 (`… — bloqué`, avec l'URL de la session) et un événement
+`stall`, comme pour une session locale. Une story dont l'état appelle une suite
 et qu'aucune session ne sert est relancée par ces mêmes balayages. Une erreur passagère sur une
 story (forge, réseau) est affichée et le balayage continue.
 
@@ -559,7 +603,7 @@ Un refus injustifié se note dans le compte rendu ; l'humain complète `extra_al
 
 ### 12.1 Gestes humains
 
-`deliveryctl init`, `run`, `merge` (en `integration = human`), `story next --go`, `story close`
+`deliveryctl init`, `run`, `merge` (en `integration = human`), `story next --go`, `story next --relaunch`, `story close`
 d'une story arrêtée, `spec release`, `spec sync`, `qualify submit`, `nightly`, `note`, `journal report`. Refusés
 quand `DELIVERY_ROLE` est défini ; en `ask` dans les réglages du projet, sauf `story close` : une
 règle ne distingue pas une story arrêtée d'une story fusionnée, que le lead ferme en run, et le
@@ -579,7 +623,7 @@ une carte en `ready`, taguer, pousser une branche de lead, passer en `released`,
 | `story prepare <id>` | copie de travail depuis la tête de la cible, squelette d'ordre ; rien n'est commité |
 | `story open <id> [--order <brouillon>]` | contrôle l'ordre, le commite, calcule le port, lance l'exécutant ; refuse si une dépendance n'est pas faite ou n'est pas contenue dans `base:` ; avertit au-delà de `max_order_lines` |
 | `story status [<id>] [--watch]` | état, prochaine étape du moteur, prochain geste humain |
-| `story next <id> [--go]` | enchaîne la suite (§9) ; `--go` relance après `plan-ready` |
+| `story next <id> [--go\|--relaunch]` | enchaîne la suite (§9) ; `--go` relance après `plan-ready` ; `--relaunch` abandonne l'exécutant cloud (sans `ended`, ou dont les commits ont été refusés : sinon code 3), pose `ended` (`abandoned`), porte un événement `resume` au journal et lance un nouvel exécutant depuis la tête locale |
 | `story wait <id> [--timeout S] [--until merged]` | rend la main à un arrêt (`blocked`, `deferred`, `plan-ready`, bornes, `merged`, et `submitted` si `integration = human`) ou au délai (code 3) |
 | `story close <id>` | supprime la copie de travail d'une story fusionnée ou arrêtée ; garde la branche d'une story arrêtée |
 | `verify <id>` | lance les vérifications sur le port de la story, écrit `work/verify.log`, commite `verification.md` |
@@ -636,7 +680,7 @@ l'est plus, que `notify_cmd` ait réussi ou non (son échec s'affiche sur la sor
 
 | Événement | Titre |
 |---|---|
-| décision attendue (story arrêtée, plan à voir, demande de fusion à relire, borne atteinte, contrôle d'intégration ou CI rouge, vérification impossible, run arrêté, recette à synthétiser, suite de nuit sans test, sans runner ou sans carte, question d'une session humaine) | `⚠ <dépôt> — <id> : <titre> — <quoi>` ; sans carte : `⚠ <dépôt> — <quoi>` |
+| décision attendue (story arrêtée, commits du cloud refusés, plan à voir, demande de fusion à relire, borne atteinte, contrôle d'intégration ou CI rouge, vérification impossible, run arrêté, recette à synthétiser, suite de nuit sans test, sans runner ou sans carte, question d'une session humaine) | `⚠ <dépôt> — <id> : <titre> — <quoi>` ; sans carte : `⚠ <dépôt> — <quoi>` |
 | run terminé, avec renvoi à `## Run` | `⭐ <dépôt> — run terminé` |
 | agent bloqué (§9.3) | `🚨 <dépôt> — <id> : <titre> — bloqué` |
 | anomalies de la nuit prêtes à trier | `⭐ <dépôt> — anomalies à trier` |
