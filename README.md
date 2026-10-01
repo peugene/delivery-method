@@ -81,8 +81,8 @@ recettes échouent tant qu'elles ne sont pas écrites, la CI de la forge
 harnais Playwright et application vide, `CHANGELOG.md`, brief, glossaire) ; il complète par ajout
 `CLAUDE.md` (import `@.delivery/rules.md`, section `## Project conventions`), `.gitignore` et
 `.claude/settings.json` (plugin désactivé dans le projet, y compris si une installation à la portée
-projet l'avait activé, car sa copie ferait doublon avec celle du projet ; hooks `Stop` et
-`SessionStart` ; messagerie entre sessions refusée ; confirmation pour les gestes humains). Écrivez
+projet l'avait activé, car sa copie ferait doublon avec celle du projet ; hooks `Stop`,
+`SessionStart` et `PreToolUse` ; messagerie entre sessions refusée ; confirmation pour les gestes humains). Écrivez
 les recettes du `justfile` pour votre pile, relisez, puis commitez : toute session Claude Code qui
 clone le dépôt, y compris une session cloud qui n'installe aucun plugin, y trouve la méthode
 entière. Ne modifiez pas à la main les fichiers copiés sous `.claude/` : `--upgrade` refuse
@@ -104,12 +104,14 @@ projet. Dans ces sessions, `deliveryctl` est déjà dans le `PATH` : le hook `Se
 `.delivery/`, et c'est donc la copie du projet. Vérifiez enfin avec
 `deliveryctl doctor`, qui ne modifie rien : chaque ligne vaut `ok`, `note` ou `warn`.
 
-**Mettre à jour.** Mettez à jour le plugin (`/plugin` dans Claude Code), puis relancez
-`/delivery-method:init` : sur un dépôt équipé, il lance `deliveryctl init --upgrade`, qui
-rafraîchit `.delivery/`, la copie sous `.claude/` (en retirant les fichiers que la nouvelle version
-n'a plus), les hooks et la version épinglée dans `.claude/settings.json`, et désactive le plugin
-dans le projet. Si un fichier copié a été modifié à la main, il refuse, en les listant, avant
-d'écrire quoi que ce soit. Relisez, commitez.
+**Mettre à jour** (depuis 0.1.0). Mettez à jour le plugin (`/plugin` dans Claude Code), puis
+relancez `/delivery-method:init` : sur un dépôt équipé, il lance `deliveryctl init --upgrade` depuis
+le lanceur du plugin (`DELIVERY_USE_PLUGIN_ENGINE=1 deliveryctl init --upgrade`, qui exécute le
+moteur du plugin et non la copie du projet, encore ancienne). La mise à jour rafraîchit
+`.delivery/`, la copie sous `.claude/` (en retirant les fichiers que la nouvelle version n'a plus),
+les hooks et la version épinglée dans `.claude/settings.json`, désactive le plugin dans le projet et
+renomme la commande `/delivery-method:run` en `/run-campaign`. Si un fichier copié a été modifié à
+la main, elle refuse, en les listant, avant d'écrire quoi que ce soit. Relisez le diff, commitez.
 
 **Publier une version du plugin** (mainteneurs). `init` épingle la marketplace sur l'étiquette
 `delivery-method--vX.Y.Z` : sans elle, un coéquipier ne peut pas installer le plugin. Montez la
@@ -286,8 +288,8 @@ d'une story arrêtée.
 
 | Verbe | Effet |
 |---|---|
-| `init [--role R] [--upgrade] [--dry-run]` **H** | pose ou met à jour moteur, règles, réglages, CI ; n'écrase rien, ne commite rien |
-| `doctor` | diagnostic en lecture seule |
+| `init [--role R] [--upgrade] [--dry-run]` **H** | pose ou met à jour moteur, règles, copie des agents, skills et commandes sous `.claude/`, réglages, CI ; n'écrase rien, ne commite rien |
+| `doctor` | diagnostic en lecture seule (dont la copie de la méthode, la confiance de Claude Code et, en dépôt GitHub public, l'adresse de commit) |
 | `cards list`, `cards order` | lire, ordonner les cartes de la branche cible, celles que lit le run |
 | `cards lint` | contrôler les cartes de la copie de travail, avant de les commiter |
 | `campaign open <nom> --phase P` | crée `docs/campaigns/<nom>.md` et son dossier de travail |
@@ -295,7 +297,7 @@ d'une story arrêtée.
 | `story prepare <id>` | copie de travail et squelette d'ordre ; rien n'est commité |
 | `story open <id>` | contrôle et commite l'ordre, lance l'exécutant |
 | `story status [<id>] [--watch]` | état, prochaine étape du moteur, prochain geste humain |
-| `story next <id> [--go]` | enchaîne la suite ; `--go` (**H**) relance après `plan-ready` |
+| `story next <id> [--go\|--relaunch]` | enchaîne la suite ; `--go` (**H**) relance après `plan-ready` ; `--relaunch` (**H**) abandonne l'exécutant cloud et en lance un nouveau |
 | `story wait <id> [--timeout S] [--until merged]` | attend un arrêt, ou la fusion |
 | `story close <id>` | supprime la copie de travail d'une story fusionnée, ou arrêtée (**H**) |
 | `verify <id>`, `gate <id> [--head R]`, `submit <id>` | vérification et verdict commité ; contrôle d'intégration ; push et demande de fusion (refusé si elle est déjà fusionnée) |
@@ -311,7 +313,7 @@ d'une story arrêtée.
 | `journal setup`, `journal flush`, `journal report` (**H**) | mise en place, envoi de la file locale, lecture hors de tout dépôt (voir Journal d'expérience) |
 | `kit lint [chemin]` | contrôle du plugin lui-même |
 
-`hook stop` et `hook session-start` sont appelés par les hooks du projet (`.claude/settings.json`). Codes de sortie :
+`hook stop`, `hook session-start` et `hook pre-tool` sont appelés par les hooks du projet (`.claude/settings.json`). Codes de sortie :
 0 succès ; 1 erreur d'usage ou interne ; 2 contrôle rouge ; 3 précondition non remplie ou délai
 écoulé ; 4 refusé ; 5 outil externe indisponible.
 

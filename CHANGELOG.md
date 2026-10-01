@@ -4,6 +4,62 @@ Chaque version liste ses ajouts, changements et corrections. La rubrique `Contra
 tout changement de [`CONTRACTS.md`](CONTRACTS.md) : tant que le plugin est en `0.x`, un
 changement de contrat monte la version mineure ; après 1.0.0, la version majeure.
 
+## 0.2.0
+
+Mise à jour d'un projet équipé en 0.1.0 : installez la nouvelle version du plugin, lancez
+`/delivery-method:init` (ou `DELIVERY_USE_PLUGIN_ENGINE=1 deliveryctl init --upgrade` depuis le
+lanceur du plugin), relisez le diff, commitez. `init --upgrade` copie la méthode dans `.claude/`,
+désactive le plugin dans le projet et renomme `/delivery-method:run` en `/run-campaign`.
+
+### Ajouts
+
+- La méthode dans le projet : `init` copie les agents, skills et commandes du plugin sous
+  `.claude/` et inscrit leur empreinte dans `.delivery/method.json` ; `init --upgrade` les
+  rafraîchit, retire ceux que la version n'a plus et refuse, en les listant, d'écraser un fichier
+  modifié à la main. Une session Claude Code sans plugin y trouve toute la méthode.
+- Exécutant dans le cloud : réglage `implementer` (`cloud` par défaut avec GitHub, `local` avec
+  GitLab) ; le `story-implementer` tourne dans une session cloud (`claude --cloud`), dont le moteur
+  rapatrie et contrôle les commits, alerte sur un arrêt de progression et relance sur demande
+  (`story next --relaunch`) ; `story status` en montre l'URL.
+- Sessions humaines dans le cloud : le moteur du projet y tourne, les hooks du projet aussi ;
+  script d'installation de l'environnement cloud (`templates/project/cloud-setup.sh`).
+- Hook `PreToolUse` du projet (`deliveryctl hook pre-tool`) : dans une session cloud, il refuse
+  sans demande de permission les gestes du propriétaire.
+- `doctor` vérifie la copie de la méthode, la confiance accordée au dépôt par Claude Code,
+  la connexion `claude.ai` et `origin` avec l'exécutant cloud, et avertit quand un dépôt GitHub
+  public publierait l'adresse de commit du propriétaire.
+
+### Changements
+
+- La commande `run` devient `/run-campaign` (`run` prenait le nom d'une commande native de Claude
+  Code) ; les commandes copiées n'ont plus d'espace de noms (`/spec-frame`, `/impl-frame`…),
+  seule `init` reste `/delivery-method:init`.
+- `.claude/settings.json` : plugin désactivé dans le projet dès le premier `init`, hooks `Stop`,
+  `SessionStart` et `PreToolUse`.
+- Les sessions de rôle lancent l'agent de la copie du projet, sans plugin ; `deliveryctl` y est
+  la copie du projet, mise en tête du `PATH` par le moteur et par le hook `SessionStart`.
+- Les trailers d'un commit sont lus dans tous les paragraphes consécutifs de fin de message.
+- Le lanceur d'un exécutant cloud s'arrête au dialogue de confiance de Claude Code (code 3).
+- Une session cloud retrouve sa story sans branche cible, par le commit d'ordre le plus récent.
+- Notification ⚠ « commits du cloud refusés ».
+
+### Contracts
+
+- §2 : `.delivery/method.json` et `.claude/{agents,skills,commands}/` ; `.claude/settings.json`
+  (plugin désactivé, trois hooks) ; `deliveryctl` du projet en tête du `PATH` ; session cloud ;
+  copie de la méthode et refus d'écraser une copie modifiée.
+- §3 : réglage `implementer` et son défaut.
+- §8 : lecture des trailers dans tous les paragraphes de fin de message.
+- §9 : entrées du registre de sessions avec `window` et champs cloud ; rapatriement des commits du
+  cloud (candidats, contrôle à la réception, acceptation, refus) ; avancée et alerte d'un
+  exécutant cloud.
+- §9.2 : hooks dans une session cloud (story servie, arrêt, `session-start`, `pre-tool`).
+- §11.1 : lancement du rôle par l'agent du projet, `PATH` du lancement, exécutant dans le cloud.
+- §12.1 : gestes refusés dans une session cloud, `story next --relaunch`, `story next --go`.
+- §12.2 : `init`, `doctor` et `hook` (diagnostics, copie de la méthode, adresse publique).
+- §13 : notification des commits du cloud refusés ; événements `refusal`, `resume` et `stall`
+  d'un exécutant cloud.
+
 ## 0.1.0
 
 ### Ajouts
