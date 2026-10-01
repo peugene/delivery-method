@@ -14,7 +14,7 @@ from pathlib import Path
 
 from . import cards, config, init, journal, roles
 from . import verdict as vd
-from .core import EXIT_OK, DeliveryError, main_root
+from .core import EXIT_OK, DeliveryError, is_cloud, main_root
 from .gitops import Git, worktree_path
 from .window import mentions
 
@@ -63,6 +63,8 @@ def check_repository(ctx):
 
 
 def check_plugin(ctx):
+    if is_cloud():
+        return
     ctx.plugin = roles.plugin_root()
     if ctx.plugin:
         yield "ok", f"plugin {ctx.plugin}"
@@ -71,6 +73,10 @@ def check_plugin(ctx):
 
 
 def check_engine(ctx):
+    if is_cloud():
+        copy = init.copy_version(ctx.root)
+        yield ("ok", f"engine copy {copy}") if copy else ("warn", "no engine copy in .delivery/: run 'deliveryctl init'")
+        return
     copy = init.copy_version(ctx.root)
     if not copy:
         yield "warn", "no engine copy in .delivery/: run 'deliveryctl init'"
@@ -118,6 +124,10 @@ def check_project(ctx):
 
 
 def check_machine(ctx):
+    if is_cloud():
+        yield "note", ("cloud session: machine settings, herdr, the notification command and the plugin "
+                       "are the owner's computer's, not checked here")
+        return
     machine = config.machine()
     path = config.machine_path()
     yield "ok", f"machine settings ({path if path.exists() else 'defaults'})"
@@ -220,6 +230,8 @@ def _executable(command: str) -> str:
 
 
 def check_claude(ctx):
+    if is_cloud():
+        return
     if shutil.which("claude"):
         yield "ok", "claude CLI"
     else:
@@ -254,7 +266,7 @@ def _origin_host(url: str) -> str:
 def check_cloud(ctx):
     """With implementer = cloud, the story-implementer runs as a Claude Code cloud session."""
     cfg = ctx.cfg
-    if not cfg or cfg.implementer != "cloud":
+    if is_cloud() or not cfg or cfg.implementer != "cloud":
         return
     if shutil.which("claude"):
         try:
@@ -321,6 +333,8 @@ def _trusted() -> set[str] | None:
 def check_trust(ctx):
     """An interactive role session in a story worktree waits on the trust dialog when neither
     the repository (whose trust the worktrees inherit) nor the worktrees folder is trusted."""
+    if is_cloud():
+        return
     terminal = config.machine().get("window") == "terminal"       # headless sessions: no dialog
     trusted = _trusted() if shutil.which("claude") and not terminal else None
     if trusted is None:

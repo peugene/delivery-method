@@ -13,7 +13,7 @@ from . import frontmatter as fm
 from . import verdict as vd
 from .config import Config
 from .core import (EXIT_ERROR, EXIT_OK, EXIT_PRECONDITION, EXIT_RED, eprint, fail, main_root,
-                   repo_root, require_human)
+                   repo_root, require_human, require_local)
 from .forge import Forge
 from .gitops import Git, worktree_path
 
@@ -358,6 +358,7 @@ def lint(cfg: Config, incr: str) -> tuple[Path, list[str]]:
 # -- submit ---------------------------------------------------------------------------------
 def submit(cfg: Config, incr: str) -> str:
     require_human("deliveryctl qualify submit")
+    require_local("deliveryctl qualify submit")
     branch = branch_of(incr)
     wt = Git(cfg.root).worktree_for(branch)
     if not wt:
@@ -392,6 +393,8 @@ def close(cfg: Config, incr: str) -> str:
 
 def main(args) -> int:
     incr = check_increment(args.increment)
+    if args.action in ("run", "submit"):
+        require_local(f"deliveryctl qualify {args.action}")
     cfg = config.load(main_root())
     if args.action == "open":
         print(open_qualification(cfg, incr))

@@ -406,6 +406,45 @@ Claude Code : celui-ci doit atteindre la chaîne d'outils du projet (les command
 `acceptance` et `serve`, leurs dépendances). `deliveryctl doctor` vérifie la connexion et
 `origin`, pas l'environnement.
 
+## Claude Cloud
+
+Le cloud de Claude Code fait tourner une session dans une machine virtuelle neuve (Ubuntu 24.04,
+dépôt cloné, Python 3.11, Node 22, JDK 21 avec Maven et Gradle, PostgreSQL 16, Docker, `git`, `gh`).
+
+**Prérequis.**
+- Être connecté avec un compte claude.ai (`claude auth login`).
+- Avoir connecté GitHub à Claude : l'application GitHub de Claude, ou `/web-setup` dans Claude Code.
+- Avoir choisi l'environnement avec `/remote-env` et collé dans son script d'installation
+  `.delivery/templates/project/cloud-setup.sh` : il ajoute `just` et le navigateur Playwright de
+  la recette (avec ses dépendances système), et rien de ce que l'image contient déjà. Ajoutez-y la
+  pile propre au projet, chaque étape terminée par `|| true`. Le script ne se met en cache que s'il
+  finit en cinq minutes environ avec le code 0.
+
+**Ce qui tourne où.**
+- Sur GitHub, l'implémenteur tourne par défaut dans le cloud ; `implementer = "local"` le garde sur
+  votre ordinateur.
+- Le lead, la vérification, le relecteur et la fusion tournent sur votre ordinateur.
+- Les sessions humaines (cadrage et rédaction de la spec, relecture de spec, cadrage de
+  l'implémentation, passation, lead de recette) peuvent tourner dans le cloud, depuis claude.ai/code
+  ou l'application Claude : le moteur du projet y tourne, les commandes sont dans `.claude/`.
+  Elles livrent par une demande de fusion de leur branche `claude/<nom>`.
+- Dans une session cloud, les gestes qui lancent des sessions Claude, poussent, taguent ou fusionnent
+  sur la forge, ou écrivent votre journal sont refusés (code 4) : `run`, `merge`, `submit`,
+  `story open`, `story next`, `story wait`, `qualify run`, `qualify submit`, `nightly`,
+  `spec release`, `init`, `note`, `journal report`. Fusionnez la demande de fusion de la session,
+  puis lancez le geste depuis votre ordinateur. `spec lint`, `cards`, `story status`, `doctor`… y
+  fonctionnent ; `doctor` saute les contrôles propres à votre ordinateur.
+
+**Suivre un implémenteur cloud.** `deliveryctl story status` affiche son URL ; l'application Claude
+permet de le suivre et de lui répondre depuis un téléphone. `deliveryctl story next <id>
+--relaunch` l'abandonne et en lance un nouveau.
+
+**Ce qui se perd.** Les refus de permission de l'implémenteur cloud n'arrivent pas au journal
+d'expérience : il n'y a pas de fichier de refus à lire.
+
+**Limites.** Chaque session cloud consomme le quota de l'abonnement. La machine virtuelle a environ
+4 processeurs, 16 Go de mémoire et 30 Go de disque.
+
 ## Fenêtres
 
 Le moteur lit l'état des stories dans git et dans les fichiers, jamais dans une fenêtre : une

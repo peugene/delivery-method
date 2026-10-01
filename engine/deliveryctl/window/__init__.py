@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 
 from .. import config
+from ..core import eprint, is_cloud
 from .base import Window
 
 
@@ -25,13 +26,14 @@ def get(root: Path) -> Window:
     if os.environ.get("DELIVERY_FAKE_WINDOW"):
         from .fake import FakeWindow
         return FakeWindow(root)
+    if is_cloud():                  # no herdr in a cloud session: nothing to probe
+        choice = "terminal"
     if choice in ("auto", "herdr"):
         from .herdr import HerdrWindow
         win = HerdrWindow(root)
         if win.probe():
             return win
         if choice == "herdr":
-            from ..core import eprint
             eprint("window = herdr but herdr does not answer: falling back to 'terminal'")
     from .terminal import TerminalWindow
     return TerminalWindow(root)

@@ -34,6 +34,17 @@ class InitTest(RepoCase):
     def settings(self) -> dict:
         return json.loads((self.repo / ".claude" / "settings.json").read_text())
 
+    def test_next_steps_name_the_cloud_environment_with_a_cloud_implementer(self):
+        out = self.init()
+        self.assertIn("/remote-env", out)
+        self.assertIn(".delivery/templates/project/cloud-setup.sh", out)
+        code, out = self.cli("init", "--upgrade")
+        self.assertNotIn("/remote-env", self.init_local())
+
+    def init_local(self):
+        write(self.repo / "delivery.toml", (self.repo / "delivery.toml").read_text() + 'implementer = "local"\n')
+        return self.cli("init", "--upgrade")[1]
+
     def test_init_lays_everything_and_commits_nothing(self):
         head = git(self.repo, "rev-parse", "HEAD")
         out = self.init()
@@ -44,6 +55,7 @@ class InitTest(RepoCase):
         self.assertTrue((dot / "engine" / "deliveryctl" / "cli.py").exists())
         self.assertEqual(list(dot.rglob("__pycache__")), [])
         self.assertTrue((dot / "templates" / "project" / "delivery.toml").exists())
+        self.assertTrue((dot / "templates" / "project" / "cloud-setup.sh").exists())
         self.assertEqual((dot / "rules.md").read_text(), (ROOT / "rules" / "rules.md").read_text())
         self.assertEqual((dot / "VERSION").read_text().strip(), VERSION)
         self.assertTrue(os.access(dot / "deliveryctl", os.X_OK))

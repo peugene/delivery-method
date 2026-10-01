@@ -60,5 +60,7 @@ Fail closed: on the first failure, say why and stop.
 ## Ends with
 A summary: files written, draft cards in dependency order as `<id> : <title>`, questions still
 open, and the owner's next gestures: commit the conventions, pass the cards to `ready` by a
-commit on the target branch, then `deliveryctl run --campaign <name>`. Last line:
+commit on the target branch, then `deliveryctl run --campaign <name>`. In a cloud session
+(`CLAUDE_CODE_REMOTE=true`), `deliveryctl run` is refused: the owner merges this session's pull
+request, then runs it from their computer. Last line:
 `Outcome: done — <summary>`, or `Outcome: question — <what the owner must decide>`.

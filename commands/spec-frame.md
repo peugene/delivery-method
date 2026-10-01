@@ -52,6 +52,7 @@ Fail closed: on the first failure, say why and stop.
    return as questions; set `status: framed` and `scope: [<story ids>]`; commit with trailers
    `Campaign: <incr>` and `Agent: product-analyst`. When the project works by merge requests,
    the approval of the one carrying this commit is the GO; pushing it is the owner's gesture.
+   In a cloud session the session's own `claude/` branch is pushed for the pull request.
 
 ## Outputs
 - `refinement/<incr>/framing.md`, 80 lines targeted, in the project language; section names

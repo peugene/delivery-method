@@ -13,7 +13,7 @@ import re
 import sys
 from pathlib import Path
 
-from .core import ID_RX, main_root, repo_root
+from .core import ID_RX, is_cloud, main_root, repo_root
 
 OUTCOME_RX = re.compile(r"^Outcome:\s*(done|blocked|deferred|plan-ready|question)\b")
 LEAD_OUTCOMES = ("done", "blocked")
@@ -151,8 +151,7 @@ def _record_refusals(cfg, role: str, scope: str, data: dict) -> None:
                                  story=scope if ID_RX.match(scope) else "", role=role, evidence=str(path)))
 
 
-def _cloud() -> bool:
-    return os.environ.get("CLAUDE_CODE_REMOTE") == "true"
+_cloud = is_cloud
 
 
 def _cloud_story(cwd: Path):
