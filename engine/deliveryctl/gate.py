@@ -9,7 +9,7 @@ from pathlib import Path
 from . import cards
 from . import verdict as vd
 from .core import ID_RX, DeliveryError, glob_match
-from .gitops import Git
+from .gitops import Git, trailer_values
 from .verify import story_dir
 
 FORBIDDEN = ["spec/**", "spec.lock", ".delivery/**", ".claude/**", "delivery.toml", "CLAUDE.md",
@@ -94,11 +94,10 @@ def agents(git: Git, base: str, head: str = "HEAD") -> dict[str, str]:
 def trailers(git: Git, base: str, head: str, key: str) -> dict[str, str]:
     """The value of the trailer `key` of each commit of base..head ('' when absent; several
     values are joined by commas)."""
-    out = git.out("log", f"--format=%H%x01%(trailers:key={key},valueonly,separator=%x2C)%x00",
-                  f"{base}..{head}", check=False)
+    out = git.out("log", "--format=%H%x01%B%x00", f"{base}..{head}", check=False)
     found = {}
     for entry in out.split("\x00"):
-        sha, _, agent = entry.strip().partition("\x01")
+        sha, _, message = entry.strip().partition("\x01")
         if sha:
-            found[sha] = agent.strip()
+            found[sha] = ",".join(trailer_values(message, key))
     return found

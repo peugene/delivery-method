@@ -25,7 +25,7 @@ from . import config
 from . import frontmatter as fm
 from .core import (EXIT_ERROR, EXIT_OK, EXIT_PRECONDITION, EXIT_RED, fail, repo_root,
                    require_human, require_local)
-from .gitops import Git
+from .gitops import Git, trailer_values
 
 SPEC = "spec"
 STORIES = f"{SPEC}/stories"
@@ -507,8 +507,8 @@ def _check_requested(git: Git, requested: str, previous: str | None, level: str,
         fail(EXIT_PRECONDITION, "release_stage is pre-release: versions stay 0.x until the first "
                                 "delivery to a third party")
     if stage == "released" and given and LEVELS.index(given) < LEVELS.index(level):
-        override = git.out("log", "-1", "--format=%(trailers:key=Version-Override,valueonly,separator=%x20)",
-                           "HEAD", check=False).strip()
+        override = " ".join(trailer_values(git.out("log", "-1", "--format=%B", "HEAD", check=False),
+                                           "Version-Override"))
         if not override:
             fail(EXIT_RED, f"{version} is a {given} release but the criteria call for a {level} one; "
                            "to keep it, commit with the trailer 'Version-Override: <reason>' and run again")

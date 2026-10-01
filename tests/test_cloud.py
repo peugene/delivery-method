@@ -14,7 +14,7 @@ from pathlib import Path
 from support import RepoCase, git, sh, write
 from test_story import CARD, ORDER
 
-from deliveryctl import config, doctor, journal, roles, story
+from deliveryctl import config, doctor, gate, journal, roles, story
 from deliveryctl.cli import main as cli_main
 from deliveryctl.core import EXIT_ERROR, EXIT_PRECONDITION, EXIT_TOOL, DeliveryError
 from deliveryctl.window import cloud, owner
@@ -23,7 +23,7 @@ from deliveryctl.window.base import Window
 # Fails like the real `claude --cloud` when its output is not a terminal, else records its
 # arguments and prints the three lines of a created session.
 FAKE_CLAUDE = r'''#!PYTHON
-import json, os, sys
+import json, os, sys, time
 from pathlib import Path
 home = Path(os.environ["FAKE_CLAUDE_DIR"])
 if sys.argv[1:3] == ["auth", "status"]:
@@ -38,6 +38,11 @@ mode = os.environ.get("FAKE_CLAUDE_MODE", "")
 if mode == "fail":
     print("Error: no cloud environment")
     sys.exit(1)
+if mode == "trust":
+    print("\033[1mQuick safety check:\033[0m Is this a project you created or one you trust?")
+    print(" 1. Yes, I trust this folder")
+    sys.stdout.flush()
+    time.sleep(60)
 if mode == "silent":
     print("Created nothing")
     sys.exit(0)
@@ -182,6 +187,18 @@ class CloudLaunchTest(CloudCase):
         self.assertIn(text, ctx.exception.message)
         self.assertIsNone(self.entry())
 
+    def test_the_trust_dialog_fails_the_launch_at_once(self):
+        os.environ["FAKE_CLAUDE_MODE"] = "trust"
+        started = time.monotonic()
+        with self.assertRaises(DeliveryError) as ctx:
+            self.open()
+        self.assertLess(time.monotonic() - started, cloud.LAUNCH_TIMEOUT / 2)
+        self.assertEqual(ctx.exception.code, EXIT_PRECONDITION)
+        self.assertIn("no accepted trust", ctx.exception.message)
+        self.assertIn(str(self.wt().name), ctx.exception.message)
+        self.assertIn("main checkout", ctx.exception.message)
+        self.assertIsNone(self.entry())
+
     def test_a_non_zero_exit_names_the_output(self):
         self.failed_launch("fail", "no cloud environment")
 
@@ -260,6 +277,14 @@ class CloudDoctorTest(CloudCase):
         self.configure(top='implementer = "local"\n')
         self.assertNotIn("implementer = cloud", self.doctor())
 
+    def test_untrusted_folder_is_reported_even_with_a_terminal_window(self):
+        os.environ["DELIVERY_WINDOW"] = "terminal"
+        (Path.home() / ".claude.json").write_text(json.dumps({"projects": {}}))
+        self.assertIn("note: Claude Code has no accepted trust", self.doctor())
+        write(self.repo / "delivery.toml", (self.repo / "delivery.toml").read_text().replace(
+            'forge = "github"\n', 'forge = "github"\nimplementer = "local"\n'))
+        self.assertNotIn("accepted trust", self.doctor())
+
 
 SESSION = "https://claude.ai/code/session_01ABC"
 
@@ -318,6 +343,32 @@ class CloudRetrievalCase(CloudCase):
 
 
 class CloudAcceptedTest(CloudRetrievalCase):
+    def test_trailers_above_the_session_own_trailer_paragraph_are_read(self):
+        tip = self.push_commit({"src/app.txt": "line\n"}, trailers=[
+            "Story: s001", "Agent: story-implementer", "",
+            "Co-Authored-By: Claude <noreply@anthropic.com>", f"Claude-Session: {SESSION}"])
+        self.pull()
+        self.assertEqual(self.head(), tip)
+        git_ = story.Git(self.repo)
+        base = self.start
+        for key, value in (("Story", "s001"), ("Agent", "story-implementer"), ("Claude-Session", SESSION),
+                           ("Co-Authored-By", "Claude <noreply@anthropic.com>")):
+            self.assertEqual(gate.trailers(git_, base, tip, key), {tip: value})
+        self.assertEqual(gate.agents(git_, base, tip), {tip: "story-implementer"})
+
+    def test_prose_above_the_trailers_is_not_read_as_trailers(self):
+        tip = self.push_commit({"src/app.txt": "line\n"}, message="implement\n\nThis explains the change.\nStory: s999 is prose",
+                               trailers=["Story: s001", "", f"Claude-Session: {SESSION}"])
+        self.pull()
+        git_ = story.Git(self.repo)
+        self.assertEqual(gate.trailers(git_, self.start, tip, "Story"), {tip: "s001"})
+
+    def test_trailer_parsing(self):
+        from deliveryctl.gitops import trailers_of
+        self.assertEqual(trailers_of("Fix: it\n\nbody\n\nA: 1\nB-c: 2\n\nD: 3\n"), [("A", "1"), ("B-c", "2"), ("D", "3")])
+        self.assertEqual(trailers_of("Fix: it\n"), [])
+        self.assertEqual(trailers_of("s\n\nA: 1\n\nprose here\n\nB: 2"), [("B", "2")])
+
     def test_commits_fast_forward_the_story_and_the_branch_is_deleted(self):
         tip = self.push_commit({"src/app.txt": "line\n"})
         self.pull()

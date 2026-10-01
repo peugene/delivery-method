@@ -335,7 +335,8 @@ def check_trust(ctx):
     the repository (whose trust the worktrees inherit) nor the worktrees folder is trusted."""
     if is_cloud():
         return
-    terminal = config.machine().get("window") == "terminal"       # headless sessions: no dialog
+    # headless role sessions show no dialog, but the cloud launch always does
+    terminal = config.machine().get("window") == "terminal" and not (ctx.cfg and ctx.cfg.implementer == "cloud")
     trusted = _trusted() if shutil.which("claude") and not terminal else None
     if trusted is None:
         return

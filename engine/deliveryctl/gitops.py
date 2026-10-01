@@ -5,12 +5,40 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 import subprocess
 from pathlib import Path
 
 from .core import EXIT_PRECONDITION, EXIT_TOOL, fail, run
 
 STORIES_DIR = "docs/stories/"
+TRAILER_LINE = re.compile(r"^(?:[A-Za-z][A-Za-z0-9-]*[ \t]*:[ \t]*\S.*|[ \t]+\S.*)$")   # `Key: value`, or its continuation
+
+
+def trailers_of(message: str) -> list[tuple[str, str]]:
+    """The trailers of a commit message, in order: every consecutive paragraph at the end of the
+    message made only of trailer lines. A tool that adds its own trailers after a blank line must
+    not hide the ones above it. The first paragraph is the subject, never a trailer block."""
+    paragraphs = [p.split("\n") for p in re.split(r"\n[ \t]*\n", message.replace("\r", "").strip("\n")) if p.strip()]
+    block: list[str] = []
+    for lines in reversed(paragraphs[1:]):
+        if lines[0][0] in " \t" or not all(TRAILER_LINE.match(line) for line in lines):
+            break
+        block = lines + block
+    found: list[tuple[str, str]] = []
+    for line in block:
+        if line[0] in " \t":
+            if found:
+                found[-1] = (found[-1][0], found[-1][1] + " " + line.strip())
+            continue
+        key, _, value = line.partition(":")
+        found.append((key.strip(), value.strip()))
+    return found
+
+
+def trailer_values(message: str, key: str) -> list[str]:
+    """The values of the trailer `key` (case-insensitive) in the message."""
+    return [v for k, v in trailers_of(message) if k.lower() == key.lower()]
 
 
 class Git:
