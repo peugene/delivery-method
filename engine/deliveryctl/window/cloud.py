@@ -15,18 +15,25 @@ import termios
 import time
 from pathlib import Path
 
-from ..core import EXIT_TOOL, clean_env, fail, now_iso
+from ..core import EXIT_PRECONDITION, EXIT_TOOL, clean_env, fail, now_iso
 from ..gitops import Git
 from .base import Window
 
 LAUNCH_TIMEOUT = 180       # seconds `claude --cloud` may take to create the session
 ANSI = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)")
+TRUST_DIALOG = "Is this a project you created or one you trust"      # compared without whitespace
 VIEW = re.compile(r"^\s*View:\s*(https://\S+)", re.MULTILINE)
+
+
+def _asks_trust(raw: bytes) -> bool:
+    text = ANSI.sub("", raw.decode("utf-8", "replace"))
+    return "".join(TRUST_DIALOG.split()) in "".join(text.split())
 
 
 def run_in_terminal(argv: list[str], cwd: str, env: dict, timeout: int) -> tuple[int, str]:
     """Run a command with a pseudo-terminal as its input and output (`claude --cloud` refuses
-    to run without one); returns its exit code and its output without terminal escapes."""
+    to run without one); returns its exit code and its output without terminal escapes. Fails at
+    once when the output shows Claude Code's trust dialog: nobody answers it here."""
     master, slave = os.openpty()
     fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 50, 500, 0, 0))   # no wrapped URL
     try:
@@ -54,6 +61,12 @@ def run_in_terminal(argv: list[str], cwd: str, env: dict, timeout: int) -> tuple
             if not data:
                 break
             chunks.append(data)
+            if _asks_trust(b"".join(chunks)):
+                os.killpg(proc.pid, signal.SIGKILL)
+                proc.wait()
+                fail(EXIT_PRECONDITION, f"Claude Code has no accepted trust for {cwd}: start 'claude' once in the "
+                                        "repository's main checkout and accept the trust dialog (story working "
+                                        "copies inherit that trust), or trust the folder of the story working copies")
     finally:
         os.close(master)
     code = proc.wait()

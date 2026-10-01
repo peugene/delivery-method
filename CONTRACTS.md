@@ -367,6 +367,12 @@ session humaine.
   par la demande de fusion, dont le titre est `<id> : <titre> (story/<id>)` et le corps commence
   par `# <id> : <titre>`.
 
+- **Lecture des trailers** : le moteur lit les trailers d'un commit (`Story`, `Agent`,
+  `Claude-Session`, `Version-Override`…) dans tous les paragraphes consécutifs en fin de message
+  faits seulement de lignes de trailer (`Clé: valeur`) ; un trailer peut donc se trouver dans
+  n'importe lequel de ces paragraphes, par exemple sous celui qu'ajoute une session Claude Code.
+  Le premier paragraphe (le sujet) et un paragraphe de prose ne sont jamais lus comme trailers.
+
 ## 9. États d'une story
 
 Tous déduits des fichiers commités (HEAD de `story/<id>`) et de la forge, jamais d'un
@@ -582,6 +588,12 @@ git push --set-upstream origin story/<id>
 claude --cloud "<consigne>" --model <modèle> --effort <effort>     # depuis la copie de travail, dans un pseudo-terminal
 ```
 
+Le lancement surveille la sortie de `claude --cloud` : dès qu'elle montre le dialogue de confiance
+(« Is this a project you created or one you trust? »), le moteur arrête le processus et échoue
+aussitôt, avec le code 3 (précondition), en nommant le dossier et le remède (lancer `claude` une
+fois dans la copie principale du dépôt et accepter le dialogue, dont héritent les copies de travail
+des stories, ou faire confiance au dossier de ces copies).
+
 Un push refusé (la branche distante a divergé) échoue avec le code 5 et le message de git. Modèle
 et effort viennent de l'en-tête de `.claude/agents/story-implementer.md` (`sonnet` et `medium` à
 défaut). La commande, qui refuse de tourner sans terminal interactif, rend la main aussitôt avec
@@ -651,7 +663,7 @@ sa branche `claude/<nom>` ; le geste refusé se lance après la fusion de cette 
 | Verbe | Effet |
 |---|---|
 | `init [--role R] [--upgrade]` | pose ou met à jour moteur, règles, copie des agents, skills et commandes sous `.claude/` (manifeste `.delivery/method.json`), réglages, CI, et pour un dépôt `spec` ou `single` sans `spec/`, un squelette de `spec/` ; n'écrase rien, ne commite rien |
-| `doctor` | diagnostic en lecture seule (dans une session cloud, il le dit et saute réglages de machine, herdr, commande de notification, plugin et connexion `claude`), dont la copie de la méthode (manifeste, version, fichiers modifiés ou absents, plugin désactivé, hooks) et, avec `implementer = "cloud"`, la connexion `claude.ai` et `origin` sur github.com |
+| `doctor` | diagnostic en lecture seule (dans une session cloud, il le dit et saute réglages de machine, herdr, commande de notification, plugin et connexion `claude`), dont la copie de la méthode (manifeste, version, fichiers modifiés ou absents, plugin désactivé, hooks) et, avec `implementer = "cloud"`, la connexion `claude.ai` et `origin` sur github.com ; la confiance de Claude Code pour le dépôt est aussi vérifiée avec `implementer = "cloud"`, quelle que soit la fenêtre de la machine |
 | `cards list`, `cards order`, `cards lint` | `list`, `order` : lire, ordonner les cartes de la branche cible, celles que lit le run ; `lint` : contrôler celles de la copie de travail, avant commit ; seules les cartes `ready` dont les dépendances sont faites sont lançables |
 | `campaign open <nom> --phase P` | crée `docs/campaigns/<nom>.md` et son dossier `work/` |
 | `run [--campaign N]` | lance le `technical-lead` en mode run |
