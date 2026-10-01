@@ -87,6 +87,9 @@ les recettes du `justfile` pour votre pile, relisez, puis commitez : toute sessi
 clone le dépôt, y compris une session cloud qui n'installe aucun plugin, y trouve la méthode
 entière. Ne modifiez pas à la main les fichiers copiés sous `.claude/` : `--upgrade` refuse
 d'écraser une copie modifiée (les fichiers que vous y ajoutez vous-même ne sont jamais touchés).
+Dans un dépôt GitHub public, l'adresse `git config user.email` est publiée dans chaque commit et
+dans le trailer `Approved-By` de chaque fusion : avant le premier commit, réglez l'adresse privée
+de GitHub (`git config user.email <id>+<login>@users.noreply.github.com`) ; `deliveryctl doctor` le signale.
 
 **3. Raccourci dans le shell.** Dans un projet, le moteur s'exécute toujours depuis sa copie,
 `.delivery/deliveryctl`. Pour votre shell, ajoutez à `~/.bashrc` ou `~/.zshrc` :

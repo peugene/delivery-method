@@ -289,6 +289,33 @@ def check_cloud(ctx):
                    "in Claude Code; it must reach the project's toolchain (README)")
 
 
+NOREPLY = "@users.noreply.github.com"
+
+
+def check_public_address(ctx):
+    """In a public GitHub repository, the owner's git address is published in every commit and
+    in the Approved-By trailer of every merge."""
+    proc = ctx.git.run("remote", "get-url", "origin", check=False)
+    if proc.returncode != 0 or _origin_host(proc.stdout) != "github.com" or not shutil.which("gh"):
+        return
+    try:
+        view = subprocess.run(["gh", "repo", "view", "--json", "visibility"], cwd=ctx.root, capture_output=True,
+                              text=True, timeout=15, stdin=subprocess.DEVNULL)
+        visibility = json.loads(view.stdout or "{}").get("visibility") if view.returncode == 0 else None
+    except (OSError, subprocess.TimeoutExpired, json.JSONDecodeError, AttributeError):
+        return
+    if not isinstance(visibility, str) or visibility.upper() != "PUBLIC":
+        return
+    email = ctx.git.out("config", "user.email", check=False).strip()
+    if email.lower().endswith(NOREPLY):
+        yield "ok", f"public repository, git address {email} is a GitHub noreply address"
+    else:
+        yield "warn", (f"public repository: the git address ({email or 'unset'}) is published in every commit and "
+                       "in the Approved-By trailer of every merge: git config user.email "
+                       f"<id>+<login>{NOREPLY} in this repository (the address GitHub shows under "
+                       "Settings → Emails), and turn on « Keep my email addresses private »")
+
+
 def check_ci(ctx):
     """With a forge, merges wait for a green CI: a CI that never starts blocks them silently."""
     cfg = ctx.cfg
@@ -422,7 +449,7 @@ def check_mentions(ctx):
 
 GLOBAL = (check_repository, check_plugin, check_machine, check_claude)
 PROJECT = (check_engine, check_method, check_project, check_remote, check_gitignore, check_claude_md, check_settings,
-           check_tools, check_cloud, check_ci, check_trust, check_worktrees, check_location, check_releases, check_mentions)
+           check_tools, check_cloud, check_public_address, check_ci, check_trust, check_worktrees, check_location, check_releases, check_mentions)
 
 
 def main(args) -> int:

@@ -56,7 +56,9 @@ def git(*argv, cwd=None):
     return subprocess.run(["git", *argv], cwd=cwd, check=True, capture_output=True, text=True).stdout.strip()
 if checks == "down":
     sys.exit("HTTP 503: service unavailable")
-if args[:2] == ["pr", "view"]:
+if args[:2] == ["repo", "view"]:
+    print(json.dumps({"visibility": (home / "visibility").read_text().strip() if (home / "visibility").exists() else "PRIVATE"}))
+elif args[:2] == ["pr", "view"]:
     req = requests.get(args[2])
     if not req:
         sys.exit('no pull requests found for branch "%s"' % args[2])
