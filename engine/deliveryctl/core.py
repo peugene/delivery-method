@@ -137,11 +137,22 @@ def is_cloud() -> bool:
     return os.environ.get("CLAUDE_CODE_REMOTE") == "true"
 
 
+# Verb (and sub-verb) of the gestures that run from the owner's computer only; `require_local` and
+# the PreToolUse hook read this one list.
+CLOUD_REFUSED = ("run", "merge", "submit", "story open", "story next", "story wait", "qualify run",
+                 "qualify submit", "nightly", "spec release", "init", "note", "journal report")
+
+
+def cloud_refusal(gesture: str) -> str:
+    return f"'deliveryctl {gesture}' ne tourne pas dans une session cloud : lancez-la depuis votre ordinateur"
+
+
 def require_local(gesture: str) -> None:
     """Gestures that start Claude sessions, push, tag or merge on the forge, or write the owner's
     journal run from the owner's computer (CONTRACTS.md §12.1)."""
+    assert gesture in CLOUD_REFUSED, gesture
     if is_cloud():
-        fail(EXIT_REFUSED, f"'{gesture}' ne tourne pas dans une session cloud : lancez-la depuis votre ordinateur")
+        fail(EXIT_REFUSED, cloud_refusal(gesture))
 
 
 def repo_root(start: Path | None = None) -> Path:

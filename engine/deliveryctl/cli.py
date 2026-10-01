@@ -49,7 +49,7 @@ def cmd_story(args) -> int:
     from . import story
     action = args.action
     if action in ("open", "next", "wait"):
-        require_local(f"deliveryctl story {action}")
+        require_local(f"story {action}")
     cfg = _cfg()
     if action == "prepare":
         print(story.prepare(cfg, args.id))
@@ -132,7 +132,7 @@ def cmd_gate(args) -> int:
 
 def cmd_submit(args) -> int:
     from . import story
-    require_local("deliveryctl submit")
+    require_local("submit")
     print(story.submit(_cfg(), args.id))
     return EXIT_OK
 
@@ -140,7 +140,7 @@ def cmd_submit(args) -> int:
 def cmd_merge(args) -> int:
     from . import story
     require_human("deliveryctl merge")
-    require_local("deliveryctl merge")
+    require_local("merge")
     cfg = _cfg()
     print(story.merge(cfg, args.id))
     if not args.keep:
@@ -151,7 +151,7 @@ def cmd_merge(args) -> int:
 def cmd_run(args) -> int:
     from . import run as run_mod
     require_human("deliveryctl run")
-    require_local("deliveryctl run")
+    require_local("run")
     return run_mod.start(_cfg(), campaign=args.campaign)
 
 
@@ -164,7 +164,7 @@ def cmd_campaign(args) -> int:
 def cmd_note(args) -> int:
     from . import journal
     require_human("deliveryctl note")
-    require_local("deliveryctl note")
+    require_local("note")
     root = main_root()
     journal.record(journal.event(root.name, "note", " ".join(args.text), story=args.story or "",
                                  role="human", source="human"))
@@ -187,7 +187,7 @@ def cmd_journal(args) -> int:
         print(f"sent {sent}, still queued {left}")
     elif args.action == "report":
         require_human("deliveryctl journal report")
-        require_local("deliveryctl journal report")
+        require_local("journal report")
         print(journal.report(args.limit))
     elif args.action == "setup":
         print(journal.SETUP)
@@ -196,7 +196,7 @@ def cmd_journal(args) -> int:
 
 def cmd_hook(args) -> int:
     from . import hooks
-    return hooks.stop() if args.event == "stop" else hooks.session_start()
+    return {"stop": hooks.stop, "session-start": hooks.session_start, "pre-tool": hooks.pre_tool}[args.event]()
 
 
 def cmd_spec(args) -> int:
@@ -212,14 +212,14 @@ def cmd_qualify(args) -> int:
 def cmd_nightly(args) -> int:
     from . import nightly
     require_human("deliveryctl nightly")
-    require_local("deliveryctl nightly")
+    require_local("nightly")
     return nightly.run(_cfg())
 
 
 def cmd_init(args) -> int:
     from . import init
     require_human("deliveryctl init")
-    require_local("deliveryctl init")
+    require_local("init")
     return init.main(args)
 
 
@@ -295,7 +295,7 @@ def build() -> argparse.ArgumentParser:
     s.set_defaults(func=cmd_journal)
 
     s = sub.add_parser("hook", help="called by the plugin hooks")
-    s.add_argument("event", choices=["stop", "session-start"])
+    s.add_argument("event", choices=["stop", "session-start", "pre-tool"])
     s.set_defaults(func=cmd_hook)
 
     s = sub.add_parser("spec", help="specification: lint, release, sync, verify")

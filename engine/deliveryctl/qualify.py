@@ -358,7 +358,7 @@ def lint(cfg: Config, incr: str) -> tuple[Path, list[str]]:
 # -- submit ---------------------------------------------------------------------------------
 def submit(cfg: Config, incr: str) -> str:
     require_human("deliveryctl qualify submit")
-    require_local("deliveryctl qualify submit")
+    require_local("qualify submit")
     branch = branch_of(incr)
     wt = Git(cfg.root).worktree_for(branch)
     if not wt:
@@ -394,7 +394,7 @@ def close(cfg: Config, incr: str) -> str:
 def main(args) -> int:
     incr = check_increment(args.increment)
     if args.action in ("run", "submit"):
-        require_local(f"deliveryctl qualify {args.action}")
+        require_local(f"qualify {args.action}")
     cfg = config.load(main_root())
     if args.action == "open":
         print(open_qualification(cfg, incr))

@@ -38,6 +38,8 @@ COPY_SOURCES = ("agents", "skills", "commands")
 NOT_COPIED = {"commands/init.md"}               # init stays a plugin command: it equips a project
 HOOK_STOP = '"$CLAUDE_PROJECT_DIR"/.delivery/deliveryctl hook stop'
 HOOK_SESSION_START = '"$CLAUDE_PROJECT_DIR"/.delivery/deliveryctl hook session-start'
+HOOK_PRE_TOOL = '"$CLAUDE_PROJECT_DIR"/.delivery/deliveryctl hook pre-tool'
+PRE_TOOL_FILTERS = ("Bash(deliveryctl *)", "Bash(.delivery/deliveryctl *)")
 HOOK_MARK = "deliveryctl hook "
 LANGUAGE_RX = re.compile(r"^[a-z]{2,3}(-[A-Za-z0-9]{2,8})?$")
 IGNORED = shutil.ignore_patterns("__pycache__", "*.pyc")
@@ -339,7 +341,11 @@ def wanted_settings(plugin: Path, version: str) -> dict:
 def method_hooks() -> dict:
     def entry(command: str, timeout: int) -> dict:
         return {"hooks": [{"type": "command", "command": command, "timeout": timeout}]}
-    return {"Stop": [entry(HOOK_STOP, 40)], "SessionStart": [entry(HOOK_SESSION_START, 10)]}
+    # the filters keep the hook from running for any Bash command that is not an engine command
+    pre_tool = {"matcher": "Bash", "hooks": [{"type": "command", "if": rule, "command": HOOK_PRE_TOOL, "timeout": 10}
+                                              for rule in PRE_TOOL_FILTERS]}
+    return {"Stop": [entry(HOOK_STOP, 40)], "SessionStart": [entry(HOOK_SESSION_START, 10)],
+            "PreToolUse": [pre_tool]}
 
 
 def _owned(entry) -> bool:

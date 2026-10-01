@@ -74,6 +74,11 @@ class InitTest(RepoCase):
         self.assertNotIn("matcher", start)
         self.assertEqual((start["hooks"][0]["command"], start["hooks"][0]["timeout"]),
                          ('"$CLAUDE_PROJECT_DIR"/.delivery/deliveryctl hook session-start', 10))
+        pre = data["hooks"]["PreToolUse"][0]
+        self.assertEqual(pre["matcher"], "Bash")
+        self.assertEqual([(h["if"], h["command"], h["timeout"]) for h in pre["hooks"]],
+                         [(rule, '"$CLAUDE_PROJECT_DIR"/.delivery/deliveryctl hook pre-tool', 10)
+                          for rule in ("Bash(deliveryctl *)", "Bash(.delivery/deliveryctl *)")])
         self.assertIn("SendMessage", data["permissions"]["deny"])
         for rule in ("Bash(deliveryctl merge *)", "Bash(.delivery/deliveryctl merge *)",
                      "Bash(deliveryctl nightly)", "Bash(.delivery/deliveryctl story next *--go*)"):
@@ -216,6 +221,7 @@ class InitTest(RepoCase):
         self.assertEqual([e["hooks"][0]["command"] for e in data["hooks"]["Stop"]],
                          ["mine", init.HOOK_STOP])
         self.assertEqual(data["hooks"]["SessionStart"], init.method_hooks()["SessionStart"])
+        self.assertEqual(data["hooks"]["PreToolUse"], init.method_hooks()["PreToolUse"])
         self.assertNotIn(".claude/commands/gone.md", json.loads(manifest_path.read_text())["files"])
         code, out = self.cli("doctor")
         self.assertNotIn("warn: method copy", out)
@@ -257,6 +263,18 @@ class InitTest(RepoCase):
         (self.repo / ".delivery" / "method.json").unlink()
         code, out = self.cli("doctor")
         self.assertIn("warn: no .delivery/method.json", out)
+
+    def test_upgrade_adds_the_pre_tool_hook_and_doctor_warns_without_it(self):
+        self.init()
+        data = self.settings()
+        del data["hooks"]["PreToolUse"]
+        write(self.repo / ".claude" / "settings.json", json.dumps(data))
+        code, out = self.cli("doctor")
+        self.assertIn("the PreToolUse hook is missing", out)
+        code, out = self.cli("init", "--upgrade")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(self.settings()["hooks"]["PreToolUse"], init.method_hooks()["PreToolUse"])
+        self.assertNotIn("PreToolUse", self.cli("doctor")[1])
 
     def test_role_is_required_and_dry_run_writes_nothing(self):
         code, out = self.cli("init", "--forge", "github")

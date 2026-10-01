@@ -518,7 +518,7 @@ def _check_requested(git: Git, requested: str, previous: str | None, level: str,
 
 def release(root: Path, requested: str | None = None) -> int:
     require_human("deliveryctl spec release")
-    require_local("deliveryctl spec release")
+    require_local("spec release")
     cfg = config.load(root)
     if cfg.repo_role == "impl":
         fail(EXIT_PRECONDITION, "spec release runs where the spec is written: here spec/ is a synced copy")

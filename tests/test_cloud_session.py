@@ -3,6 +3,7 @@ push, tag or merge are refused, the checking verbs work, no herdr is probed, doc
 owner's computer; the setup script of the cloud environment."""
 
 import io
+import json
 import os
 import subprocess
 from contextlib import redirect_stderr, redirect_stdout
@@ -10,7 +11,7 @@ from unittest import mock
 
 from support import ROOT, RepoCase, git, write
 
-from deliveryctl import cli, config, window
+from deliveryctl import cli, config, core, hooks, window
 
 REFUSED = [
     ["run"], ["merge", "s001"], ["submit", "s001"], ["story", "open", "s001"], ["story", "next", "s001"],
@@ -80,6 +81,61 @@ class CloudSessionTest(RepoCase):
             self.assertNotIn(skipped, out)
         del os.environ["CLAUDE_CODE_REMOTE"]
         self.assertIn("ok: machine settings", self.cli("doctor")[1])
+
+
+class PreToolHookTest(RepoCase):
+    with_agents = False
+
+    def hook(self, command: str, cloud: bool = True) -> dict | None:
+        out = io.StringIO()
+        if cloud:
+            os.environ["CLAUDE_CODE_REMOTE"] = "true"
+        payload = json.dumps({"tool_name": "Bash", "tool_input": {"command": command}})
+        with mock.patch("sys.stdin", io.StringIO(payload)), redirect_stdout(out):
+            self.assertEqual(hooks.pre_tool(), 0)
+        return json.loads(out.getvalue()) if out.getvalue() else None
+
+    def test_refused_gestures_are_denied_without_a_prompt(self):
+        for command in ("deliveryctl run", "./.delivery/deliveryctl merge t001",
+                        "cd x && deliveryctl story next s001", '"$CLAUDE_PROJECT_DIR"/.delivery/deliveryctl nightly',
+                        "deliveryctl qualify run i1", "deliveryctl spec release 1.0.0"):
+            with self.subTest(command=command):
+                answer = self.hook(command)["hookSpecificOutput"]
+                self.assertEqual((answer["hookEventName"], answer["permissionDecision"]), ("PreToolUse", "deny"))
+                self.assertIn("ne tourne pas dans une session cloud", answer["permissionDecisionReason"])
+
+    def test_the_reason_is_the_refusal_line_of_require_local(self):
+        err = io.StringIO()
+        os.environ["CLAUDE_CODE_REMOTE"] = "true"
+        with redirect_stderr(err):
+            self.assertEqual(cli.main(["merge", "t001"]), 4)
+        reason = self.hook("deliveryctl merge t001")["hookSpecificOutput"]["permissionDecisionReason"]
+        self.assertIn(reason, err.getvalue())
+
+    def test_other_commands_are_left_alone(self):
+        for command in ("deliveryctl story status", "deliveryctl spec lint", "git status", "deliveryctl doctor",
+                        "deliveryctl journal add x", "echo run"):
+            with self.subTest(command=command):
+                self.assertIsNone(self.hook(command))
+
+    def test_outside_a_cloud_session_it_says_nothing(self):
+        for command in ("deliveryctl run", "./.delivery/deliveryctl merge t001"):
+            self.assertIsNone(self.hook(command, cloud=False))
+
+    def test_it_shares_its_list_with_require_local(self):
+        os.environ["CLAUDE_CODE_REMOTE"] = "true"
+        for gesture in core.CLOUD_REFUSED:
+            with self.subTest(gesture=gesture):
+                self.assertTrue(self.hook(f"deliveryctl {gesture} x"))
+                with self.assertRaises(core.DeliveryError):
+                    core.require_local(gesture)
+
+    def test_garbage_input_is_silent(self):
+        os.environ["CLAUDE_CODE_REMOTE"] = "true"
+        out = io.StringIO()
+        with mock.patch("sys.stdin", io.StringIO("not json")), redirect_stdout(out):
+            self.assertEqual(hooks.pre_tool(), 0)
+        self.assertEqual(out.getvalue(), "")
 
 
 class CloudSetupScriptTest(RepoCase):

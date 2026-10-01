@@ -10,10 +10,11 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import sys
 from pathlib import Path
 
-from .core import ID_RX, is_cloud, main_root, repo_root
+from .core import CLOUD_REFUSED, ID_RX, cloud_refusal, is_cloud, main_root, repo_root
 
 OUTCOME_RX = re.compile(r"^Outcome:\s*(done|blocked|deferred|plan-ready|question)\b")
 LEAD_OUTCOMES = ("done", "blocked")
@@ -293,6 +294,41 @@ def session_start() -> int:
         root = main_root()
         journal.record(journal.event(root.name, "compact", f"{role} compacted",
                                      story=os.environ.get("DELIVERY_STORY", ""), role=role))
+    except Exception:
+        pass
+    return 0
+
+
+def _called_gesture(command: str) -> str | None:
+    """The first refused gesture a Bash command calls, in any of its simple commands."""
+    for part in re.split(r"[;&|()\n]+", command):
+        try:
+            words = shlex.split(part)
+        except ValueError:
+            words = part.split()
+        for i, word in enumerate(words):
+            if word.rsplit("/", 1)[-1] != "deliveryctl":
+                continue
+            args = [w for w in words[i + 1:] if not w.startswith("-")]
+            for gesture in CLOUD_REFUSED:
+                if args[:len(gesture.split())] == gesture.split():
+                    return gesture
+    return None
+
+
+def pre_tool() -> int:
+    """In a cloud session, deny at once a gesture that only runs from the owner's computer: the
+    'ask' rules would open a permission prompt that nobody answers. Silent elsewhere."""
+    try:
+        if not is_cloud():
+            return 0
+        data = _stdin()
+        command = (data.get("tool_input") or {}).get("command") or ""
+        gesture = _called_gesture(command) if isinstance(command, str) else None
+        if gesture:
+            print(json.dumps({"hookSpecificOutput": {
+                "hookEventName": "PreToolUse", "permissionDecision": "deny",
+                "permissionDecisionReason": cloud_refusal(gesture)}}))
     except Exception:
         pass
     return 0
