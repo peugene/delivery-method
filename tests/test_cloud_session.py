@@ -71,6 +71,21 @@ class CloudSessionTest(RepoCase):
             del os.environ["CLAUDE_CODE_REMOTE"]
             self.assertEqual(window.get(self.repo).name, "herdr")
 
+    def test_doctor_has_no_origin_head_nor_gh_warning_in_the_cloud(self):
+        self.equip()
+        git(self.repo, "remote", "set-head", "origin", "--delete")
+        with mock.patch("deliveryctl.doctor._probe", return_value=False):
+            code, out = self.cli("doctor")
+        self.assertEqual(code, 0)
+        self.assertNotIn("origin/HEAD is not set: git remote", out)
+        self.assertNotIn("auth status", out)
+        self.assertIn("GitHub proxy", out)
+        os.environ.pop("CLAUDE_CODE_REMOTE")
+        with mock.patch("deliveryctl.doctor._probe", return_value=False):
+            _, out = self.cli("doctor")
+        self.assertIn("origin/HEAD is not set", out)
+        self.assertIn("auth status", out)
+
     def test_doctor_says_it_is_a_cloud_session_and_skips_the_computer_checks(self):
         self.equip()
         write(self.home / ".config" / "delivery-method" / "machine.toml", 'notify_cmd = "/nonexistent/notify"\n')

@@ -488,7 +488,10 @@ session. Dans une session humaine, un arrêt dont la dernière ligne non vide es
 jamais et ne notifie jamais : le moteur de l'ordinateur du propriétaire reprend le travail depuis
 la branche poussée. La session sert une story quand le premier commit de sa branche après la
 base commune avec la branche cible ajoute seulement `docs/stories/<id>/order.md` (première règle
-du §10). Dans ce cas, au premier arrêt, le hook bloque si le dernier message ne finit pas par une
+du §10). Quand la branche cible ou la base commune est introuvable (un clone cloud qui ne porte que
+la branche de la story, sans `origin/HEAD` ni `main`), la session sert la story du commit d'ordre
+le plus récent de l'historique de `HEAD` : sujet `order <id>`, trailer `Agent: engine`, et
+`docs/stories/<id>/order.md` pour seul fichier ; sans un tel commit, aucune story. Dans ce cas, au premier arrêt, le hook bloque si le dernier message ne finit pas par une
 ligne `Outcome:`, si `docs/stories/<id>/report.md` a des modifications non commitées, ou si la
 branche a des commits que son amont n'a pas (ou n'a pas d'amont) ; la raison dit quoi faire
 (commiter le rapport, `git push -u origin HEAD`, finir par la ligne `Outcome` de la section
@@ -667,7 +670,7 @@ validerait.
 | Verbe | Effet |
 |---|---|
 | `init [--role R] [--upgrade]` | pose ou met à jour moteur, règles, copie des agents, skills et commandes sous `.claude/` (manifeste `.delivery/method.json`), réglages, CI, et pour un dépôt `spec` ou `single` sans `spec/`, un squelette de `spec/` ; n'écrase rien, ne commite rien |
-| `doctor` | diagnostic en lecture seule (dans une session cloud, il le dit et saute réglages de machine, herdr, commande de notification, plugin et connexion `claude`), dont la copie de la méthode (manifeste, version, fichiers modifiés ou absents, plugin désactivé, hooks) et, avec `implementer = "cloud"`, la connexion `claude.ai` et `origin` sur github.com ; pour un `origin` sur github.com dont `gh repo view` dit le dépôt public, il avertit si l'adresse `git config user.email` ne finit pas par `@users.noreply.github.com` (elle est publiée dans chaque commit et dans le trailer `Approved-By` de chaque fusion), `ok` sinon, et ne dit rien si `gh` manque ou ne répond pas ; la confiance de Claude Code pour le dépôt est aussi vérifiée avec `implementer = "cloud"`, quelle que soit la fenêtre de la machine |
+| `doctor` | diagnostic en lecture seule (dans une session cloud, il le dit et saute réglages de machine, herdr, commande de notification, plugin et connexion `claude`, ne vérifie pas `gh auth status` (une note : le forge passe par le proxy GitHub de la session, les gestes de forge se font depuis l'ordinateur du propriétaire) et n'avertit pas d'un `origin/HEAD` absent, au plus une note), dont la copie de la méthode (manifeste, version, fichiers modifiés ou absents, plugin désactivé, hooks) et, avec `implementer = "cloud"`, la connexion `claude.ai` et `origin` sur github.com ; pour un `origin` sur github.com dont `gh repo view` dit le dépôt public, il avertit si l'adresse `git config user.email` ne finit pas par `@users.noreply.github.com` (elle est publiée dans chaque commit et dans le trailer `Approved-By` de chaque fusion), `ok` sinon, et ne dit rien si `gh` manque ou ne répond pas ; la confiance de Claude Code pour le dépôt est aussi vérifiée avec `implementer = "cloud"`, quelle que soit la fenêtre de la machine |
 | `cards list`, `cards order`, `cards lint` | `list`, `order` : lire, ordonner les cartes de la branche cible, celles que lit le run ; `lint` : contrôler celles de la copie de travail, avant commit ; seules les cartes `ready` dont les dépendances sont faites sont lançables |
 | `campaign open <nom> --phase P` | crée `docs/campaigns/<nom>.md` et son dossier `work/` |
 | `run [--campaign N]` | lance le `technical-lead` en mode run |

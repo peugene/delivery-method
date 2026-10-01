@@ -159,8 +159,14 @@ def check_remote(ctx):
     proc = ctx.git.run("symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD", check=False)
     if proc.returncode == 0:
         yield "ok", f"origin, target branch {proc.stdout.strip()}"
-    else:
+    elif not is_cloud():
         yield "warn", "origin/HEAD is not set: git remote set-head origin --auto"
+    else:
+        # a cloud clone has no origin/HEAD; the target branch is found another way, or not needed
+        try:
+            yield "note", f"origin, target branch {ctx.git.target_branch()} (a cloud clone has no origin/HEAD)"
+        except DeliveryError:
+            yield "note", "origin/HEAD is not set and no main or master branch: a story is found from its order commit"
 
 
 def check_gitignore(ctx):
@@ -244,7 +250,10 @@ def check_tools(ctx):
     if not cfg:
         return
     tool = {"github": "gh", "gitlab": "glab"}.get(cfg.forge)
-    if tool and not shutil.which(tool):
+    if tool and is_cloud():
+        yield "note", (f"cloud session: '{tool}' reaches the forge through the session's GitHub proxy; "
+                       "forge gestures run from the owner's computer")
+    elif tool and not shutil.which(tool):
         yield "warn", f"forge = {cfg.forge} needs the '{tool}' command"
     elif tool and not _probe([tool, "auth", "status"], 15):
         yield "warn", f"'{tool} auth status' fails: {tool} auth login"
