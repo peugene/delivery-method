@@ -435,7 +435,7 @@ def _finish_idle(cfg: Config, card_id: str, alive: list[str], st: State) -> list
         owner = window.owner(cfg.root, info)
         if owner.headless:               # a headless session ends with its turn; a cloud one is not listed
             continue
-        sessions = claude_sessions() or {} if sessions is None else sessions
+        sessions = (claude_sessions() or {}) if sessions is None else sessions
         idle = (sessions.get(info.get("session_id")) or {}).get("status") == "idle"
         if idle and _role_done(role, st):
             owner.stop_role(card_id, role)

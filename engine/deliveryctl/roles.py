@@ -60,7 +60,7 @@ PROMPTS = {
 # the cloud session has no role settings and no --agent: the prompt names the agent file
 CLOUD_PROMPT = ("You are the story-implementer of this repository: read .claude/agents/story-implementer.md "
                 "and follow it as your instructions. " + PROMPTS["story-implementer"] +
-                " Where: cloud — use port {port} wherever DELIVERY_PORT or {port} is asked.")
+                " Where: cloud — use port {port} wherever DELIVERY_PORT or {{port}} is asked.")
 
 
 def plugin_root() -> Path | None:

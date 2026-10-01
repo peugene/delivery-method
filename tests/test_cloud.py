@@ -117,7 +117,7 @@ class CloudLaunchTest(CloudCase):
             "You are the story-implementer of this repository: read .claude/agents/story-implementer.md "
             "and follow it as your instructions. Story s001 : Sign in — read docs/stories/s001/order.md and "
             "carry it out. Mode: implement. Where: cloud — use port 31001 wherever DELIVERY_PORT or "
-            "31001 is asked."))
+            "{port} is asked."))
         self.assertEqual(argv[2:], ["--model", "sonnet", "--effort", "medium"])
         for flag in ("--agent", "--settings", "--permission-mode", "--setting-sources", "--session-id"):
             self.assertNotIn(flag, argv)
