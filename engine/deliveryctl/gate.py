@@ -3,16 +3,29 @@ Python, so the CI of a merge request runs it without Claude."""
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 from . import cards
 from . import verdict as vd
-from .core import glob_match
+from .core import ID_RX, glob_match
 from .gitops import Git
 from .verify import story_dir
 
 FORBIDDEN = ["spec/**", "spec.lock", ".delivery/**", ".claude/**", "delivery.toml", "CLAUDE.md",
              "**/CLAUDE.md", "docs/stories/*/work/**"]
+
+
+def story_of_branch(git: Git, head: str = "HEAD") -> str | None:
+    """The story a branch serves: the id whose order.md is the only file of its first commit
+    after the merge-base with the target branch (the first rule of the check below)."""
+    try:
+        base = git.merge_base(head, git.target_ref())
+        first = git.first_commit_files(base, head)
+    except SystemExit:
+        return None
+    found = re.fullmatch(r"docs/stories/([^/]+)/order\.md", first[0]) if len(first) == 1 else None
+    return found.group(1) if found and ID_RX.match(found.group(1)) else None
 
 
 def check(git: Git, card_id: str, base: str | None = None, head: str = "HEAD") -> list[str]:

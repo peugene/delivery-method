@@ -112,7 +112,7 @@ class RepoCase(unittest.TestCase):
         self.home = self.tmp / "home"
         self.home.mkdir()
         self.env_backup = dict(os.environ)
-        for key in [k for k in os.environ if k.startswith("DELIVERY_") or k == "CLAUDECODE"]:
+        for key in [k for k in os.environ if k.startswith("DELIVERY_") or k in ("CLAUDECODE", "CLAUDE_CODE_REMOTE")]:
             os.environ.pop(key, None)
         os.environ.update({
             "HOME": str(self.home),

@@ -157,6 +157,61 @@ class HookInRepoTest(RepoCase):
             self.assertEqual(out, "")
             self.assertEqual(detach.call_count, 2)
 
+    def cloud_story_branch(self):
+        """A branch built like the engine builds it: order.md alone in the first commit."""
+        self.cloud_branch()
+        git(self.repo, "push", "--quiet", "-u", "origin", "HEAD")
+
+    def cloud_branch(self):
+        git(self.repo, "push", "--quiet", "origin", "main")
+        git(self.repo, "checkout", "--quiet", "-b", "claude/s001")
+        write(self.repo / "docs/stories/s001/order.md", "order\n")
+        git(self.repo, "add", "-A")
+        git(self.repo, "commit", "--quiet", "-m", "order")
+
+    def cloud_stop(self, last, active=False):
+        with mock.patch.dict(os.environ, {"CLAUDE_CODE_REMOTE": "true"}), \
+                mock.patch.object(story, "detach_next") as detach:
+            payload = {"session_id": "C1", "cwd": str(self.repo), "last_assistant_message": last,
+                       "stop_hook_active": active}
+            _, out, _ = run_stop(payload)
+        detach.assert_not_called()
+        return json.loads(out)["reason"] if out else ""
+
+    def test_cloud_story_stop_blocks_once_then_lets_end(self):
+        self.cloud_story_branch()
+        self.assertIn("Outcome line", self.cloud_stop("done."))
+        self.assertEqual(self.cloud_stop("done.", active=True), "")
+        self.assertEqual(self.cloud_stop("Outcome: done — ok"), "")
+        write(self.repo / "docs/stories/s001/report.md", "r\n")
+        self.assertIn("Commit docs/stories/s001/report.md", self.cloud_stop("Outcome: done — ok"))
+        git(self.repo, "add", "-A")
+        git(self.repo, "commit", "--quiet", "-m", "report")
+        self.assertIn("git push -u origin HEAD", self.cloud_stop("Outcome: done — ok"))
+        self.assertEqual(self.cloud_stop("Outcome: done — ok", active=True), "")
+        git(self.repo, "push", "--quiet")
+        self.assertEqual(self.cloud_stop("Outcome: done — ok"), "")
+        self.assertFalse(self.notified())
+
+    def test_cloud_branch_without_upstream_is_blocked(self):
+        self.cloud_branch()
+        self.assertIn("git push -u origin HEAD", self.cloud_stop("Outcome: done — ok"))
+
+    def test_cloud_session_outside_a_story_does_not_notify(self):
+        git(self.repo, "checkout", "--quiet", "-b", "claude/free")
+        self.assertEqual(self.cloud_stop("Two options.\nOutcome: question — GO"), "")
+        self.assertFalse(self.notified())
+        self.assertEqual(self.cloud_stop("no outcome"), "")
+
+    def test_cloud_session_start_reminds_the_story(self):
+        self.cloud_story_branch()
+        for source in ("startup", "resume"):
+            out = self.session_start(source, CLAUDE_CODE_REMOTE="true")
+            self.assertIn("story-implementer of story s001", out)
+            self.assertIn("docs/stories/s001/order.md", out)
+        self.assertIn("Context was compacted", self.session_start("compact", CLAUDE_CODE_REMOTE="true", DELIVERY_ROLE="story-implementer", DELIVERY_STORY="s001"))
+        self.assertEqual(self.session_start("clear", CLAUDE_CODE_REMOTE="true"), "")
+
     def transcript(self, denied_commands):
         lines = []
         for n, command in enumerate(denied_commands):
@@ -193,7 +248,7 @@ class HookInRepoTest(RepoCase):
 
     def session_start(self, source: str, **env) -> str:
         out = io.StringIO()
-        with mock.patch.dict(os.environ, env), mock.patch("sys.stdin", io.StringIO(json.dumps({"source": source}))), \
+        with mock.patch.dict(os.environ, env), mock.patch("sys.stdin", io.StringIO(json.dumps({"source": source, "cwd": str(self.repo)}))), \
                 redirect_stdout(out):
             self.assertEqual(hooks.session_start(), 0)
         return out.getvalue()
@@ -228,7 +283,7 @@ class OldPythonTest(unittest.TestCase):
     def test_hook_without_tomllib_is_silent(self):
         code = ("import sys; sys.modules['tomllib'] = None; sys.path.insert(0, sys.argv[1]); "
                 "from deliveryctl.cli import main; sys.exit(main(['hook', 'stop']))")
-        env = {k: v for k, v in os.environ.items() if k != "DELIVERY_ROLE"}
+        env = {k: v for k, v in os.environ.items() if k not in ("DELIVERY_ROLE", "CLAUDE_CODE_REMOTE")}
         for message in ("hello", "Two options.\nOutcome: question — GO"):
             proc = subprocess.run([sys.executable, "-c", code, str(ENGINE)], text=True, capture_output=True,
                                   input=json.dumps({"last_assistant_message": message}), env=env)
