@@ -41,7 +41,6 @@ désactive le plugin dans le projet et renomme `/delivery-method:run` en `/run-c
 - Les trailers d'un commit sont lus dans tous les paragraphes consécutifs de fin de message.
 - Le lanceur d'un exécutant cloud s'arrête au dialogue de confiance de Claude Code (code 3).
 - Une session cloud retrouve sa story sans branche cible, par le commit d'ordre le plus récent.
-- Le sujet du commit d'ordre porte le titre de la carte.
 - Notification ⚠ « commits du cloud refusés ».
 
 ### Contracts
