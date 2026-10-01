@@ -48,6 +48,8 @@ Proportionate by default: adjust either way, and say so.
   plans, commit messages, campaign files and every message to the decision owner. Branches,
   paths, trailers, frontmatter, test tags and command arguments keep the bare identifier.
 - Write for a reader who was not there: plain words, short sentences, terms defined once.
+- In a role session, run one command per Bash call whenever a part may fall outside your
+  permission list: a chained command (`;`, `&&`, `|`) is refused whole.
 
 ## Scope
 

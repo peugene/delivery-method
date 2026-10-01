@@ -233,6 +233,9 @@ def _submission(cfg: Config, main: Git, git: Git, st: State) -> State:
     pushed = bool(remote) and remote[0] == git.head()
     st.name = "submitted" if pushed and mr and mr["state"] in ("open", "opened") else "ready-to-submit"
     st.extra["mr"] = mr
+    if mr and mr.get("checks") == "none":
+        st.extra["ci_waited"] = _ci_first_seen(cfg, card_id, st)
+        st.extra["ci_stall"] = cfg.lever("stall_minutes")
     if st.name == "ready-to-submit":
         st.engine_next = f"deliveryctl submit {card_id}"
     elif cfg.integration == "ai":
@@ -549,13 +552,20 @@ def _advance(cfg: Config, card_id: str, go: bool = False, chained: bool = False)
     return state(cfg, card_id)
 
 
-def _ci_absent(cfg: Config, card_id: str, st: State) -> None:
-    """A merge request whose CI has not started after stall_minutes: one warning per tree."""
+def _ci_first_seen(cfg: Config, card_id: str, st: State) -> float:
+    """When the engine first saw this merge request without any check (kept per card and tree)."""
     path = run_dir(cfg.root) / "ci-waits.json"
     waits = read_json(path, {})
     key = f"{card_id}:{st.tree}"
-    first = waits.setdefault(key, time.time())
-    write_json(path, waits)
+    if key not in waits:
+        waits[key] = time.time()
+        write_json(path, waits)
+    return waits[key]
+
+
+def _ci_absent(cfg: Config, card_id: str, st: State) -> None:
+    """A merge request whose CI has not started after stall_minutes: one warning per tree."""
+    first = _ci_first_seen(cfg, card_id, st)
     if time.time() - first > cfg.lever("stall_minutes") * 60:
         notify.notify(cfg.root, f"{card_id}:ci-absent:{st.tree}", "decision",
                       notify.subject(card_id, st.title, "CI absente"),
@@ -929,6 +939,18 @@ def describe(cfg: Config, card_id: str) -> str:
     return render(st)
 
 
+def _checks_word(st: State) -> str:
+    """The checks of the merge request; no check yet reads as a wait, then as an absence."""
+    checks = st.extra["mr"].get("checks")
+    first = st.extra.get("ci_waited")
+    if checks != "none" or first is None:
+        return str(checks)
+    minutes = int((time.time() - first) // 60)
+    if minutes < st.extra.get("ci_stall", 0):
+        return "CI not started yet"
+    return f"no CI check for {minutes} min"
+
+
 def render(st: State) -> str:
     lines = [f"{label(st)} — {st.name}"]
     if st.worktree:
@@ -942,7 +964,7 @@ def render(st: State) -> str:
     if st.detail:
         lines.append(f"  {st.detail}")
     if st.extra.get("mr"):
-        lines.append(f"  merge request: {st.extra['mr'].get('url')} ({st.extra['mr'].get('checks')})")
+        lines.append(f"  merge request: {st.extra['mr'].get('url')} ({_checks_word(st)})")
     if st.engine_next:
         lines.append(f"  engine next: {st.engine_next}")
     if st.human_next:

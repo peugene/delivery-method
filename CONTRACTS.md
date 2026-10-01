@@ -622,7 +622,10 @@ que celle-ci ; ses commits portent `Claude-Session: <url>`. Elle tourne dans l'e
 défaut choisi par `/remote-env` dans Claude Code.
 
 **Socle commun** : lecture du dépôt, `git` en lecture, commandes de `[commands]` (dont `test`,
-le test ciblé) et `extra_allow`, `deliveryctl story status` et `cards list|order|lint`. Refus :
+le test ciblé) et `extra_allow`, les sondes de version en règles exactes (`<exécutable> --version`
+pour l'exécutable de chaque commande de `[commands]`, plus `git --version`, `python3 --version`,
+`node --version`, `java --version`, `java -version` ; jamais de motif `* --version`),
+`deliveryctl story status` et `cards list|order|lint`. Refus :
 `Agent`, `Workflow`, `SendMessage`, `Monitor`, `CronCreate`, `RemoteTrigger`, `PushNotification`,
 `AskUserQuestion`, `WebSearch` ; l'écriture dans `spec/`, `.delivery/`, `.claude/`,
 `delivery.toml`, `CLAUDE.md` ; la lecture de `~/.ssh/`, `~/.config/gh/`, `**/.env.secrets`, du
@@ -697,7 +700,10 @@ références se séparent par `; `, un titre pouvant contenir une virgule :
 - `cards order` : `<id> : <titre> — <kind>, <status>[ (waits for <références>)]` ;
 - `cards lint` : `<id> : <titre> — <problème>`, puis `note: <id> : <titre> — <remarque>`, sans
   effet sur le verdict ;
-- `story status`, `story wait`, `story next` : première ligne `<id> : <titre> — <état>` ;
+- `story status`, `story wait`, `story next` : première ligne `<id> : <titre> — <état>` ; la ligne
+  `merge request: <url> (<contrôles>)` donne `pending`, `green` ou `red` ; sans aucun contrôle,
+  `CI not started yet` pendant les `stall_minutes` qui suivent la première fois où le moteur l'a vue
+  ainsi (heure partagée avec l'alerte « CI absente »), puis `no CI check for <n> min` ;
 - `verify`, `gate` : `<id> : <titre> — verification <verdict> (<résultat>)`,
   `<id> : <titre> — integration check green|red`.
 

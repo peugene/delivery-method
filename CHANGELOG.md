@@ -4,6 +4,22 @@ Chaque version liste ses ajouts, changements et corrections. La rubrique `Contra
 tout changement de [`CONTRACTS.md`](CONTRACTS.md) : tant que le plugin est en `0.x`, un
 changement de contrat monte la version mineure ; après 1.0.0, la version majeure.
 
+## 0.2.2
+
+### Changements
+
+- Chaque rôle sans surveillance peut lancer `<exécutable> --version` pour l'exécutable de chaque
+  commande de `[commands]`, ainsi que `git`, `python3`, `node` et `java` : des règles exactes,
+  jamais un motif `* --version`. Une commande chaînée est refusée en entier dès qu'une de ses
+  parties sort de la liste : les règles communes demandent une commande par appel Bash.
+- Une demande de fusion sans aucun contrôle de CI s'affiche `CI not started yet` pendant les
+  `stall_minutes` qui suivent, puis `no CI check for <n> min` (au lieu de `none`).
+
+### Contracts
+
+- §11.1 : les sondes de version du socle commun.
+- §12 : la ligne `merge request` de `story status` et ses deux formules.
+
 ## 0.2.1
 
 ### Changements
