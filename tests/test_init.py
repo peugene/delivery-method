@@ -51,6 +51,8 @@ class InitTest(RepoCase):
         cfg = config.load(self.repo)
         self.assertEqual((cfg.repo_role, cfg.forge, cfg.content_language), ("impl", "github", "fr"))
         self.assertEqual(cfg.commands["acceptance"], "just acceptance {grep}")
+        self.assertIn("max_in_flight = 3", (self.repo / "delivery.toml").read_text())
+        self.assertEqual(cfg.max_in_flight, 3)
         dot = self.repo / ".delivery"
         self.assertTrue((dot / "engine" / "deliveryctl" / "cli.py").exists())
         self.assertEqual(list(dot.rglob("__pycache__")), [])

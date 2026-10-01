@@ -371,6 +371,7 @@ class StoryCycleTest(RepoCase):
 
     # -- max_in_flight (§12.4: stopped stories do not count) ------------------------------------
     def test_max_in_flight(self):
+        self.configure(top="max_in_flight = 1\n")
         write(self.repo / "backlog/s002-lists.md", CARD.replace("s001", "s002"))
         self.commit_all("s002")
         git(self.repo, "push", "--quiet", "origin", "main")
@@ -380,6 +381,9 @@ class StoryCycleTest(RepoCase):
             self.open("s002")
         self.assertEqual(ctx.exception.code, core.EXIT_PRECONDITION)
         self.assertIn("in flight: s001 : Sign in", ctx.exception.message)
+
+    def test_max_in_flight_defaults_to_three(self):
+        self.assertEqual(self.cfg.max_in_flight, 3)
 
     def test_a_stopped_story_does_not_count_in_flight(self):
         write(self.repo / "backlog/s002-lists.md", CARD.replace("s001", "s002"))

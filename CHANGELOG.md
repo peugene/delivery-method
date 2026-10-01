@@ -4,6 +4,24 @@ Chaque version liste ses ajouts, changements et corrections. La rubrique `Contra
 tout changement de [`CONTRACTS.md`](CONTRACTS.md) : tant que le plugin est en `0.x`, un
 changement de contrat monte la version mineure ; après 1.0.0, la version majeure.
 
+## 0.2.1
+
+### Changements
+
+- `max_in_flight` vaut `3` par défaut (au lieu de `1`) : c'est un plafond, sous lequel le
+  `technical-lead` choisit lui-même entre séquentiel et parallèle ;
+  séquentiel est le défaut, et il n'ouvre une seconde story pendant qu'une tourne que s'il est sûr
+  qu'elles ne peuvent pas entrer en conflit (zones de code disjointes, aucune dépendance déclarée
+  ni implicite), jamais au-delà du plafond.
+- Un projet équipé avant garde la valeur écrite dans son `delivery.toml` : passer à `3` est le
+  choix du propriétaire. Le nouveau défaut atteint les nouveaux projets et tout `delivery.toml`
+  sans cette clé.
+
+### Contracts
+
+- §3 : défaut de `max_in_flight`.
+- §12.4 : le choix du lead entre séquentiel et parallèle.
+
 ## 0.2.0
 
 Mise à jour d'un projet équipé en 0.1.0 : installez la nouvelle version du plugin, lancez
