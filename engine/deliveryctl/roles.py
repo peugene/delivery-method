@@ -28,6 +28,8 @@ GIT_READ = ["git status", "git diff", "git log", "git show", "git ls-files", "gi
 GIT_WRITE = ["git add", "git commit", "git rm", "git mv", "git restore"]
 ENGINE_READ = ["deliveryctl story status", "deliveryctl cards list", "deliveryctl cards order",
                "deliveryctl cards lint"]
+FIXED_PROBES = ["git --version", "python3 --version", "node --version", "java --version",
+                "java -version"]
 DENY_BASH = ["git push", "git reset --hard", "git clean", "git rebase", "git checkout --",
              "git branch -D", "git stash drop", "git commit --amend", "herdr",
              "deliveryctl run", "deliveryctl merge", "deliveryctl note", "deliveryctl journal",
@@ -112,6 +114,16 @@ def _command_rules(cfg: Config) -> list[str]:
     return rules
 
 
+def _version_probes(cfg: Config) -> list[str]:
+    """Exact `<tool> --version` rules for the tools of [commands]; never a `* --version` pattern."""
+    probes = list(FIXED_PROBES)
+    for template in cfg.commands.values():
+        words = (template or "").split("{", 1)[0].split()
+        if words and f"{words[0]} --version" not in probes:
+            probes.append(f"{words[0]} --version")
+    return [f"Bash({probe})" for probe in probes]
+
+
 def _write(folder: Path, patterns) -> list[str]:
     out = []
     for pattern in patterns:
@@ -126,6 +138,7 @@ def permissions(cfg: Config, role: str, worktree: Path, scope: str) -> dict:
     allow = ["Read", "Glob", "Grep", "TodoWrite", "Skill"]
     allow += _bash(READ_ONLY_SHELL + GIT_READ + ENGINE_READ + ["just --list"])
     allow += _command_rules(cfg)
+    allow += _version_probes(cfg)
     allow += [rule if "(" in rule else f"Bash({rule})" for rule in cfg.extra_allow]
     deny = list(DENY_TOOLS)
     deny += _bash(DENY_BASH)

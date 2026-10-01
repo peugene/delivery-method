@@ -353,6 +353,23 @@ class StoryCycleTest(RepoCase):
         self.assertTrue(any(k.startswith("s001:stall:") for k in self.notified()))
         self.assertEqual(len(self.events("stall")), 1)
 
+    def test_a_merge_request_without_check_reads_as_not_started_then_as_absent(self):
+        self.configure(levers="stall_minutes = 10\n")
+        st = story.State(id="s001", name="submitted", worktree=self.repo, title="Sign in")
+        st.extra["mr"] = {"url": "https://forge.test/pr/1", "checks": "none"}
+        st.extra["ci_waited"] = story._ci_first_seen(self.cfg, "s001", st)
+        st.extra["ci_stall"] = 10
+        self.assertIn("(CI not started yet)", story.render(st))
+        # the time is the one _ci_absent keeps: a second reader finds it, it does not restart
+        waits = self.repo / ".delivery/run/ci-waits.json"
+        key = f"s001:{st.tree}"
+        self.assertEqual(story._ci_first_seen(self.cfg, "s001", st), json.loads(waits.read_text())[key])
+        waits.write_text(json.dumps({key: time.time() - 12 * 60}))
+        st.extra["ci_waited"] = story._ci_first_seen(self.cfg, "s001", st)
+        self.assertIn("(no CI check for 12 min)", story.render(st))
+        st.extra["mr"]["checks"] = "pending"
+        self.assertIn("(pending)", story.render(st))
+
     def test_question_stops_as_blocked(self):
         self.fake(IMPL="question")
         self.open()

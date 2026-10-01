@@ -50,6 +50,22 @@ class RolesTest(RepoCase):
                             for word in shlex.split(roles.shell_line(spec))))
         self.assertEqual(argv[argv.index("--setting-sources") + 1], "project")
 
+    def test_version_probes_are_exact_rules_for_the_project_tools(self):
+        write(self.repo / "delivery.toml", 'repo_role = "impl"\nforge = "github"\n[commands]\n'
+              'check = "./gradlew check"\ntest = "just test {target}"\n')
+        self.cfg = config.load(self.repo)
+        for role in roles.UNATTENDED:
+            allow = self.perms(role)["permissions"]["allow"]
+            for probe in ("./gradlew --version", "just --version", "git --version", "python3 --version",
+                          "node --version", "java --version", "java -version"):
+                self.assertIn(f"Bash({probe})", allow, role)
+            self.assertFalse([r for r in allow if r.startswith("Bash(*") and "--version" in r], role)
+
+    def test_the_rules_ask_for_one_command_per_call(self):
+        text = (ROOT / "rules" / "rules.md").read_text()
+        self.assertIn("run one command per Bash call", text)
+        self.assertLessEqual(len(text.splitlines()), 60)
+
     def test_the_lead_runs_the_renamed_command(self):
         self.assertEqual(roles.PROMPTS["technical-lead"].format(campaign="c1"), "/run-campaign c1")
         self.assertTrue((ROOT / "commands" / "run-campaign.md").exists())
