@@ -9,7 +9,7 @@ external_contracts = []        # détenteurs externes d'un état ou d'une API : 
 forge = "github"               # github | gitlab ; toute story passe par une demande de fusion
 integration = "human"          # human | ai : qui fusionne les demandes de fusion de story
 implementer = "cloud"          # cloud | local : où tourne le story-implementer ; cloud = session Claude Code cloud (GitHub seulement)
-max_in_flight = 1              # stories en cours pendant un run
+max_in_flight = 3              # plafond des stories que le lead peut mener à la fois
 agent_prefix = "dm"            # noms de session : <prefix>-<id>-<role>
 port_prefix = 31               # 10 à 64 ; port d'une story : <port_prefix><numéro sur 3 chiffres>
 

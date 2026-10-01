@@ -39,7 +39,7 @@ TOP_SCHEMA = {
     "forge": (str, ("github", "gitlab"), "github"),
     "integration": (str, ("human", "ai"), "human"),
     "implementer": (str, ("cloud", "local"), ""),      # '' = by forge: cloud with github, local with gitlab
-    "max_in_flight": (int, None, 1),
+    "max_in_flight": (int, None, 3),
     "agent_prefix": (str, None, ""),
     "port_prefix": (int, None, 31),
     "commands": (dict, None, {}),

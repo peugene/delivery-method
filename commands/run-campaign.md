@@ -8,8 +8,8 @@ Target: $ARGUMENTS
 - Regime: impl (decide and record, or defer). The run never stops for a question: decide and
   record it in the order, or defer the card with a written reason, and go on.
 - Chain the ready cards of the target branch, in dependency order, until nothing is launchable.
-- Why: the owner's attention goes to decisions and merges, not to relaying work; each story
-  starts from an order anchored in the real code.
+- Why: the owner's attention goes to decisions and merges; each story starts from an order
+  anchored in the real code.
 - Scope: the `technical-lead` in run mode, an unattended role session started by
   `deliveryctl run`; skills `delivery-method:anchoring` and `delivery-method:work-orders`. The
   engine chains the roles of each story; you prepare, anchor, write orders, open, wait, decide.
@@ -17,8 +17,7 @@ Target: $ARGUMENTS
 ## Preconditions
 Fail closed: on the first failure, say why and end with `Outcome: blocked — <reason>`.
 1. `printenv DELIVERY_ROLE` prints `technical-lead`: a run is started by the owner.
-2. The campaign is the argument, else the value printed by `printenv DELIVERY_CAMPAIGN`;
-   `docs/campaigns/<name>.md` exists.
+2. The campaign is the argument, else `printenv DELIVERY_CAMPAIGN`; `docs/campaigns/<name>.md` exists.
 3. Resuming (crash, `/clear`, compaction): read `## Next` of the campaign file, then
    `docs/campaigns/work/<name>/notes.md` and `deliveryctl story status`; finish open stories first.
 
@@ -58,9 +57,10 @@ Fail closed: on the first failure, say why and end with `Outcome: blocked — <r
    Anchor only the facts independent of the running story, declared (`depends_on`) or implicit
    (a file, type, port, schema or migration it creates or changes); keep the others in your
    notes as "to reconfirm after merge". Prepared after the merge, it starts from the new head.
-6. Several stories at once only when `max_in_flight` allows and their code zones are disjoint;
-   sequential when in doubt. Rewrite `docs/campaigns/work/<name>/notes.md` at each story
-   transition: stories in flight, next card, deferred cards, decisions taken, refusals met.
+6. Sequential is the default; open a second story while one runs only when sure they cannot
+   conflict (disjoint code zones, no `depends_on`, no implicit dependency: file, type, port,
+   schema, migration), never beyond `max_in_flight`; in doubt, sequential. Rewrite
+   `docs/campaigns/work/<name>/notes.md` at each transition: in flight, next, deferred, decisions, refusals.
 7. Exit codes of `deliveryctl`. 2: a red check; fix what it names in the order. 3: read the
    `deliveryctl:` line or the printed state: a dependency or `max_in_flight` → wait for the
    running story; `anchored before … was merged` → re-anchor at the target head, update `base:`;

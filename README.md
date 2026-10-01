@@ -327,7 +327,7 @@ fichier posé par `init` décrivent chaque clé : `repo_role`, `content_language
 `external_contracts` (détenteurs externes d'un état ou d'une API), `forge`, `integration`
 (`human`, ou `ai` : le moteur fusionne quand la relecture dit oui et que la CI est verte),
 `implementer` (`cloud` ou `local` : où tourne le `story-implementer`, voir « Exécutant dans le cloud »),
-`max_in_flight` (stories en cours en même temps, `1` par défaut ; une story arrêtée ne compte
+`max_in_flight` (stories en cours en même temps, `3` par défaut ; le lead choisit séquentiel ou parallèle sous ce plafond ; une story arrêtée ne compte
 pas), `agent_prefix`, `port_prefix`, `[commands]` (`check`, `acceptance` avec `{grep}`, `serve`
 avec `{port}`, `test` avec `{selector}`, facultatif : le test ciblé permis aux rôles,
 `just test <selector>`) et `[permissions] extra_allow` (règles ajoutées aux rôles, par exemple

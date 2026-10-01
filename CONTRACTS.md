@@ -97,8 +97,8 @@ release_stage = "pre-release"  # pre-release | released — humain seulement
 external_contracts = []        # détenteurs externes d'un état ou d'une API — humain seulement
 forge = "github"               # github | gitlab ; toute story passe par une demande de fusion
 integration = "human"          # human | ai
-implementer = "cloud"         # cloud | local ; défaut : cloud avec forge = github, local avec gitlab
-max_in_flight = 1              # stories en cours pendant un run (§12.4)
+implementer = "cloud"          # cloud | local ; défaut : cloud avec forge = github, local avec gitlab
+max_in_flight = 3              # plafond des stories que le lead peut mener à la fois (§12.4) ; défaut : 3
 agent_prefix = "tk"            # noms de session : <prefix>-<id>-<role>
 port_prefix = 31               # 10 à 64 ; port d'une story : <port_prefix><numéro sur 3 chiffres>, ou le suivant libre
 
@@ -721,7 +721,10 @@ cible, ordre écrit, `story open`, puis `story wait`. Pendant l'attente, il ancr
 carte suivante, et seulement elle, à la tête de la cible et sans préparer sa copie :
 `story prepare` vient juste avant `story open`. `max_in_flight` compte les stories ouvertes
 (ordre commité) qui ne sont ni arrêtées (§9 : `blocked`, `deferred`, `plan-ready`,
-`verify-exhausted`, `review-exhausted`) ni `merged` ; une story `submitted` compte. Le run ne
+`verify-exhausted`, `review-exhausted`) ni `merged` ; une story `submitted` compte. Le lead choisit
+entre séquentiel (défaut) et parallèle : il n'ouvre une seconde story pendant qu'une tourne que
+s'il est sûr qu'elles ne peuvent pas entrer en conflit (zones de code disjointes, aucune
+dépendance déclarée ni implicite), jamais au-delà de `max_in_flight` ; dans le doute, séquentiel. Le run ne
 s'interrompt pas pour une question : le lead tranche et documente dans l'ordre, ou il passe la
 carte en `deferred` en le motivant. Il se termine quand plus rien n'est lançable, par la section
 `## Run` de la campagne et une ligne `Outcome: done`, ou `Outcome: blocked` quand il ne peut pas
