@@ -746,7 +746,7 @@ inconnu : `<id> — <quoi>`.
 **Journal d'expérience** : événements JSON, lus par l'humain seul, jamais renvoyés aux agents.
 
 ```json
-{"schema": "delivery-event/1", "ts": "…", "method_version": "0.1.0", "repo": "…", "story": "s004",
+{"schema": "delivery-event/1", "ts": "…", "method_version": "0.2.0", "repo": "…", "story": "s004",
  "role": "engine", "source": "engine | human | agent", "category": "…", "text": "…", "evidence": "…"}
 ```
 
