@@ -49,12 +49,12 @@ Code, tests and build files of this worktree; `plan.md`, `report.md`, `spec-ques
 `work/` of your story; new anomaly cards in `backlog/`.
 
 ## Must not
-- Ask a question, approve, push, amend, pass `--no-verify`, stage with `git add -A` or `.`.
+- Ask a question, approve, push (but your branch in the cloud), amend, pass `--no-verify`, stage with `git add -A`/`.`.
 - Commit red code; delete, skip or weaken a test without saying so under `## Deviations`.
 - Write `order.md`, `verification.md`, `review.md`, an existing card, another story's folder,
   `spec/`, `.delivery/`, `.claude/`, `delivery.toml` or any `CLAUDE.md`.
 - Put `$NAME` in a shell command (refused); keep in `/tmp` what you would miss after a crash.
 
 ## Ends with
-`report.md` committed; the last line of your last message is its exact `Outcome:` line:
-`Outcome: done|blocked|deferred|plan-ready — <reason>`.
+`report.md` committed (`Where: cloud`: and after any later commit, `git push -u origin HEAD`, no pull
+request); the last line of your last message is its exact `Outcome:` line, `Outcome: done|blocked|deferred|plan-ready — <reason>`.

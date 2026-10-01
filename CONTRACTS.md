@@ -471,10 +471,24 @@ Il porte au journal (`refusal`), une seule fois, les refus de permission du tran
 session. Dans une session humaine, un arrêt dont la dernière ligne non vide est
 `Outcome: question` envoie la notification ⚠ « décision attendue », une par message.
 
+**Dans une session cloud** (`CLAUDE_CODE_REMOTE=true`, sans `DELIVERY_ROLE`), le hook n'enchaîne
+jamais et ne notifie jamais : le moteur de l'ordinateur du propriétaire reprend le travail depuis
+la branche poussée. La session sert une story quand le premier commit de sa branche après la
+base commune avec la branche cible ajoute seulement `docs/stories/<id>/order.md` (première règle
+du §10). Dans ce cas, au premier arrêt, le hook bloque si le dernier message ne finit pas par une
+ligne `Outcome:`, si `docs/stories/<id>/report.md` a des modifications non commitées, ou si la
+branche a des commits que son amont n'a pas (ou n'a pas d'amont) ; la raison dit quoi faire
+(commiter le rapport, `git push -u origin HEAD`, finir par la ligne `Outcome` de la section
+« Ends with » de l'agent). Au second arrêt, il laisse finir. Hors d'une session de story, il se
+comporte comme dans une session humaine, sans la notification.
+
 `deliveryctl hook session-start` tourne à chaque démarrage de session (démarrage, reprise,
 `clear`, compaction), lit la `source` dans l'entrée du hook et reste silencieux et rapide en cas
 d'erreur. Toujours : si `$CLAUDE_ENV_FILE` est défini, il y ajoute
-`export PATH="<racine du projet>/.delivery:$PATH"` (§2). Seulement pour la source `compact`, dans
+`export PATH="<racine du projet>/.delivery:$PATH"` (§2). Dans une session cloud sur une story, pour les sources `startup` et `resume`, il rappelle que la
+session est le `story-implementer` de la story `<id>` : lire `.claude/agents/story-implementer.md`,
+puis `order.md`, `plan.md` et `work/notes.md` de la story quand ils existent, puis `git status`.
+Seulement pour la source `compact`, dans
 une session de rôle, le hook de reprise réinjecte « re-read
 order.md, plan.md, work/notes.md, then git status » (le `qualification-runner` :
 `qualification/order.md`, `qualification/work/notes.md` ; le `technical-lead` : les sections
@@ -522,7 +536,7 @@ les demandes de fusion, aucune n'est jamais verte : `doctor` le signale.
 | `spec-reviewer` | spec | sous-agent | sonnet, high | corriger |
 | `refuter` | spec, qualification | sous-agent | sonnet, high | proposer un correctif |
 | `technical-lead` | impl | humaine (cadrage) ; de rôle (run) | opus, high | écrire du code ; écrire dans une copie de story autre chose qu'un ordre |
-| `story-implementer` | impl | de rôle | sonnet, medium | poser une question ; approuver ; pousser |
+| `story-implementer` | impl | de rôle | sonnet, medium | poser une question ; approuver ; pousser (sauf, dans une session cloud, sa propre branche de travail) |
 | `story-reviewer` | impl | de rôle, toujours neuve | opus, high | commiter une modification de code |
 | `qualification-lead` | qualification | humaine | opus, high | corriger le produit |
 | `qualification-runner` | qualification | de rôle, jetable | sonnet, medium | corriger le produit ; pousser |
@@ -574,6 +588,10 @@ You are the story-implementer of this repository: read .claude/agents/story-impl
 it as your instructions. Story <carte> — read docs/stories/<id>/order.md and carry it out. Mode: <mode>.
 Where: cloud — use port <port> wherever DELIVERY_PORT or <port> is asked.
 ```
+
+Dans la session cloud, l'exécutant pousse sa branche de travail (`git push -u origin HEAD`) après
+avoir commité `report.md` et après tout commit ultérieur ; il ne pousse aucune autre branche et
+n'ouvre aucune demande de fusion ; trailers et ligne `Outcome` sont inchangés (§9.2 pour le hook).
 
 La session cloud ne reçoit ni fichier de rôle (`--settings`, `--permission-mode`), ni variable
 d'environnement du moteur, ni plugin, ni fichier local : le dépôt à la branche poussée seulement.

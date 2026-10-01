@@ -49,11 +49,11 @@ def _digest(text: str) -> str:
     return hashlib.sha1(text.encode("utf-8")).hexdigest()[:8]
 
 
-def _human_question(data: dict) -> int:
+def _human_question(data: dict, notify_owner: bool = True) -> int:
     """A human-led session that ends its turn on 'Outcome: question' waits for the owner."""
     last = data.get("last_assistant_message") or ""
     found = last_outcome(last)
-    if not found or found.group(1) != "question":
+    if not found or found.group(1) != "question" or not notify_owner:
         return 0
     try:
         from . import config, notify
@@ -151,8 +151,55 @@ def _record_refusals(cfg, role: str, scope: str, data: dict) -> None:
                                  story=scope if ID_RX.match(scope) else "", role=role, evidence=str(path)))
 
 
+def _cloud() -> bool:
+    return os.environ.get("CLAUDE_CODE_REMOTE") == "true"
+
+
+def _cloud_story(cwd: Path):
+    """The story a cloud session serves, found from its branch; None when it serves none."""
+    from .gate import story_of_branch
+    from .gitops import Git
+    try:
+        return story_of_branch(Git(cwd))
+    except Exception:
+        return None
+
+
+def _cloud_problems(cwd: Path, story_id: str, last: str) -> list[str]:
+    """What the engine, on the owner's computer, would not find in the pushed branch."""
+    from .gitops import Git
+    from .verify import story_dir
+    git = Git(cwd)
+    report = f"{story_dir(story_id)}/report.md"
+    problems = []
+    if not last_outcome(last):
+        problems.append("End your last message with the exact Outcome line the 'Ends with' section of "
+                        ".claude/agents/story-implementer.md gives.")
+    if git.run("status", "--porcelain", "--", report, check=False).stdout.strip():
+        problems.append(f"Commit {report}: it has uncommitted changes.")
+    upstream = git.rev("@{upstream}")
+    if not upstream or git.out("rev-list", "--count", "@{upstream}..HEAD", check=False) not in ("", "0"):
+        problems.append("Push the working branch with 'git push -u origin HEAD': it has commits "
+                        "that its upstream lacks.")
+    return problems
+
+
+def _cloud_stop(data: dict) -> int:
+    """A cloud session never chains and never notifies: the engine on the owner's computer picks
+    the work up from the pushed branch. In a story session the first stop is checked."""
+    story_id = _cloud_story(Path(data.get("cwd") or "."))
+    if not story_id:
+        return _human_question(data, notify_owner=False)
+    problems = _cloud_problems(Path(data.get("cwd") or "."), story_id, data.get("last_assistant_message") or "")
+    if problems and not data.get("stop_hook_active"):
+        print(json.dumps({"decision": "block", "reason": " ".join(problems)}))
+    return 0
+
+
 def stop() -> int:
     role = os.environ.get("DELIVERY_ROLE")
+    if _cloud() and not role:
+        return _cloud_stop(_stdin())
     if not role:
         return _human_question(_stdin())
     from . import config, journal, notify, story
@@ -228,6 +275,13 @@ def session_start() -> int:
     except Exception:
         pass
     role = os.environ.get("DELIVERY_ROLE")
+    if _cloud() and not role and data.get("source") in ("startup", "resume"):
+        story_id = _cloud_story(Path(data.get("cwd") or "."))
+        if story_id:
+            print(f"This session is the story-implementer of story {story_id}: read "
+                  f".claude/agents/story-implementer.md, then docs/stories/{story_id}/order.md, plan.md "
+                  "and work/notes.md when they exist, then git status.")
+            sys.stdout.flush()
     if not role or data.get("source") != "compact":
         return 0
     scope = os.environ.get("DELIVERY_STORY", "<id>")
