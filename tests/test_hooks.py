@@ -14,6 +14,8 @@ from unittest import mock
 from support import ENGINE, ROOT, RepoCase, git, write
 
 from deliveryctl import hooks, story
+from deliveryctl.gate import story_of_branch
+from deliveryctl.gitops import Git
 
 
 def run_stop(payload, role=None, scope=None):
@@ -169,10 +171,10 @@ class HookInRepoTest(RepoCase):
         git(self.repo, "add", "-A")
         git(self.repo, "commit", "--quiet", "-m", "order")
 
-    def cloud_stop(self, last, active=False):
+    def cloud_stop(self, last, active=False, cwd=None):
         with mock.patch.dict(os.environ, {"CLAUDE_CODE_REMOTE": "true"}), \
                 mock.patch.object(story, "detach_next") as detach:
-            payload = {"session_id": "C1", "cwd": str(self.repo), "last_assistant_message": last,
+            payload = {"session_id": "C1", "cwd": str(cwd or self.repo), "last_assistant_message": last,
                        "stop_hook_active": active}
             _, out, _ = run_stop(payload)
         detach.assert_not_called()
@@ -192,6 +194,35 @@ class HookInRepoTest(RepoCase):
         git(self.repo, "push", "--quiet")
         self.assertEqual(self.cloud_stop("Outcome: done — ok"), "")
         self.assertFalse(self.notified())
+
+    def story_only_clone(self):
+        """A cloud clone of the story branch alone: no origin/HEAD, no main."""
+        git(self.repo, "checkout", "--quiet", "-b", "story/s001")
+        write(self.repo / "docs/stories/s001/order.md", "order\n")
+        git(self.repo, "add", "-A")
+        git(self.repo, "commit", "--quiet", "-m", "order s001 : Sign in", "-m", "Story: s001\nAgent: engine")
+        git(self.repo, "push", "--quiet", "origin", "story/s001")
+        clone = self.tmp / "cloud-clone"
+        git(self.tmp, "clone", "--quiet", "--single-branch", "--branch", "story/s001", str(self.origin), str(clone))
+        return clone
+
+    def test_story_of_a_clone_without_the_target_branch(self):
+        clone = self.story_only_clone()
+        self.assertIsNone(Git(clone).rev("main"))
+        self.assertEqual(story_of_branch(Git(clone)), "s001")
+        self.assertIn("Outcome line", self.cloud_stop("done.", cwd=clone))
+        self.assertEqual(self.cloud_stop("done.", active=True, cwd=clone), "")
+
+    def test_no_order_commit_means_no_story_without_the_target_branch(self):
+        clone = self.story_only_clone()
+        write(clone / "x.txt", "x\n")
+        git(clone, "add", "-A")
+        git(clone, "commit", "--quiet", "-m", "order s002", "-m", "Agent: engine")   # not the order file
+        git(clone, "commit", "--quiet", "--amend", "-m", "order s003")               # no engine trailer
+        git(clone, "checkout", "--quiet", "--orphan", "free")
+        git(clone, "commit", "--quiet", "--allow-empty", "-m", "nothing")
+        self.assertIsNone(story_of_branch(Git(clone)))
+        self.assertEqual(self.cloud_stop("no outcome", cwd=clone), "")
 
     def test_cloud_branch_without_upstream_is_blocked(self):
         self.cloud_branch()

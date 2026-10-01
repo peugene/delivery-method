@@ -18,14 +18,36 @@ FORBIDDEN = ["spec/**", "spec.lock", ".delivery/**", ".claude/**", "delivery.tom
 
 def story_of_branch(git: Git, head: str = "HEAD") -> str | None:
     """The story a branch serves: the id whose order.md is the only file of its first commit
-    after the merge-base with the target branch (the first rule of the check below)."""
+    after the merge-base with the target branch (the first rule of the check below). A clone
+    that holds the story branch only has no target branch to measure from: the engine's order
+    commit in the history of the branch tells the story instead."""
     try:
         base = git.merge_base(head, git.target_ref())
         first = git.first_commit_files(base, head)
     except DeliveryError:
-        return None
+        return _story_of_order_commit(git, head)
     found = re.fullmatch(r"docs/stories/([^/]+)/order\.md", first[0]) if len(first) == 1 else None
     return found.group(1) if found and ID_RX.match(found.group(1)) else None
+
+
+def _story_of_order_commit(git: Git, head: str) -> str | None:
+    """The id of the most recent engine order commit in the history of `head`: subject
+    `order <id>`, trailer `Agent: engine`, and `docs/stories/<id>/order.md` as its only file."""
+    try:
+        commits = git.out("rev-list", "-E", "--grep=^order ", head).split()
+        for commit in commits:
+            subject = git.out("log", "-1", "--format=%s", commit)
+            found = re.match(r"order ([^\s:]+)(?: : .*)?$", subject.strip())     # order <id> : <title>
+            if not found or not ID_RX.match(found.group(1)):
+                continue
+            if "engine" not in trailer_values(git.out("log", "-1", "--format=%B", commit), "Agent"):
+                continue
+            files = git.out("diff-tree", "--no-commit-id", "--name-only", "-r", "--root", commit).split("\n")
+            if files == [f"docs/stories/{found.group(1)}/order.md"]:
+                return found.group(1)
+    except DeliveryError:
+        pass
+    return None
 
 
 def check(git: Git, card_id: str, base: str | None = None, head: str = "HEAD") -> list[str]:
