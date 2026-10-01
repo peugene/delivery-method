@@ -200,7 +200,7 @@ class HookInRepoTest(RepoCase):
         git(self.repo, "checkout", "--quiet", "-b", "story/s001")
         write(self.repo / "docs/stories/s001/order.md", "order\n")
         git(self.repo, "add", "-A")
-        git(self.repo, "commit", "--quiet", "-m", "order s001", "-m", "Story: s001\nAgent: engine")
+        git(self.repo, "commit", "--quiet", "-m", "order s001 : Sign in", "-m", "Story: s001\nAgent: engine")
         git(self.repo, "push", "--quiet", "origin", "story/s001")
         clone = self.tmp / "cloud-clone"
         git(self.tmp, "clone", "--quiet", "--single-branch", "--branch", "story/s001", str(self.origin), str(clone))

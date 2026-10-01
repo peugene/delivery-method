@@ -37,7 +37,7 @@ def _story_of_order_commit(git: Git, head: str) -> str | None:
         commits = git.out("rev-list", "-E", "--grep=^order ", head).split()
         for commit in commits:
             subject = git.out("log", "-1", "--format=%s", commit)
-            found = re.fullmatch(r"order (\S+)", subject.strip())
+            found = re.match(r"order ([^\s:]+)(?: : .*)?$", subject.strip())     # order <id> : <title>
             if not found or not ID_RX.match(found.group(1)):
                 continue
             if "engine" not in trailer_values(git.out("log", "-1", "--format=%B", commit), "Agent"):
