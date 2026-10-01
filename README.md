@@ -80,13 +80,13 @@ recettes échouent tant qu'elles ne sont pas écrites, la CI de la forge
 `single` qui n'en a pas encore, un squelette `spec/` (`spec.toml`, contrat du harnais, libellés,
 harnais Playwright et application vide, `CHANGELOG.md`, brief, glossaire) ; il complète par ajout
 `CLAUDE.md` (import `@.delivery/rules.md`, section `## Project conventions`), `.gitignore` et
-`.claude/settings.json` (plugin désactivé dans le projet, car sa copie ferait doublon avec celle du
-projet ; hooks `Stop` et `SessionStart` ; messagerie entre sessions refusée ; confirmation pour les
-gestes humains). Écrivez les recettes du `justfile` pour votre pile, relisez, puis commitez : toute
-session Claude Code qui clone le dépôt, y compris une session cloud qui n'installe aucun plugin,
-y trouve la méthode entière. Ne modifiez pas à la main les fichiers copiés sous `.claude/` :
-`--upgrade` refuse d'écraser une copie modifiée (les fichiers que vous y ajoutez vous-même ne sont
-jamais touchés).
+`.claude/settings.json` (plugin désactivé dans le projet, y compris si une installation à la portée
+projet l'avait activé, car sa copie ferait doublon avec celle du projet ; hooks `Stop` et
+`SessionStart` ; messagerie entre sessions refusée ; confirmation pour les gestes humains). Écrivez
+les recettes du `justfile` pour votre pile, relisez, puis commitez : toute session Claude Code qui
+clone le dépôt, y compris une session cloud qui n'installe aucun plugin, y trouve la méthode
+entière. Ne modifiez pas à la main les fichiers copiés sous `.claude/` : `--upgrade` refuse
+d'écraser une copie modifiée (les fichiers que vous y ajoutez vous-même ne sont jamais touchés).
 
 **3. Raccourci dans le shell.** Dans un projet, le moteur s'exécute toujours depuis sa copie,
 `.delivery/deliveryctl`. Pour votre shell, ajoutez à `~/.bashrc` ou `~/.zshrc` :

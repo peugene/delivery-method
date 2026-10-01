@@ -179,7 +179,9 @@ def launch(cfg: Config, role: str, worktree: Path, scope: str, prompt: str, head
     if headless:
         argv += ["-p", "--output-format", "stream-json", "--verbose"]
     argv.append(prompt)
-    env = {"DELIVERY_ROLE": role, "DELIVERY_STORY": scope}
+    # the project's engine first, whether or not the SessionStart hook runs
+    env = {"DELIVERY_ROLE": role, "DELIVERY_STORY": scope,
+           "PATH": f"{Path(worktree) / '.delivery'}{os.pathsep}{os.environ.get('PATH', '')}"}
     env.update(extra_env or {})
     return {"argv": argv, "env": env, "cwd": str(worktree), "session_id": session_id,
             "name": name, "settings": str(settings)}

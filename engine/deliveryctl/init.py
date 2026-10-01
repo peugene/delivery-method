@@ -382,8 +382,8 @@ def add_only(current: dict, wanted: dict, where: str = "") -> list[str]:
 
 def merge_settings(current: dict, wanted: dict, refresh: bool) -> tuple[dict, list[str]]:
     """Once declared, the marketplace source belongs to the team (a fork, an internal mirror):
-    init only adds its ref, and --upgrade refreshes it. --upgrade also disables the plugin in the
-    project and replaces the method's hooks."""
+    init only adds its ref, and --upgrade refreshes it. Both disable the plugin in the project;
+    --upgrade also replaces the method's hooks."""
     merged = copy.deepcopy(current)
     wanted = dict(wanted)
     merge_hooks(merged, wanted.pop("hooks"), refresh)
@@ -396,10 +396,12 @@ def merge_settings(current: dict, wanted: dict, refresh: bool) -> tuple[dict, li
         pinned = isinstance(source, dict) and ("ref" in source or source.get("source") in ("github", "git"))
         if pinned and (refresh or "ref" not in source):
             source["ref"] = ref
+    # the method owns this key: a project-scope plugin install writes it as true before init runs
+    plugins = merged.setdefault("enabledPlugins", {})
+    if isinstance(plugins, dict):
+        plugins[PLUGIN_KEY] = False
+    wanted.pop("enabledPlugins")
     if refresh:
-        plugins = merged.setdefault("enabledPlugins", {})
-        if isinstance(plugins, dict):
-            plugins[PLUGIN_KEY] = False
         return merged, []
     return merged, add_only(merged, wanted)
 

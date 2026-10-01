@@ -104,12 +104,19 @@ class InitTest(RepoCase):
         self.assertEqual((self.repo / "Justfile").read_text(), "check:\n    npm test\n")
 
     def test_conflict_is_listed_and_nothing_is_written(self):
-        write(self.repo / ".claude" / "settings.json", json.dumps({"enabledPlugins": {init.PLUGIN_KEY: True}}))
+        write(self.repo / ".claude" / "settings.json", json.dumps({"permissions": {"deny": "SendMessage"}}))
         code, out = self.cli("init", "--role", "impl", "--forge", "github")
         self.assertEqual(code, 3)
-        self.assertIn("enabledPlugins.delivery-method@delivery-method: true", out)
+        self.assertIn("permissions.deny", out)
         self.assertFalse((self.repo / "delivery.toml").exists())
         self.assertFalse((self.repo / ".delivery").exists())
+
+    def test_first_init_disables_a_plugin_installed_at_project_scope(self):
+        write(self.repo / ".claude" / "settings.json",
+              json.dumps({"enabledPlugins": {init.PLUGIN_KEY: True, "x@y": True}}))
+        self.init()
+        plugins = self.settings()["enabledPlugins"]
+        self.assertEqual(plugins, {init.PLUGIN_KEY: False, "x@y": True})
 
     def test_copy_of_the_method_lands_in_claude_without_the_namespace(self):
         self.init()

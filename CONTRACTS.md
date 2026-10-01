@@ -45,7 +45,7 @@ synchronise une version de spec, pousse, et change la méthode.
 | `.delivery/rules.md` | oui | `deliveryctl init` | règles communes, importées par `CLAUDE.md` |
 | `.delivery/run/` | non | moteur seul | fichiers de rôle, sessions, ports, notifications, registre des verdicts (`verdicts.json`, §6), journaux de sortie ; aucun rôle n'y écrit |
 | `CLAUDE.md` | oui | `init` (crée ou ajoute `@.delivery/rules.md`), puis humain | règles et conventions du projet |
-| `.claude/settings.json` | oui | `init` (fusion par ajout), puis humain | plugin désactivé dans le projet (`enabledPlugins` à `false` : sa copie ferait doublon avec celle du projet), hooks `Stop` et `SessionStart`, refus de `SendMessage` pour toute session du projet, `ask` sur les gestes humains |
+| `.claude/settings.json` | oui | `init` (fusion par ajout), puis humain | plugin désactivé dans le projet (`enabledPlugins` à `false`, dès le premier `init`, même si une installation du plugin à la portée projet l'a écrit à `true` : sa copie ferait doublon avec celle du projet), hooks `Stop` et `SessionStart`, refus de `SendMessage` pour toute session du projet, `ask` sur les gestes humains |
 | `.gitignore` | oui | `init` (ajout) | `.delivery/run/`, `.delivery/**/__pycache__/`, `docs/stories/*/work/`, `docs/campaigns/work/`, `qualification/work/`, sorties de tests (`test-results/`, `playwright-report/`, `spec/acceptance/node_modules/`) |
 | `backlog/<id>-<slug>.md` | oui | leads (`draft`), humain (`ready`), rôles (anomalies) | cartes (§5) |
 | `docs/stories/<id>/` | oui | rôles, moteur | dossier de story (§6) |
@@ -417,10 +417,11 @@ Il porte au journal (`refusal`), une seule fois, les refus de permission du tran
 session. Dans une session humaine, un arrêt dont la dernière ligne non vide est
 `Outcome: question` envoie la notification ⚠ « décision attendue », une par message.
 
-`deliveryctl hook session-start` tourne à chaque démarrage de session (démarrage, reprise, `clear`,
-compaction), lit la `source` dans l'entrée du hook et reste silencieux et rapide en cas d'erreur.
-Toujours : si `$CLAUDE_ENV_FILE` est défini, il y ajoute `export PATH="<racine du projet>/.delivery:$PATH"`
-(§2). Seulement pour la source `compact`, dans une session de rôle, le hook de reprise réinjecte « re-read
+`deliveryctl hook session-start` tourne à chaque démarrage de session (démarrage, reprise,
+`clear`, compaction), lit la `source` dans l'entrée du hook et reste silencieux et rapide en cas
+d'erreur. Toujours : si `$CLAUDE_ENV_FILE` est défini, il y ajoute
+`export PATH="<racine du projet>/.delivery:$PATH"` (§2). Seulement pour la source `compact`, dans
+une session de rôle, le hook de reprise réinjecte « re-read
 order.md, plan.md, work/notes.md, then git status » (le `qualification-runner` :
 `qualification/order.md`, `qualification/work/notes.md` ; le `technical-lead` : les sections
 `## Next` et `## Run` de sa campagne, puis `deliveryctl story status`).
@@ -484,10 +485,15 @@ claude --agent <role> \
 
 `<role>` est l'agent de la copie du projet, `.claude/agents/<role>.md` de la copie de travail du
 rôle (absent : erreur de précondition qui nomme `deliveryctl init --upgrade`) ; aucun plugin n'est
-passé à la session. `<portée>` est l'identifiant de la carte, `lead` pour le run, ou l'incrément recetté. Le fichier
-de rôle, généré par le moteur, porte `"env": {"DELIVERY_ROLE": …, "DELIVERY_STORY": …}`, plus
-`DELIVERY_PORT` pour les rôles d'une story : la session, ses hooks et son outil Bash en héritent,
-quel que soit le lanceur. Ses règles de chemin sont absolues (`//<chemin>/…`).
+passé à la session. `<portée>` est l'identifiant de la carte, `lead` pour le run, ou l'incrément
+recetté. Le moteur met aussi `<copie de travail>/.delivery` en tête du `PATH` de l'environnement
+du lancement, que chaque fenêtre transmet : `deliveryctl` y est la copie du projet même si le hook
+`SessionStart` n'a pas tourné. Le fichier de rôle, généré par le moteur, porte `"env":
+{"DELIVERY_ROLE": …, "DELIVERY_STORY": …}`, plus
+`DELIVERY_PORT` pour les rôles d'une story : la
+session, ses hooks et son outil Bash en héritent,
+quel que soit le lanceur. Ses règles de chemin
+sont absolues (`//<chemin>/…`).
 
 **Socle commun** : lecture du dépôt, `git` en lecture, commandes de `[commands]` (dont `test`,
 le test ciblé) et `extra_allow`, `deliveryctl story status` et `cards list|order|lint`. Refus :

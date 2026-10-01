@@ -1,7 +1,8 @@
 """Method hooks (CONTRACTS.md §9.2). They run in every session of an equipped project (its
-.claude/settings.json) and of a project where the plugin is enabled, so outside role sessions they return at once, silently, except for the toast of a human-led
-session that waits on 'Outcome: question'. The engine modules are imported only past the role
-test, so that an unsupported Python stays silent outside role sessions."""
+.claude/settings.json) and of a project where the plugin is enabled, so outside role sessions
+they return at once, silently, except for the toast of a human-led session that waits on
+'Outcome: question'. The engine modules are imported only past the role test, so that an
+unsupported Python stays silent outside role sessions."""
 
 from __future__ import annotations
 
