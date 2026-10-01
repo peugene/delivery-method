@@ -321,6 +321,7 @@ fichier posé par `init` décrivent chaque clé : `repo_role`, `content_language
 (`released` après la première livraison à un tiers : la compatibilité compte),
 `external_contracts` (détenteurs externes d'un état ou d'une API), `forge`, `integration`
 (`human`, ou `ai` : le moteur fusionne quand la relecture dit oui et que la CI est verte),
+`implementer` (`cloud` ou `local` : où tourne le `story-implementer`, voir « Exécutant dans le cloud »),
 `max_in_flight` (stories en cours en même temps, `1` par défaut ; une story arrêtée ne compte
 pas), `agent_prefix`, `port_prefix`, `[commands]` (`check`, `acceptance` avec `{grep}`, `serve`
 avec `{port}`, `test` avec `{selector}`, facultatif : le test ciblé permis aux rôles,
@@ -384,6 +385,26 @@ ajouter ; `journal flush` envoie la file en attente.
 `journal report` lit le journal hors de tout dépôt équipé, par le lanceur du plugin appelé par
 son chemin : `<racine du plugin>/bin/deliveryctl journal report`, la racine étant sur la ligne
 `plugin` de `deliveryctl doctor`.
+
+## Exécutant dans le cloud
+
+Sur un projet GitHub, `implementer = "cloud"` (le défaut) lance chaque `story-implementer` comme
+une session cloud de Claude Code : l'implémentation continue quand votre ordinateur dort ou se
+déconnecte. Les autres rôles et la vérification restent locaux. Avec GitLab, `implementer` vaut
+`local` ; `cloud` y est refusé au chargement, une session cloud ne poussant que sur GitHub.
+
+Le moteur pousse `story/<id>` sur `origin`, puis lance `claude --cloud` depuis la copie de
+travail de la story, dans un pseudo-terminal (la commande refuse de tourner sans terminal). La
+session cloud ne reçoit que le dépôt à la branche poussée : ni fichier de rôle, ni plugin, ni
+variable d'environnement du moteur, ni fichier local. Elle travaille sur sa propre branche
+`claude/<nom>`, créée depuis `story/<id>`, et ne peut pousser que celle-ci. `deliveryctl story
+status` affiche son URL.
+
+Prérequis : `claude auth login` avec un compte claude.ai (pas une clé d'API) et `origin` sur
+github.com. La session s'exécute dans l'environnement par défaut choisi par `/remote-env` dans
+Claude Code : celui-ci doit atteindre la chaîne d'outils du projet (les commandes `check`,
+`acceptance` et `serve`, leurs dépendances). `deliveryctl doctor` vérifie la connexion et
+`origin`, pas l'environnement.
 
 ## Fenêtres
 

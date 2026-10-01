@@ -87,7 +87,7 @@ class StoryCycleTest(RepoCase):
     def configure(self, top="", commands="", levers=""):
         check = "grep -q BROKEN src/app.txt && exit 1 || echo '1 passed'"
         write(self.repo / "delivery.toml",
-              f'repo_role = "impl"\nforge = "github"\nintegration = "human"\n{top}'
+              f'repo_role = "impl"\nforge = "github"\nimplementer = "local"\nintegration = "human"\n{top}'
               f'[commands]\ncheck = "{check}"\n{commands}[levers]\n{levers}')
         self.commit_all("settings")
         git(self.repo, "push", "--quiet", "origin", "main")

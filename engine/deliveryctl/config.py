@@ -38,6 +38,7 @@ TOP_SCHEMA = {
     "external_contracts": (list, None, []),
     "forge": (str, ("github", "gitlab"), "github"),
     "integration": (str, ("human", "ai"), "human"),
+    "implementer": (str, ("cloud", "local"), ""),      # '' = by forge: cloud with github, local with gitlab
     "max_in_flight": (int, None, 1),
     "agent_prefix": (str, None, ""),
     "port_prefix": (int, None, 31),
@@ -73,6 +74,7 @@ class Config:
     commands: dict
     extra_allow: list
     levers: dict = field(default_factory=dict)
+    implementer: str = "local"
 
     def lever(self, name: str):
         return self.levers[name]
@@ -143,6 +145,11 @@ def parse(data: dict, root: Path, source: str = PROJECT_FILE) -> Config:
         for check in checks:
             if check not in REINFORCED_CHECKS:
                 fail(EXIT_ERROR, f"{source}: levers.reinforced_risks.{risk}: unknown check '{check}'")
+    if not values["implementer"]:
+        values["implementer"] = "cloud" if values["forge"] == "github" else "local"
+    elif values["implementer"] == "cloud" and values["forge"] != "github":
+        fail(EXIT_ERROR, f"{source}: implementer = cloud needs forge = github "
+                         "(a cloud session pushes to GitHub only)")
     if not values["agent_prefix"]:
         values["agent_prefix"] = "".join(w[0] for w in root.name.split("-") if w)[:4] or "dm"
     return Config(
@@ -159,6 +166,7 @@ def parse(data: dict, root: Path, source: str = PROJECT_FILE) -> Config:
         commands=values["commands"],
         extra_allow=extra,
         levers=levers,
+        implementer=values["implementer"],
     )
 
 

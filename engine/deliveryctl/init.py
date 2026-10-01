@@ -291,6 +291,7 @@ def project_toml(root: Path, plugin: Path, args, forge: str) -> str:
         fail(EXIT_ERROR, f"--language takes a language code such as fr or en, got '{language}'")
     text = (plugin / "templates" / "project" / "delivery.toml").read_text(encoding="utf-8")
     values = {"repo_role": args.role, "content_language": language, "forge": forge,
+              "implementer": "cloud" if forge == "github" else "local",
               "agent_prefix": agent_prefix(root.name), "check": args.check or "just check",
               "acceptance": args.acceptance or "just acceptance {grep}", "serve": args.serve or "just serve {port}"}
     for key, value in values.items():

@@ -20,6 +20,7 @@ from .core import (EXIT_PRECONDITION, EXIT_RED, EXIT_REFUSED, EXIT_TOOL, Deliver
                    eprint, fail, file_lock, read_json, require_human, run_dir, write_json)
 from .forge import Forge, request_body
 from .gitops import Git, story_branch, worktree_path
+from .window.cloud import CloudWindow
 from .verify import register, registry, story_dir, unregister, verify
 
 STATE_WORDS = {"blocked": "bloquée", "deferred": "différée", "plan-ready": "plan à relire"}
@@ -338,17 +339,26 @@ def open_story(cfg: Config, card_id: str, order_draft: Path | None = None, start
 # -- chaining -------------------------------------------------------------------------------
 def _start(cfg: Config, card_id: str, role: str, prompt: str, step: str = "") -> dict:
     wt = Git(cfg.root).worktree_for(story_branch(card_id))
-    win = window.get(cfg.root)
-    spec = roles.launch(cfg, role, wt, card_id, prompt, headless=win.headless,
-                        extra_env={"DELIVERY_PORT": str(ports.port(cfg, card_id))})
+    machine = window.get(cfg.root)
+    if _is_cloud(cfg, role):
+        win = CloudWindow(cfg.root)
+        spec = roles.cloud_launch(cfg, wt, card_id, prompt)
+    else:
+        win = machine
+        spec = roles.launch(cfg, role, wt, card_id, prompt, headless=win.headless,
+                            extra_env={"DELIVERY_PORT": str(ports.port(cfg, card_id))})
     info = win.start_role(card_id, role, spec)
     if step:
         reg = win.sessions(card_id)
         if role in reg:
             reg[role]["step"] = step
             write_json(run_dir(cfg.root) / "sessions" / f"{card_id}.json", reg)
-    win.show_state(card_id, role)
+    machine.show_state(card_id, role)
     return info
+
+
+def _is_cloud(cfg: Config, role: str) -> bool:
+    return role == "story-implementer" and cfg.implementer == "cloud"
 
 
 def _start_implementer(cfg: Config, st: State, mode: str) -> None:
@@ -357,20 +367,22 @@ def _start_implementer(cfg: Config, st: State, mode: str) -> None:
     step = f"{mode}@{st.extra.get('step', '')}"
     prev = window.get(cfg.root).session(st.id, "story-implementer")
     if prev and (mode == "resume" or prev.get("step") == step):
-        evidence = prev.get("log") or str(transcript_path(prev.get("cwd", ""), prev.get("session_id", "")))
+        evidence = prev.get("log") or prev.get("url") or str(
+            transcript_path(prev.get("cwd", ""), prev.get("session_id", "")))
         journal.record(journal.event(
             cfg.root.name, "resume", f"{label(st)} — story-implementer relaunched ({mode}); previous session "
             f"{prev.get('session_id', '?')} ended without an Outcome", story=st.id, role="story-implementer",
             evidence=evidence))
+    template = roles.CLOUD_PROMPT if _is_cloud(cfg, "story-implementer") else roles.PROMPTS["story-implementer"]
     _start(cfg, st.id, "story-implementer",
-           roles.PROMPTS["story-implementer"].format(id=st.id, label=label(st), mode=mode), step)
+           template.format(id=st.id, label=label(st), mode=mode, port=ports.port(cfg, st.id)), step)
 
 
 def _alive(cfg: Config, card_id: str) -> list[str]:
     win = window.get(cfg.root)
     alive = []
     for role, info in win.sessions(card_id).items():
-        if win.role_alive(card_id, role) is not False:     # unknown counts as alive (§9.1)
+        if window.owner(cfg.root, info).role_alive(card_id, role) is not False:   # unknown counts as alive (§9.1)
             alive.append(role)
         else:
             _record_denials(cfg, win, card_id, role, info)
@@ -417,14 +429,16 @@ def _finish_idle(cfg: Config, card_id: str, alive: list[str], st: State) -> list
     deliverable is written, so that the next role can start."""
     from .window.base import claude_sessions
     win = window.get(cfg.root)
-    if win.headless:                     # a headless session ends with its turn
-        return alive
-    sessions = claude_sessions() or {}
+    sessions = None
     for role in alive:
-        sid = (win.session(card_id, role) or {}).get("session_id")
-        idle = (sessions.get(sid) or {}).get("status") == "idle"
+        info = win.session(card_id, role) or {}
+        owner = window.owner(cfg.root, info)
+        if owner.headless:               # a headless session ends with its turn; a cloud one is not listed
+            continue
+        sessions = claude_sessions() or {} if sessions is None else sessions
+        idle = (sessions.get(info.get("session_id")) or {}).get("status") == "idle"
         if idle and _role_done(role, st):
-            win.stop_role(card_id, role)
+            owner.stop_role(card_id, role)
     return _alive(cfg, card_id)
 
 
@@ -662,7 +676,9 @@ def check_stall(cfg: Config, card_id: str) -> list[str]:
     limit = cfg.lever("stall_minutes") * 60
     stalled = []
     for role, info in win.sessions(card_id).items():
-        if not info.get("session_id") or win.role_alive(card_id, role) is False:
+        if info.get("window") == "cloud":       # nothing of a cloud session shows here before it ends
+            continue
+        if not info.get("session_id") or window.owner(cfg.root, info).role_alive(card_id, role) is False:
             continue
         idle = time.time() - _progress(git, wt, card_id, info)
         if idle > limit:
@@ -729,6 +745,10 @@ def describe(cfg: Config, card_id: str) -> str:
     alive = _alive(cfg, card_id) if st.worktree else []
     if alive:
         st.detail = (st.detail + "; " if st.detail else "") + f"session running: {', '.join(alive)}"
+        for role in alive:
+            url = (window.get(cfg.root).session(card_id, role) or {}).get("url")
+            if url:
+                st.detail += f"\n  {role} in the cloud: {url}"
         st.engine_next = ""
     return render(st)
 

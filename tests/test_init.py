@@ -256,6 +256,17 @@ class InitTest(RepoCase):
         self.assertIn("created  delivery.toml", out)
         self.assertEqual(snapshot(self.repo), before)
 
+    def test_init_writes_the_implementer_key(self):
+        self.init()
+        text = (self.repo / "delivery.toml").read_text()
+        self.assertIn('implementer = "cloud"', text)
+        self.assertEqual(config.load(self.repo).implementer, "cloud")
+        (self.repo / "delivery.toml").unlink()
+        code, out = self.cli("init", "--role", "single", "--forge", "gitlab")
+        self.assertEqual(code, 0, out)
+        self.assertIn('implementer = "local"', (self.repo / "delivery.toml").read_text())
+        self.assertEqual(config.load(self.repo).implementer, "local")
+
     def test_gitlab_ci_and_include_hint(self):
         code, out = self.cli("init", "--role", "single", "--forge", "gitlab", "--language", "en")
         self.assertEqual(code, 0, out)
@@ -341,7 +352,7 @@ class InitTest(RepoCase):
         code, out = self.cli("doctor")
         self.assertIn("warn: .github/workflows/delivery.yml is missing", out)
         write(self.repo / "delivery.toml", (self.repo / "delivery.toml").read_text().replace(
-            'forge = "github"', 'forge = "gitlab"'))
+            'forge = "github"', 'forge = "gitlab"').replace('implementer = "cloud"', 'implementer = "local"'))
         code, out = self.cli("doctor")
         self.assertIn("warn: .gitlab-ci.yml does not include .gitlab/delivery-ci.yml", out)
 

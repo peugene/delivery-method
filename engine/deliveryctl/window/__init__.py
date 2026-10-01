@@ -1,6 +1,7 @@
 """Where role sessions run. The engine reads story state from git and files only; a window
-merely shows sessions and starts them. Three implementations: 'terminal' (plain processes),
-'herdr' (one workspace per story) and 'fake' (tests)."""
+merely shows sessions and starts them. Implementations: 'terminal' (plain processes),
+'herdr' (one workspace per story), 'cloud' (the story-implementer in a Claude Code cloud session,
+whatever the machine's window) and 'fake' (tests)."""
 
 from __future__ import annotations
 
@@ -9,6 +10,14 @@ from pathlib import Path
 
 from .. import config
 from .base import Window
+
+
+def owner(root: Path, entry: dict) -> Window:
+    """The window that owns a registered session: the cloud one, else the machine's."""
+    if (entry or {}).get("window") == "cloud":
+        from .cloud import CloudWindow
+        return CloudWindow(root)
+    return get(root)
 
 
 def get(root: Path) -> Window:

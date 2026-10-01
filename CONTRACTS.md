@@ -90,6 +90,7 @@ release_stage = "pre-release"  # pre-release | released — humain seulement
 external_contracts = []        # détenteurs externes d'un état ou d'une API — humain seulement
 forge = "github"               # github | gitlab ; toute story passe par une demande de fusion
 integration = "human"          # human | ai
+implementer = "cloud"         # cloud | local ; défaut : cloud avec forge = github, local avec gitlab
 max_in_flight = 1              # stories en cours pendant un run (§12.4)
 agent_prefix = "tk"            # noms de session : <prefix>-<id>-<role>
 port_prefix = 31               # 10 à 64 ; port d'une story : <port_prefix><numéro sur 3 chiffres>, ou le suivant libre
@@ -125,6 +126,12 @@ libre. La CI posée par `init` substitue `{grep}`, et `{port}` par `DELIVERY_POR
 Une clé inconnue fait échouer toute commande. La branche cible se déduit de `origin/HEAD` ; à
 défaut, de la branche cible fournie par la CI (`GITHUB_BASE_REF`,
 `CI_MERGE_REQUEST_TARGET_BRANCH_NAME`) ; sinon `main`, puis `master`.
+
+**`implementer`** : où tourne le `story-implementer` (§11.1). `cloud` : une session cloud de
+Claude Code, qui continue quand la machine dort ; `local` : une session locale comme les autres
+rôles. Les autres rôles et la vérification restent locaux. Défaut : `cloud` avec `forge =
+"github"`, `local` avec `gitlab` ; `cloud` avec `gitlab` fait échouer le chargement (une session
+cloud ne pousse que sur GitHub). `init` écrit la clé.
 
 Le dépôt a un remote `origin` sur GitHub ou GitLab ; `init` refuse un dépôt sans `origin`. Il
 n'y a pas de fusion locale : une story, une recette ou une suite de nuit passe toujours par une
@@ -393,7 +400,13 @@ qui lit `order.md`, `plan.md`, `work/notes.md` puis `git status`. Le moteur ne l
 rôle dont une session de la story est vivante ; il ferme une session inactive dont le livrable
 est écrit avant d'enchaîner. Vivante : la session figure dans `claude agents` (ou son processus
 existe) ; une session dont la fenêtre ne sait pas dire si elle vit (par exemple, qui démarre)
-compte comme vivante. L'exécutant relancé après une session du même pas finie sans `Outcome`
+compte comme vivante. Chaque entrée du registre (`.delivery/run/sessions/<id>.json`) porte
+`window`, la fenêtre qui la détient (`cloud`, `herdr`, `terminal`), et c'est cette fenêtre que le
+moteur interroge, non celle de la machine. Une entrée `cloud` porte aussi `session_id`, `url`
+(sans paramètres), `head` (le commit poussé) et `pushed_at` ; elle est vivante tant qu'elle n'a
+pas de champ `ended`. Une session cloud ne s'arrête pas d'ici (`stop_role` ne fait rien) et
+rien de sa progression n'est lisible tant qu'elle n'est pas rapatriée : le balayage de §9.3 ne
+l'alerte pas. `story status` en montre l'URL. L'exécutant relancé après une session du même pas finie sans `Outcome`
 (crash, arrêt, tour perdu) est une reprise, portée au journal (`resume`).
 
 ### 9.2 Enchaînement
@@ -495,6 +508,35 @@ session, ses hooks et son outil Bash en héritent,
 quel que soit le lanceur. Ses règles de chemin
 sont absolues (`//<chemin>/…`).
 
+**Exécutant dans le cloud** (`implementer = "cloud"`, §3). Chaque lancement du `story-implementer`
+(implement, resume, fix, plan first, approved plan) est un lancement cloud, fenêtre `cloud` quelle
+que soit la fenêtre de la machine :
+
+```
+git push --set-upstream origin story/<id>
+claude --cloud "<consigne>" --model <modèle> --effort <effort>     # depuis la copie de travail, dans un pseudo-terminal
+```
+
+Un push refusé (la branche distante a divergé) échoue avec le code 5 et le message de git. Modèle
+et effort viennent de l'en-tête de `.claude/agents/story-implementer.md` (`sonnet` et `medium` à
+défaut). La commande, qui refuse de tourner sans terminal interactif, rend la main aussitôt avec
+`Created cloud session`, `View: <url>` et `Resume with: claude --teleport <id>` ; le moteur lit
+l'identifiant et l'URL (sans paramètres) sur la ligne `View:` ; un code de sortie non nul ou
+l'absence de cette ligne échoue avec le code 5 et la sortie. La consigne se suffit, la session
+n'ayant ni `--agent` ni fichier de rôle :
+
+```
+You are the story-implementer of this repository: read .claude/agents/story-implementer.md and follow
+it as your instructions. Story <carte> — read docs/stories/<id>/order.md and carry it out. Mode: <mode>.
+Where: cloud — use port <port> wherever DELIVERY_PORT or <port> is asked.
+```
+
+La session cloud ne reçoit ni fichier de rôle (`--settings`, `--permission-mode`), ni variable
+d'environnement du moteur, ni plugin, ni fichier local : le dépôt à la branche poussée seulement.
+Elle travaille sur sa propre branche `claude/<nom>`, créée depuis `story/<id>`, et ne peut pousser
+que celle-ci ; ses commits portent `Claude-Session: <url>`. Elle tourne dans l'environnement par
+défaut choisi par `/remote-env` dans Claude Code.
+
 **Socle commun** : lecture du dépôt, `git` en lecture, commandes de `[commands]` (dont `test`,
 le test ciblé) et `extra_allow`, `deliveryctl story status` et `cards list|order|lint`. Refus :
 `Agent`, `Workflow`, `SendMessage`, `Monitor`, `CronCreate`, `RemoteTrigger`, `PushNotification`,
@@ -530,7 +572,7 @@ une carte en `ready`, taguer, pousser une branche de lead, passer en `released`,
 | Verbe | Effet |
 |---|---|
 | `init [--role R] [--upgrade]` | pose ou met à jour moteur, règles, copie des agents, skills et commandes sous `.claude/` (manifeste `.delivery/method.json`), réglages, CI, et pour un dépôt `spec` ou `single` sans `spec/`, un squelette de `spec/` ; n'écrase rien, ne commite rien |
-| `doctor` | diagnostic en lecture seule, dont la copie de la méthode (manifeste, version, fichiers modifiés ou absents, plugin désactivé, hooks) |
+| `doctor` | diagnostic en lecture seule, dont la copie de la méthode (manifeste, version, fichiers modifiés ou absents, plugin désactivé, hooks) et, avec `implementer = "cloud"`, la connexion `claude.ai` et `origin` sur github.com |
 | `cards list`, `cards order`, `cards lint` | `list`, `order` : lire, ordonner les cartes de la branche cible, celles que lit le run ; `lint` : contrôler celles de la copie de travail, avant commit ; seules les cartes `ready` dont les dépendances sont faites sont lançables |
 | `campaign open <nom> --phase P` | crée `docs/campaigns/<nom>.md` et son dossier `work/` |
 | `run [--campaign N]` | lance le `technical-lead` en mode run |

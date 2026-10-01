@@ -9,6 +9,7 @@ import uuid
 from pathlib import Path
 
 from . import VERSION, config
+from . import frontmatter as fm
 from .config import Config
 from .core import EXIT_ERROR, EXIT_PRECONDITION, ROLES, fail, run_dir, write_json
 from .gitops import worktree_path
@@ -54,6 +55,12 @@ PROMPTS = {
     "technical-lead": "/run-campaign {campaign}",
     "qualification-runner": "Qualification {id}: carry out qualification/order.md.",
 }
+
+
+# the cloud session has no role settings and no --agent: the prompt names the agent file
+CLOUD_PROMPT = ("You are the story-implementer of this repository: read .claude/agents/story-implementer.md "
+                "and follow it as your instructions. " + PROMPTS["story-implementer"] +
+                " Where: cloud — use port {port} wherever DELIVERY_PORT or {port} is asked.")
 
 
 def plugin_root() -> Path | None:
@@ -185,6 +192,20 @@ def launch(cfg: Config, role: str, worktree: Path, scope: str, prompt: str, head
     env.update(extra_env or {})
     return {"argv": argv, "env": env, "cwd": str(worktree), "session_id": session_id,
             "name": name, "settings": str(settings)}
+
+
+def cloud_launch(cfg: Config, worktree: Path, scope: str, prompt: str) -> dict:
+    """What the cloud window needs to start the story-implementer as a Claude Code cloud
+    session: model and effort from the agent file (a cloud session has no `--agent`), no
+    settings file, no environment (the session gets the pushed repository only)."""
+    agent = Path(worktree) / ".claude" / "agents" / "story-implementer.md"
+    if not agent.exists():
+        fail(EXIT_PRECONDITION, f".claude/agents/story-implementer.md not found in {worktree}: the project does "
+                                "not carry the method's agents (commit them, or run 'deliveryctl init --upgrade')")
+    head = fm.load(agent)[0]
+    model, effort = str(head.get("model") or "sonnet"), str(head.get("effort") or "medium")
+    return {"argv": ["claude", "--cloud", prompt, "--model", model, "--effort", effort],
+            "env": {}, "cwd": str(worktree), "branch": f"story/{scope}", "name": f"{cfg.agent_prefix}-{scope}-story-implementer"}
 
 
 def shell_line(spec: dict) -> str:
