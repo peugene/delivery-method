@@ -6,6 +6,8 @@ import io
 import json
 import os
 import sys
+import time
+import tomllib
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 
@@ -85,7 +87,7 @@ class CloudCase(RepoCase):
 
 class ImplementerSettingTest(RepoCase):
     def load(self, text):
-        return config.parse(__import__("tomllib").loads(text), self.repo)
+        return config.parse(tomllib.loads(text), self.repo)
 
     def test_default_follows_the_forge(self):
         self.assertEqual(self.load('repo_role = "impl"\nforge = "github"\n').implementer, "cloud")
@@ -545,7 +547,7 @@ class CloudStallTest(CloudRetrievalCase):
 
     def test_a_retrieved_commit_is_progress(self):
         self.configure(levers="stall_minutes = 30\n")
-        self.stale(pushed_at="2020-01-01T00:00:00Z", last_commit_at=story._iso(__import__("time").time()))
+        self.stale(pushed_at="2020-01-01T00:00:00Z", last_commit_at=story._iso(time.time()))
         self.assertEqual(story.check_stall(self.cfg, "s001"), [])
 
     def test_an_ended_session_does_not_stall(self):

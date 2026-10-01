@@ -10,8 +10,8 @@ import re
 import subprocess
 import sys
 import time
-from datetime import datetime, timezone
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 
 from . import VERSION, cards, frontmatter as fm, gate, journal, notify, ports, roles, window
