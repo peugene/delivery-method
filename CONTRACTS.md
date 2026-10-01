@@ -624,7 +624,8 @@ défaut choisi par `/remote-env` dans Claude Code.
 **Socle commun** : lecture du dépôt, `git` en lecture, commandes de `[commands]` (dont `test`,
 le test ciblé) et `extra_allow`, les sondes de version en règles exactes (`<exécutable> --version`
 pour l'exécutable de chaque commande de `[commands]`, plus `git --version`, `python3 --version`,
-`node --version`, `java --version`, `java -version` ; jamais de motif `* --version`), `deliveryctl story status` et `cards list|order|lint`. Refus :
+`node --version`, `java --version`, `java -version` ; jamais de motif `* --version`),
+`deliveryctl story status` et `cards list|order|lint`. Refus :
 `Agent`, `Workflow`, `SendMessage`, `Monitor`, `CronCreate`, `RemoteTrigger`, `PushNotification`,
 `AskUserQuestion`, `WebSearch` ; l'écriture dans `spec/`, `.delivery/`, `.claude/`,
 `delivery.toml`, `CLAUDE.md` ; la lecture de `~/.ssh/`, `~/.config/gh/`, `**/.env.secrets`, du
