@@ -37,7 +37,8 @@ Fail closed: on the first failure, say why and stop.
    - questions waiting for the owner, if any;
    - `Read first:` at most five files, most useful first.
 5. Commit the files written, with trailers `Campaign: <incr or campaign>` and
-   `Agent: <role of this session>`; never push.
+   `Agent: <role of this session>`; never push. In a cloud session the files reach the owner by
+   the pull request of the session's `claude/` branch: the line to paste is for after its merge.
 
 ## Outputs
 - The confirmed points in their files; `## Next` rewritten; one commit.

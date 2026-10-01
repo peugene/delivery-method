@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 from . import VERSION
-from .core import EXIT_ERROR, EXIT_OK, EXIT_RED, DeliveryError, eprint, main_root, require_human
+from .core import EXIT_ERROR, EXIT_OK, EXIT_RED, DeliveryError, eprint, main_root, require_human, require_local
 
 
 def _cfg():
@@ -47,8 +47,10 @@ def cmd_cards(args) -> int:
 
 def cmd_story(args) -> int:
     from . import story
-    cfg = _cfg()
     action = args.action
+    if action in ("open", "next", "wait"):
+        require_local(f"deliveryctl story {action}")
+    cfg = _cfg()
     if action == "prepare":
         print(story.prepare(cfg, args.id))
     elif action == "open":
@@ -130,6 +132,7 @@ def cmd_gate(args) -> int:
 
 def cmd_submit(args) -> int:
     from . import story
+    require_local("deliveryctl submit")
     print(story.submit(_cfg(), args.id))
     return EXIT_OK
 
@@ -137,6 +140,7 @@ def cmd_submit(args) -> int:
 def cmd_merge(args) -> int:
     from . import story
     require_human("deliveryctl merge")
+    require_local("deliveryctl merge")
     cfg = _cfg()
     print(story.merge(cfg, args.id))
     if not args.keep:
@@ -147,6 +151,7 @@ def cmd_merge(args) -> int:
 def cmd_run(args) -> int:
     from . import run as run_mod
     require_human("deliveryctl run")
+    require_local("deliveryctl run")
     return run_mod.start(_cfg(), campaign=args.campaign)
 
 
@@ -159,6 +164,7 @@ def cmd_campaign(args) -> int:
 def cmd_note(args) -> int:
     from . import journal
     require_human("deliveryctl note")
+    require_local("deliveryctl note")
     root = main_root()
     journal.record(journal.event(root.name, "note", " ".join(args.text), story=args.story or "",
                                  role="human", source="human"))
@@ -181,6 +187,7 @@ def cmd_journal(args) -> int:
         print(f"sent {sent}, still queued {left}")
     elif args.action == "report":
         require_human("deliveryctl journal report")
+        require_local("deliveryctl journal report")
         print(journal.report(args.limit))
     elif args.action == "setup":
         print(journal.SETUP)
@@ -205,12 +212,14 @@ def cmd_qualify(args) -> int:
 def cmd_nightly(args) -> int:
     from . import nightly
     require_human("deliveryctl nightly")
+    require_local("deliveryctl nightly")
     return nightly.run(_cfg())
 
 
 def cmd_init(args) -> int:
     from . import init
     require_human("deliveryctl init")
+    require_local("deliveryctl init")
     return init.main(args)
 
 

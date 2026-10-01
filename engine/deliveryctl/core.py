@@ -132,6 +132,18 @@ def require_human(gesture: str) -> None:
                            f"(DELIVERY_ROLE={os.environ.get('DELIVERY_ROLE')})")
 
 
+def is_cloud() -> bool:
+    """True inside a Claude Code cloud session (CONTRACTS.md §2)."""
+    return os.environ.get("CLAUDE_CODE_REMOTE") == "true"
+
+
+def require_local(gesture: str) -> None:
+    """Gestures that start Claude sessions, push, tag or merge on the forge, or write the owner's
+    journal run from the owner's computer (CONTRACTS.md §12.1)."""
+    if is_cloud():
+        fail(EXIT_REFUSED, f"'{gesture}' ne tourne pas dans une session cloud : lancez-la depuis votre ordinateur")
+
+
 def repo_root(start: Path | None = None) -> Path:
     """Top level of the current checkout (a story worktree or the main checkout)."""
     proc = run(["git", "rev-parse", "--show-toplevel"], cwd=start or Path.cwd(), check=False)

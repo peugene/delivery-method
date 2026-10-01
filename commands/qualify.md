@@ -52,18 +52,18 @@ material may be repaired, and each repair is declared.
    `## Failure classification` (material or product). Commit it: `qualify run` refuses an
    order with uncommitted changes, and git keeps each version the runner received.
 5. **Run.** `deliveryctl qualify run <incr>` starts the runner and returns: follow it where the
-   engine says. Do not commit in the worktree until its commit, whose `## Run` ends with
-   `Outcome:`. If it ends `blocked`, read why, repair the order or the material, commit, and
-   run again; a product cause is an anomaly.
+   engine says (a cloud session is refused: the owner runs it after merging its pull request).
+   Do not commit in the worktree until its commit, whose `## Run` ends with `Outcome:`. If it
+   ends `blocked`, repair the order or the material, commit, run again; a product cause: anomaly.
 6. **Synthesize.** Reproduce each product failure before counting it (or ask a refuter). Check the
    runner's `Env:`, rows and `## Run`; complete `## Results` for read controls, `## Anomalies`
    (`A-<n> : <title>`, severity, its card or run control), `## Not covered`, the proposed verdict
    block, `By: qualification-lead`. `Tree:` and `Spec:` come from the engine. Commit.
 7. **Lint.** `deliveryctl qualify lint <incr>` until exit 0; fix the plan or the report, never
    the product.
-8. **Hand over.** Ask the owner to run `deliveryctl qualify submit <incr>` and to triage each
-   anomaly in that merge request: fix (the card matures to `ready`), defer, drop, or "spec is
-   silent" (a question the owner carries to the spec).
+8. **Hand over.** Ask the owner to run `deliveryctl qualify submit <incr>` (in a cloud session,
+   after merging this session's pull request) and to triage each anomaly in that merge request:
+   fix (matures to `ready`), defer, drop, or "spec is silent" (a question for the spec).
 
 ## Outputs
 - `qualification/plan.md`, `qualification/order.md`, `qualification/reports/<incr>.md`,

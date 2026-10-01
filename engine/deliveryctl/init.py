@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Callable
 
 from . import config, roles
-from .core import EXIT_ERROR, EXIT_OK, EXIT_PRECONDITION, fail, main_root, repo_root, run
+from .core import EXIT_ERROR, EXIT_OK, EXIT_PRECONDITION, DeliveryError, fail, main_root, repo_root, run
 
 PLUGIN_KEY = "delivery-method@delivery-method"
 PLUGIN_NAMESPACE = "delivery-method"
@@ -508,6 +508,13 @@ def install_steps(root: Path, plugin: Path, version: str, args, notes: list[str]
     return steps, forge
 
 
+def _implementer(root: Path) -> str:
+    try:
+        return config.load(root).implementer
+    except DeliveryError:
+        return ""
+
+
 def next_steps(root: Path, steps: list[Step], forge: str, upgrade: bool) -> list[str]:
     changed = [s.path for s in steps if s.status != "kept"]
     if not changed:
@@ -532,6 +539,10 @@ def next_steps(root: Path, steps: list[Step], forge: str, upgrade: bool) -> list
     if not config.machine_path().exists():
         lines.append(f"Réglages de la machine (notifications, journal) : {config.machine_path()} "
                      "(CONTRACTS.md §4).")
+    if _implementer(root) == "cloud":
+        lines.append("L'implémenteur tourne dans le cloud : choisissez l'environnement cloud avec /remote-env "
+                     "dans Claude Code, et collez .delivery/templates/project/cloud-setup.sh dans son script "
+                     "d'installation (README, section « Claude Cloud »).")
     lines.append("Les agents, skills et commandes de la méthode sont copiés dans .claude/ : une session "
                  "Claude Code du dépôt (locale ou dans le cloud) les trouve sans plugin ; "
                  "les commandes s'appellent /spec-frame, /impl-frame, … ; ne les modifiez pas à la main : "

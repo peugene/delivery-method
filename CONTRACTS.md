@@ -70,6 +70,13 @@ copie du projet si elle existe, celle du plugin hors de tout projet ; `init` et 
 exécutent celle du plugin. Appelé pour un hook sans Python 3.11 ou plus, il rend la main en
 silence.
 
+Dans une session cloud (`CLAUDE_CODE_REMOTE=true`), le moteur est cette même copie du projet, avec
+Python 3.11 de l'image : la fenêtre est `terminal`, sans sonder herdr ; il n'y a ni réglages de
+machine, ni commande de notification, ni plugin, et `doctor` ne vérifie pas ces points (§12.1).
+`templates/project/cloud-setup.sh` (copié sous `.delivery/templates/`) est le script d'installation
+de l'environnement cloud : il ajoute `just` et le navigateur Playwright de la recette, rien de ce
+que l'image contient déjà.
+
 **La méthode dans le projet.** `init` copie les agents, skills et commandes du plugin sous
 `.claude/` et inscrit leur empreinte dans `.delivery/method.json`. Les commandes y sont
 `/spec-frame`, `/impl-frame`, `/run-campaign`… sans espace de noms (`run` aurait pris le nom d'une
@@ -629,12 +636,22 @@ moteur refuse à un rôle la fermeture d'une story arrêtée. Commits humains : 
 une carte en `ready`, taguer, pousser une branche de lead, passer en `released`, éditer
 `external_contracts`, modifier les conventions du projet ou les permissions.
 
+Dans une session cloud (`CLAUDE_CODE_REMOTE=true`), les gestes qui lancent des sessions Claude,
+poussent, taguent ou fusionnent sur la forge, ou écrivent le journal du propriétaire sont refusés,
+code 4, avec une ligne qui dit de les lancer depuis son ordinateur : `run`, `merge`, `submit`,
+`story open`, `story next`, `story wait`, `qualify run`, `qualify submit`, `nightly`,
+`spec release`, `init`, `note`, `journal report`. Les verbes qui lisent ou contrôlent et ceux qui
+ne touchent que la copie de travail restent permis : `cards`, `story prepare|status|close`,
+`verify`, `gate`, `campaign open`, `journal add|flush|setup`, `hook`, `spec lint|sync|verify`,
+`qualify open|lint|close`, `doctor`, `kit`. Une session cloud livre par une demande de fusion de
+sa branche `claude/<nom>` ; le geste refusé se lance après la fusion de cette demande.
+
 ### 12.2 Verbes du moteur
 
 | Verbe | Effet |
 |---|---|
 | `init [--role R] [--upgrade]` | pose ou met à jour moteur, règles, copie des agents, skills et commandes sous `.claude/` (manifeste `.delivery/method.json`), réglages, CI, et pour un dépôt `spec` ou `single` sans `spec/`, un squelette de `spec/` ; n'écrase rien, ne commite rien |
-| `doctor` | diagnostic en lecture seule, dont la copie de la méthode (manifeste, version, fichiers modifiés ou absents, plugin désactivé, hooks) et, avec `implementer = "cloud"`, la connexion `claude.ai` et `origin` sur github.com |
+| `doctor` | diagnostic en lecture seule (dans une session cloud, il le dit et saute réglages de machine, herdr, commande de notification, plugin et connexion `claude`), dont la copie de la méthode (manifeste, version, fichiers modifiés ou absents, plugin désactivé, hooks) et, avec `implementer = "cloud"`, la connexion `claude.ai` et `origin` sur github.com |
 | `cards list`, `cards order`, `cards lint` | `list`, `order` : lire, ordonner les cartes de la branche cible, celles que lit le run ; `lint` : contrôler celles de la copie de travail, avant commit ; seules les cartes `ready` dont les dépendances sont faites sont lançables |
 | `campaign open <nom> --phase P` | crée `docs/campaigns/<nom>.md` et son dossier `work/` |
 | `run [--campaign N]` | lance le `technical-lead` en mode run |
