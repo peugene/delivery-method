@@ -45,7 +45,7 @@ synchronise une version de spec, pousse, et change la méthode.
 | `.delivery/rules.md` | oui | `deliveryctl init` | règles communes, importées par `CLAUDE.md` |
 | `.delivery/run/` | non | moteur seul | fichiers de rôle, sessions, ports, notifications, registre des verdicts (`verdicts.json`, §6), journaux de sortie ; aucun rôle n'y écrit |
 | `CLAUDE.md` | oui | `init` (crée ou ajoute `@.delivery/rules.md`), puis humain | règles et conventions du projet |
-| `.claude/settings.json` | oui | `init` (fusion par ajout), puis humain | plugin désactivé dans le projet (`enabledPlugins` à `false`, dès le premier `init`, même si une installation du plugin à la portée projet l'a écrit à `true` : sa copie ferait doublon avec celle du projet), hooks `Stop` et `SessionStart`, refus de `SendMessage` pour toute session du projet, `ask` sur les gestes humains |
+| `.claude/settings.json` | oui | `init` (fusion par ajout), puis humain | plugin désactivé dans le projet (`enabledPlugins` à `false`, dès le premier `init`, même si une installation du plugin à la portée projet l'a écrit à `true` : sa copie ferait doublon avec celle du projet), hooks `Stop`, `SessionStart` et `PreToolUse` (matcher `Bash`, filtré par `if` sur les commandes `deliveryctl *` et `.delivery/deliveryctl *`), refus de `SendMessage` pour toute session du projet, `ask` sur les gestes humains |
 | `.gitignore` | oui | `init` (ajout) | `.delivery/run/`, `.delivery/**/__pycache__/`, `docs/stories/*/work/`, `docs/campaigns/work/`, `qualification/work/`, sorties de tests (`test-results/`, `playwright-report/`, `spec/acceptance/node_modules/`) |
 | `backlog/<id>-<slug>.md` | oui | leads (`draft`), humain (`ready`), rôles (anomalies) | cartes (§5) |
 | `docs/stories/<id>/` | oui | rôles, moteur | dossier de story (§6) |
@@ -656,7 +656,11 @@ code 4, avec une ligne qui dit de les lancer depuis son ordinateur : `run`, `mer
 ne touchent que la copie de travail restent permis : `cards`, `story prepare|status|close`,
 `verify`, `gate`, `campaign open`, `journal add|flush|setup`, `hook`, `spec lint|sync|verify`,
 `qualify open|lint|close`, `doctor`, `kit`. Une session cloud livre par une demande de fusion de
-sa branche `claude/<nom>` ; le geste refusé se lance après la fusion de cette demande.
+sa branche `claude/<nom>` ; le geste refusé se lance après la fusion de cette demande. La liste de ces
+gestes est unique dans le moteur : le hook `PreToolUse` du projet (`deliveryctl hook pre-tool`) la
+lit aussi, et refuse la commande Bash qui en appelle un avant toute demande de permission, avec la
+même ligne de refus, si bien que les règles `ask` n'ouvrent pas de demande qu'aucun humain ne
+validerait.
 
 ### 12.2 Verbes du moteur
 
@@ -681,7 +685,7 @@ sa branche `claude/<nom>` ; le geste refusé se lance après la fusion de cette 
 | `qualify open <incr>`, `qualify run <incr>`, `qualify lint <incr>`, `qualify submit <incr>`, `qualify close <incr>` | §15 |
 | `nightly` | suite complète des tests d'IHM (§16) |
 | `note "<texte>"`, `journal add`, `journal flush`, `journal report`, `journal setup` | §13 |
-| `hook stop`, `hook session-start` | appelés par les hooks du projet (`.claude/settings.json`) |
+| `hook stop`, `hook session-start`, `hook pre-tool` | appelés par les hooks du projet (`.claude/settings.json`) ; `hook pre-tool` ne dit rien hors d'une session cloud et, dans une session cloud, rend sur la sortie standard la décision `deny` (`hookSpecificOutput`, `permissionDecisionReason` : la ligne de refus du §12.1) quand la commande Bash appelle, où que ce soit, un geste refusé ; silencieux et rapide en cas d'erreur |
 | `kit lint` | contrôle du plugin lui-même |
 
 **Sorties du moteur.** Une carte y est nommée par sa référence lisible (§1) ; plusieurs

@@ -200,7 +200,8 @@ def check_settings(ctx):
     problems = []
     if _get(data, "enabledPlugins", init.PLUGIN_KEY) is not False:
         problems.append(f"enabledPlugins does not disable {init.PLUGIN_KEY} (the project carries its own copy)")
-    for event, command in (("Stop", init.HOOK_STOP), ("SessionStart", init.HOOK_SESSION_START)):
+    for event, command in (("Stop", init.HOOK_STOP), ("SessionStart", init.HOOK_SESSION_START),
+                           ("PreToolUse", init.HOOK_PRE_TOOL)):
         entries = _get(data, "hooks", event)
         if not any(isinstance(h, dict) and h.get("command") == command
                    for e in entries if isinstance(e, dict) for h in e.get("hooks") or []
