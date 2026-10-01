@@ -243,6 +243,40 @@ def check_tools(ctx):
             yield "warn", f"commands.{name}: '{exe}' not found"
 
 
+def _origin_host(url: str) -> str:
+    """Host of a git remote URL (https, ssh:// or scp-like), lower case."""
+    url = url.strip().lower()
+    if "://" in url:
+        url = url.split("://", 1)[1]
+    return url.rsplit("@", 1)[-1].split("/", 1)[0].split(":", 1)[0]
+
+
+def check_cloud(ctx):
+    """With implementer = cloud, the story-implementer runs as a Claude Code cloud session."""
+    cfg = ctx.cfg
+    if not cfg or cfg.implementer != "cloud":
+        return
+    if shutil.which("claude"):
+        try:
+            proc = subprocess.run(["claude", "auth", "status", "--json"], capture_output=True, text=True,
+                                  timeout=15, stdin=subprocess.DEVNULL)
+            status = json.loads(proc.stdout or "{}")
+        except (OSError, subprocess.TimeoutExpired, json.JSONDecodeError):
+            status = {}
+        status = status if isinstance(status, dict) else {}
+        if status.get("loggedIn") is True and status.get("authMethod") == "claude.ai":
+            yield "ok", "claude logged in with claude.ai (cloud sessions)"
+        else:
+            yield "warn", ("implementer = cloud needs 'claude auth status --json' to say loggedIn with "
+                           "authMethod claude.ai: claude auth login")
+    proc = ctx.git.run("remote", "get-url", "origin", check=False)
+    if proc.returncode == 0 and _origin_host(proc.stdout) != "github.com":
+        yield "warn", (f"implementer = cloud: origin ({proc.stdout.strip()}) is not on github.com, "
+                       "a cloud session works on GitHub only")
+    yield "note", ("implementer = cloud: cloud sessions run in the default environment chosen by /remote-env "
+                   "in Claude Code; it must reach the project's toolchain (README)")
+
+
 def check_ci(ctx):
     """With a forge, merges wait for a green CI: a CI that never starts blocks them silently."""
     cfg = ctx.cfg
@@ -373,7 +407,7 @@ def check_mentions(ctx):
 
 GLOBAL = (check_repository, check_plugin, check_machine, check_claude)
 PROJECT = (check_engine, check_method, check_project, check_remote, check_gitignore, check_claude_md, check_settings,
-           check_tools, check_ci, check_trust, check_worktrees, check_location, check_releases, check_mentions)
+           check_tools, check_cloud, check_ci, check_trust, check_worktrees, check_location, check_releases, check_mentions)
 
 
 def main(args) -> int:
