@@ -49,6 +49,15 @@ def check(git: Git, card_id: str, base: str | None = None, head: str = "HEAD") -
             if not git.exists(head, path):
                 problems.append(f"{own}{name}: Evidence '{path}' is not in the tree")
 
+    problems += diff_problems(git, card_id, base, head)
+    return problems
+
+
+def diff_problems(git: Git, card_id: str, base: str, head: str) -> list[str]:
+    """What the diff base...head may not touch (points 4 and 5 of §10): the integration check
+    and the reception of cloud commits (§9) share these rules."""
+    problems: list[str] = []
+    own = story_dir(card_id) + "/"
     for status, path in git.diff_status(base, head):
         if path.startswith("docs/stories/") and not path.startswith(own):
             problems.append(f"touches another story's folder: {path}")
@@ -66,7 +75,13 @@ def check(git: Git, card_id: str, base: str | None = None, head: str = "HEAD") -
 
 def agents(git: Git, base: str, head: str = "HEAD") -> dict[str, str]:
     """The 'Agent:' trailer of each commit of base..head (several are joined by commas)."""
-    out = git.out("log", "--format=%H%x01%(trailers:key=Agent,valueonly,separator=%x2C)%x00",
+    return trailers(git, base, head, "Agent")
+
+
+def trailers(git: Git, base: str, head: str, key: str) -> dict[str, str]:
+    """The value of the trailer `key` of each commit of base..head ('' when absent; several
+    values are joined by commas)."""
+    out = git.out("log", f"--format=%H%x01%(trailers:key={key},valueonly,separator=%x2C)%x00",
                   f"{base}..{head}", check=False)
     found = {}
     for entry in out.split("\x00"):

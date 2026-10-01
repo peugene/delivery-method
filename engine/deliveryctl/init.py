@@ -322,7 +322,7 @@ def ask_rules() -> list[str]:
     for launcher in ("deliveryctl", ".delivery/deliveryctl"):
         for verb in GESTURES:
             rules += [f"Bash({launcher} {verb})", f"Bash({launcher} {verb} *)"]
-        rules.append(f"Bash({launcher} story next *--go*)")
+        rules += [f"Bash({launcher} story next *--go*)", f"Bash({launcher} story next *--relaunch*)"]
     return rules
 
 

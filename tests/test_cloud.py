@@ -6,15 +6,17 @@ import io
 import json
 import os
 import sys
+import time
+import tomllib
 from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 
 from support import RepoCase, git, sh, write
 from test_story import CARD, ORDER
 
-from deliveryctl import config, doctor, roles, story
+from deliveryctl import config, doctor, journal, roles, story
 from deliveryctl.cli import main as cli_main
-from deliveryctl.core import EXIT_ERROR, EXIT_TOOL, DeliveryError
+from deliveryctl.core import EXIT_ERROR, EXIT_PRECONDITION, EXIT_TOOL, DeliveryError
 from deliveryctl.window import cloud, owner
 from deliveryctl.window.base import Window
 
@@ -85,7 +87,7 @@ class CloudCase(RepoCase):
 
 class ImplementerSettingTest(RepoCase):
     def load(self, text):
-        return config.parse(__import__("tomllib").loads(text), self.repo)
+        return config.parse(tomllib.loads(text), self.repo)
 
     def test_default_follows_the_forge(self):
         self.assertEqual(self.load('repo_role = "impl"\nforge = "github"\n').implementer, "cloud")
@@ -152,10 +154,8 @@ class CloudLaunchTest(CloudCase):
         write(self.repo / ".delivery/run/sessions/s001.json", json.dumps(reg))
         self.assertEqual(story._alive(self.cfg, "s001"), [])
 
-    def test_stop_does_nothing_and_a_cloud_session_is_not_a_stall(self):
-        self.configure(levers="stall_minutes = 0\n")
+    def test_stop_does_nothing(self):
         self.open()
-        self.assertEqual(story.check_stall(self.cfg, "s001"), [])
         cloud.CloudWindow(self.repo).stop_role("s001", "story-implementer")
         self.assertEqual(story._alive(self.cfg, "s001"), ["story-implementer"])
 
@@ -259,3 +259,358 @@ class CloudDoctorTest(CloudCase):
     def test_local_says_nothing(self):
         self.configure(top='implementer = "local"\n')
         self.assertNotIn("implementer = cloud", self.doctor())
+
+
+SESSION = "https://claude.ai/code/session_01ABC"
+
+
+class CloudRetrievalCase(CloudCase):
+    """The cloud session is played by a second clone pushing `claude/<slug>` branches."""
+
+    def setUp(self):
+        super().setUp()
+        self.other = self.tmp / "cloud-clone"
+        self.open()
+        git(self.tmp, "clone", "--quiet", str(self.origin), str(self.other))
+        git(self.other, "config", "user.email", "cloud@example.test")
+        git(self.other, "config", "user.name", "cloud")
+        self.start = self.entry()["head"]
+
+    def push_commit(self, files, branch="claude/work-1", session=SESSION, trailers=None, base=None,
+                    message="implement"):
+        """One commit of the session on `branch`, created from `base` (the pushed story)."""
+        git(self.other, "fetch", "--quiet", "origin")
+        if base or not git(self.other, "branch", "--list", branch):
+            git(self.other, "checkout", "--quiet", "-B", branch, base or "origin/story/s001")
+        else:
+            git(self.other, "checkout", "--quiet", branch)
+        for path, text in files.items():
+            write(self.other / path, text)
+        git(self.other, "add", "-A")
+        trailers = ["Story: s001", "Agent: story-implementer", f"Claude-Session: {session}"] if trailers is None else trailers
+        git(self.other, "commit", "--quiet", "-m", message + "\n\n" + "\n".join(trailers))
+        git(self.other, "push", "--quiet", "origin", f"{branch}:{branch}")
+        return git(self.other, "rev-parse", "HEAD")
+
+    def pull(self, age=True):
+        """One retrieval; `age` makes the 60-second limit pass first."""
+        if age:
+            info = self.entry()
+            info["fetched_at"] = 0
+            story._save_entry(self.cfg, "s001", info)
+        story.pull_cloud(self.cfg, "s001")
+
+    def head(self):
+        return git(self.wt(), "rev-parse", "HEAD")
+
+    def remote(self, ref):
+        return git(self.repo, "ls-remote", "origin", f"refs/heads/{ref}")
+
+    def notified(self):
+        return json.loads((self.repo / ".delivery/run/notified.json").read_text())
+
+    def events(self, category):
+        path = journal.queue_path()
+        lines = path.read_text().splitlines() if path.exists() else []
+        return [e for e in map(json.loads, filter(str.strip, lines)) if e["category"] == category]
+
+    REPORT = "## Delivered\nx\n\nOutcome: done — all delivered\n"
+
+
+class CloudAcceptedTest(CloudRetrievalCase):
+    def test_commits_fast_forward_the_story_and_the_branch_is_deleted(self):
+        tip = self.push_commit({"src/app.txt": "line\n"})
+        self.pull()
+        self.assertEqual(self.head(), tip)
+        self.assertEqual(self.remote("claude/work-1"), "")
+        info = self.entry()
+        self.assertEqual(info["head"], tip)
+        self.assertTrue(info["last_commit_at"])
+        self.assertNotIn("ended", info)            # no Outcome yet: the session goes on
+        self.assertEqual(story.state(self.cfg, "s001").name, "implementing")
+
+    def test_a_fresh_outcome_ends_the_session_and_leads_to_the_verification(self):
+        self.push_commit({"src/app.txt": "line\n", "docs/stories/s001/report.md": self.REPORT})
+        self.pull()
+        self.assertTrue(self.entry()["ended"])
+        self.assertEqual(story.state(self.cfg, "s001").name, "to-verify")
+        self.assertEqual(story._alive(self.cfg, "s001"), [])
+        self.assertEqual(len(self.calls()), 1)     # the story chains on, no second implementer
+
+    def test_the_most_advanced_branch_wins_and_the_story_branch_counts(self):
+        self.push_commit({"a.txt": "1\n"}, branch="claude/short")
+        tip = self.push_commit({"a.txt": "1\n"}, branch="claude/long")
+        tip = self.push_commit({"b.txt": "2\n"}, branch="claude/long")
+        self.pull()
+        self.assertEqual(self.head(), tip)
+        self.assertEqual(self.remote("claude/long"), "")
+        self.assertNotEqual(self.remote("claude/short"), "")
+
+    def test_later_commits_on_the_same_branch_are_taken_in_turn(self):
+        self.push_commit({"a.txt": "1\n"})
+        self.pull()
+        tip = self.push_commit({"b.txt": "2\n"}, base=self.head())
+        self.pull()
+        self.assertEqual(self.head(), tip)
+
+    def test_an_anomaly_card_to_triage_is_accepted(self):
+        card = "---\nid: x001\nkind: anomaly\ntitle: Odd\nstatus: to-triage\n---\n## Objective\nodd\n"
+        tip = self.push_commit({"backlog/x001-odd.md": card})
+        self.pull()
+        self.assertEqual(self.head(), tip)
+
+    def test_a_dirty_working_copy_holds_the_commits_until_it_is_clean(self):
+        tip = self.push_commit({"src/app.txt": "line\n"})
+        write(self.wt() / "stray.txt", "x\n")
+        self.pull()
+        self.assertNotEqual(self.head(), tip)
+        self.assertIn("retried at the next sweep", story.state(self.cfg, "s001").detail)
+        self.assertNotEqual(self.remote("claude/work-1"), "")
+        (self.wt() / "stray.txt").unlink()
+        self.pull()
+        self.assertEqual(self.head(), tip)
+        self.assertNotIn("retried", story.state(self.cfg, "s001").detail)
+
+
+class CloudIgnoredTest(CloudRetrievalCase):
+    def test_another_session_is_ignored(self):
+        self.push_commit({"a.txt": "1\n"}, session="https://claude.ai/code/session_OTHER")
+        self.pull()
+        self.assertEqual(self.head(), self.start)
+        self.assertNotIn("ended", self.entry())
+        self.assertEqual(story.state(self.cfg, "s001").name, "open")
+
+    def test_a_branch_with_one_foreign_commit_is_ignored(self):
+        self.push_commit({"a.txt": "1\n"})
+        self.push_commit({"b.txt": "2\n"}, session="https://claude.ai/code/session_OTHER")
+        self.pull()
+        self.assertEqual(self.head(), self.start)
+        self.assertNotIn("rejected", self.entry())
+
+    def test_a_branch_not_descending_from_the_head_is_ignored(self):
+        git(self.other, "checkout", "--quiet", "-B", "claude/elsewhere", "origin/main")
+        self.push_commit({"a.txt": "1\n"}, branch="claude/elsewhere", base="origin/main")
+        self.pull()
+        self.assertEqual(self.head(), self.start)
+        self.assertNotIn("ended", self.entry())
+
+    def test_a_cloud_free_story_is_left_alone(self):
+        info = self.entry()
+        info["window"] = "fake"
+        story._save_entry(self.cfg, "s001", info)
+        self.push_commit({"a.txt": "1\n"})
+        self.pull()
+        self.assertEqual(self.head(), self.start)
+
+
+class CloudRefusedTest(CloudRetrievalCase):
+    def refused(self, text, **kwargs):
+        self.push_commit(**kwargs)
+        self.pull()
+        info = self.entry()
+        self.assertEqual(self.head(), self.start)               # never fast-forwarded
+        self.assertTrue(info["ended"])
+        self.assertTrue(any(text in problem for problem in info["rejected"]), info["rejected"])
+        st = story.state(self.cfg, "s001")
+        self.assertEqual(st.name, "blocked")
+        self.assertIn(text, st.detail)
+        self.assertIn("deliveryctl story next s001 --relaunch", st.human_next)
+        self.assertIn("origin/claude/work-1", st.human_next)
+        keys = [k for k in self.notified() if k.startswith("s001:cloud-refused:")]
+        self.assertEqual(len(keys), 1)
+        (event,) = self.events("refusal")
+        self.assertEqual(event["evidence"], f"origin/claude/work-1 — {SESSION}")
+        story.next_step(self.cfg, "s001")                       # one notification, one event, no launch
+        self.pull()
+        self.assertEqual(len([k for k in self.notified() if "cloud-refused" in k or "blocked" in k]), 1)
+        self.assertEqual(len(self.events("refusal")), 1)
+        self.assertEqual(len(self.calls()), 1)
+        self.assertNotEqual(self.remote("claude/work-1"), "")   # kept for inspection
+
+    def test_a_verification_written_by_the_implementer(self):
+        self.refused("verification.md", files={"docs/stories/s001/verification.md": "x\n"})
+
+    def test_a_review_written_by_the_implementer(self):
+        self.refused("review.md", files={"docs/stories/s001/review.md": "x\n"})
+
+    def test_a_protected_path(self):
+        self.refused("protected path: .claude/settings.json", files={".claude/settings.json": "{}\n"})
+
+    def test_another_story_folder(self):
+        self.refused("another story's folder", files={"docs/stories/s002/report.md": "x\n"})
+
+    def test_a_change_to_a_backlog_card(self):
+        self.refused("backlog/s001-sign-in.md", files={"backlog/s001-sign-in.md": CARD.replace("ready", "done")})
+
+    def test_a_missing_story_trailer(self):
+        self.refused("lacks the trailers", files={"a.txt": "1\n"},
+                     trailers=["Agent: story-implementer", f"Claude-Session: {SESSION}"])
+
+    def test_a_missing_agent_trailer(self):
+        self.refused("lacks the trailers", files={"a.txt": "1\n"},
+                     trailers=["Story: s001", f"Claude-Session: {SESSION}"])
+
+    def test_another_agent_trailer(self):
+        self.refused("lacks the trailers", files={"a.txt": "1\n"},
+                     trailers=["Story: s001", "Agent: story-reviewer", f"Claude-Session: {SESSION}"])
+
+    def test_a_merge_commit(self):
+        self.push_commit({"a.txt": "1\n"})
+        git(self.other, "checkout", "--quiet", "-B", "side", "origin/story/s001")
+        write(self.other / "side.txt", "s\n")
+        git(self.other, "add", "-A")
+        git(self.other, "commit", "--quiet", "-m",
+            f"side\n\nStory: s001\nAgent: story-implementer\nClaude-Session: {SESSION}")
+        git(self.other, "checkout", "--quiet", "claude/work-1")
+        git(self.other, "merge", "--quiet", "--no-ff", "side", "-m",
+            f"merge\n\nStory: s001\nAgent: story-implementer\nClaude-Session: {SESSION}")
+        git(self.other, "push", "--quiet", "origin", "claude/work-1:claude/work-1")
+        self.pull()
+        self.assertEqual(self.head(), self.start)
+        self.assertTrue(any("merge commit" in p for p in self.entry()["rejected"]))
+
+    def test_a_tip_not_descending_from_the_local_head(self):
+        self.push_commit({"a.txt": "1\n"})
+        write(self.wt() / "local.txt", "x\n")
+        git(self.wt(), "add", "-A")
+        git(self.wt(), "commit", "--quiet", "-m", "local")
+        self.pull()
+        self.assertTrue(any("does not descend" in p for p in self.entry()["rejected"]))
+
+    def test_relaunch_after_a_refusal(self):
+        self.push_commit({"docs/stories/s001/verification.md": "x\n"})
+        self.pull()
+        self.assertEqual(story.state(self.cfg, "s001").name, "blocked")
+        st = story.relaunch(self.cfg, "s001")
+        self.assertEqual(len(self.calls()), 2)
+        self.assertNotIn("rejected", self.entry())
+        self.assertNotIn("ended", self.entry())
+        self.assertEqual(self.entry()["head"], self.head())
+        self.assertNotEqual(st.name, "blocked")
+
+
+class CloudFetchLimitTest(CloudRetrievalCase):
+    def test_one_fetch_per_minute(self):
+        self.pull()
+        tip = self.push_commit({"a.txt": "1\n"})
+        self.pull(age=False)
+        self.assertEqual(self.head(), self.start)               # inside the limit: not even fetched
+        self.assertTrue(self.entry()["fetched_at"] > 0)
+        info = self.entry()
+        info["fetched_at"] -= 61
+        story._save_entry(self.cfg, "s001", info)
+        story.pull_cloud(self.cfg, "s001")
+        self.assertEqual(self.head(), tip)
+
+    def test_every_sweep_retrieves(self):
+        tip = self.push_commit({"a.txt": "1\n"})
+        story.scan(self.cfg)
+        self.assertEqual(self.head(), tip)
+        tip = self.push_commit({"b.txt": "2\n"}, base=tip)
+        self.pull()
+        story.next_step(self.cfg, "s001")
+        self.assertEqual(self.head(), tip)
+        self.assertIn("a.txt", git(self.wt(), "ls-files"))
+
+    def test_status_and_wait_retrieve(self):
+        tip = self.push_commit({"docs/stories/s001/report.md": self.REPORT})
+        text = story.describe(self.cfg, "s001")
+        self.assertEqual(self.head(), tip)
+        self.assertIn("to-verify", text)
+
+    def test_a_network_error_is_shown_and_does_not_stop_the_sweep(self):
+        git(self.repo, "remote", "set-url", "origin", str(self.tmp / "nowhere.git"))
+        err = io.StringIO()
+        with redirect_stderr(err):
+            self.pull()
+            story.scan(self.cfg)
+        self.assertIn("cloud commits", err.getvalue())
+        self.assertEqual(self.head(), self.start)
+
+
+class CloudStallTest(CloudRetrievalCase):
+    def stale(self, **fields):
+        info = self.entry()
+        info.update(fields)
+        story._save_entry(self.cfg, "s001", info)
+
+    def test_a_session_without_progress_is_alerted_once(self):
+        self.configure(levers="stall_minutes = 30\n")
+        self.assertEqual(story.check_stall(self.cfg, "s001"), [])
+        self.stale(pushed_at="2020-01-01T00:00:00Z")
+        self.assertEqual(story.check_stall(self.cfg, "s001"), ["story-implementer"])
+        story.check_stall(self.cfg, "s001")
+        keys = [k for k in self.notified() if k.startswith("s001:stall:")]
+        self.assertEqual(len(keys), 1)
+        (event,) = self.events("stall")
+        self.assertEqual(event["evidence"], SESSION)
+
+    def test_a_retrieved_commit_is_progress(self):
+        self.configure(levers="stall_minutes = 30\n")
+        self.stale(pushed_at="2020-01-01T00:00:00Z", last_commit_at=story._iso(time.time()))
+        self.assertEqual(story.check_stall(self.cfg, "s001"), [])
+
+    def test_an_ended_session_does_not_stall(self):
+        self.stale(pushed_at="2020-01-01T00:00:00Z", ended="2020-01-02T00:00:00Z")
+        self.assertEqual(story.check_stall(self.cfg, "s001"), [])
+
+    def test_no_second_implementer_while_the_session_has_no_end(self):
+        self.stale(pushed_at="2020-01-01T00:00:00Z")
+        story.scan(self.cfg)
+        st = story.next_step(self.cfg, "s001")
+        self.assertIn("session running", st.detail)
+        self.assertEqual(len(self.calls()), 1)
+
+
+class CloudRelaunchTest(CloudRetrievalCase):
+    def test_refused_in_a_role_session(self):
+        os.environ["DELIVERY_ROLE"] = "technical-lead"
+        try:
+            with self.assertRaises(DeliveryError) as ctx:
+                story.relaunch(self.cfg, "s001")
+            err = io.StringIO()
+            with redirect_stderr(err), redirect_stdout(io.StringIO()):
+                self.assertNotEqual(cli_main(["story", "next", "s001", "--relaunch"]), 0)
+        finally:
+            os.environ.pop("DELIVERY_ROLE")
+        self.assertIn("human gesture", ctx.exception.message)
+        self.assertEqual(len(self.calls()), 1)
+        self.assertNotIn("ended", self.entry())
+
+    def test_abandons_the_live_session_and_starts_another_from_the_local_head(self):
+        self.push_commit({"a.txt": "1\n"})
+        self.pull()
+        local = self.head()
+        old = self.entry()
+        out = io.StringIO()
+        with redirect_stdout(out), redirect_stderr(io.StringIO()):
+            self.assertEqual(cli_main(["story", "next", "s001", "--relaunch"]), 0)
+        self.assertEqual(len(self.calls()), 2)
+        info = self.entry()
+        self.assertNotIn("ended", info)
+        self.assertEqual(info["head"], local)
+        self.assertGreaterEqual(info["pushed_at"], old["pushed_at"])
+        (event,) = self.events("resume")
+        self.assertEqual(event["evidence"], SESSION)
+        self.assertIn("abandoned", event["text"])
+        self.assertIn("resume", self.calls()[1]["argv"][1])
+
+    def test_a_session_ended_by_its_outcome_cannot_be_relaunched(self):
+        self.push_commit({"docs/stories/s001/report.md": self.REPORT})
+        self.pull()
+        with self.assertRaises(DeliveryError) as ctx:
+            story.relaunch(self.cfg, "s001")
+        self.assertEqual(ctx.exception.code, EXIT_PRECONDITION)
+        self.assertEqual(len(self.calls()), 1)
+
+    def test_a_local_implementer_cannot_be_relaunched(self):
+        info = self.entry()
+        info["window"] = "fake"
+        story._save_entry(self.cfg, "s001", info)
+        with self.assertRaises(DeliveryError):
+            story.relaunch(self.cfg, "s001")
+
+    def test_init_asks_before_a_relaunch(self):
+        from deliveryctl import init
+        for launcher in ("deliveryctl", ".delivery/deliveryctl"):
+            self.assertIn(f"Bash({launcher} story next *--relaunch*)", init.ask_rules())
