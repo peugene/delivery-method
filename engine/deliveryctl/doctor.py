@@ -125,7 +125,7 @@ def check_project(ctx):
 
 def check_machine(ctx):
     if is_cloud():
-        yield "note", ("cloud session: machine settings, herdr, the notification command and the plugin "
+        yield "note", ("cloud session: machine settings, the window, the notification command and the plugin "
                        "are the owner's computer's, not checked here")
         return
     machine = config.machine()

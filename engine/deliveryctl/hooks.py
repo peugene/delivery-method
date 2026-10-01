@@ -151,9 +151,6 @@ def _record_refusals(cfg, role: str, scope: str, data: dict) -> None:
                                  story=scope if ID_RX.match(scope) else "", role=role, evidence=str(path)))
 
 
-_cloud = is_cloud
-
-
 def _cloud_story(cwd: Path):
     """The story a cloud session serves, found from its branch; None when it serves none."""
     from .gate import story_of_branch
@@ -197,7 +194,7 @@ def _cloud_stop(data: dict) -> int:
 
 def stop() -> int:
     role = os.environ.get("DELIVERY_ROLE")
-    if _cloud() and not role:
+    if is_cloud() and not role:
         return _cloud_stop(_stdin())
     if not role:
         return _human_question(_stdin())
@@ -274,7 +271,7 @@ def session_start() -> int:
     except Exception:
         pass
     role = os.environ.get("DELIVERY_ROLE")
-    if _cloud() and not role and data.get("source") in ("startup", "resume"):
+    if is_cloud() and not role and data.get("source") in ("startup", "resume"):
         story_id = _cloud_story(Path(data.get("cwd") or "."))
         if story_id:
             print(f"This session is the story-implementer of story {story_id}: read "
