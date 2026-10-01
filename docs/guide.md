@@ -47,8 +47,8 @@ Dans chaque dépôt, une fois :
 | Où | Commande | Effet |
 |---|---|---|
 | shell | `claude plugin marketplace add peugene/delivery-method` | déclare la marketplace |
-| shell | `claude plugin install delivery-method@delivery-method --scope project` | active le plugin pour le projet |
-| session Claude | `/delivery-method:init` | cinq questions, puis `deliveryctl init` : `delivery.toml`, `.delivery/`, `CLAUDE.md`, `.claude/settings.json`, `.gitignore`, `justfile`, CI ; un squelette `spec/` pour `todo-spec` |
+| shell | `claude plugin install delivery-method@delivery-method` | installe le plugin pour l'utilisateur (une fois par machine) |
+| session Claude | `/delivery-method:init` | cinq questions, puis `deliveryctl init` : `delivery.toml`, `.delivery/`, la copie des agents, skills et commandes sous `.claude/` (commandes sans espace de noms : `/spec-frame`…), `CLAUDE.md`, `.claude/settings.json`, `.gitignore`, `justfile`, CI ; un squelette `spec/` pour `todo-spec` |
 | shell | `deliveryctl doctor` | diagnostic en lecture seule |
 
 Réponses types : `todo-spec` → rôle `spec` ; `todo-kotlin` → rôle `impl`, `check = "just check"`
@@ -65,7 +65,7 @@ par tour. La discussion se clôt sur votre mot.
 
 ```mermaid
 flowchart LR
-    A["/delivery-method:brainstorm &lt;idée&gt;"] --> B[discussion<br/>rien n'est écrit]
+    A["/brainstorm &lt;idée&gt;"] --> B[discussion<br/>rien n'est écrit]
     B --> C{votre mot}
     C -- oublier --> D[aucune trace]
     C -- archiver --> E["docs/maybe/2026-10-02-rappels.md<br/>hors de toute décision"]
@@ -74,17 +74,17 @@ flowchart LR
 
 | Où | Commande | Effet |
 |---|---|---|
-| session Claude, tout dépôt | `/delivery-method:brainstorm <idée>` | ouvre la discussion |
+| session Claude, tout dépôt | `/brainstorm <idée>` | ouvre la discussion |
 | même session | « oublier », « archiver » ou « cadrer » | clôt : rien, une archive, ou le passage au cadrage |
 | shell | `git add docs/maybe/… && git commit` | garde l'archive, si vous le voulez ; le commit est votre geste |
 
 Deux exemples sur le banc :
 
-- Dans `todo-spec`, `/delivery-method:brainstorm des rappels pour les tâches échues`. Vous
+- Dans `todo-spec`, `/brainstorm des rappels pour les tâches échues`. Vous
   concluez que l'idée vaut un incrément, mais sans notification par e-mail : « cadrer ». La
   seule décision validée, « rappel dans l'application, pas d'e-mail », ouvre
-  `/delivery-method:spec-frame 02-rappels`. Les pistes écartées ne sont reprises nulle part.
-- Dans `todo-supabase`, `/delivery-method:brainstorm passer la liste partagée en temps réel`.
+  `/spec-frame 02-rappels`. Les pistes écartées ne sont reprises nulle part.
+- Dans `todo-supabase`, `/brainstorm passer la liste partagée en temps réel`.
   Rien n'est mûr : « archiver ». Le fichier de `docs/maybe/` reste consultable par l'équipe ;
   aucun agent ne le lit de lui-même, et les sessions de rôle ne peuvent pas le lire.
 
@@ -95,15 +95,15 @@ décidez. Quatre GO humains jalonnent un incrément.
 
 ```mermaid
 flowchart TD
-    A["/delivery-method:spec-frame 01-core"] --> B{GO de cadrage}
-    B -- "framing.md : framed" --> C["/delivery-method:spec-write 01-core"]
+    A["/spec-frame 01-core"] --> B{GO de cadrage}
+    B -- "framing.md : framed" --> C["/spec-write 01-core"]
     C --> L["deliveryctl spec lint"]
-    L --> D["/delivery-method:spec-review 01-core"]
+    L --> D["/spec-review 01-core"]
     D --> E{GO de revue}
-    E --> G["/delivery-method:spec-write 01-core<br/>applique vos décisions"]
+    E --> G["/spec-write 01-core<br/>applique vos décisions"]
     G --> H{GO de clôture}
-    H -- "stories ready, framing.md : closed" --> I["/delivery-method:spec-write 01-core --acceptance"]
-    I --> J["/delivery-method:spec-review 01-core --acceptance"]
+    H -- "stories ready, framing.md : closed" --> I["/spec-write 01-core --acceptance"]
+    I --> J["/spec-review 01-core --acceptance"]
     J --> K["deliveryctl spec release"]
     K --> M{GO de publication}
     M -- "vous tapez les commandes affichées" --> N["tag spec-v0.1.0"]
@@ -112,15 +112,15 @@ flowchart TD
 Exemple : l'incrément `01-core` couvre `s001 : Se connecter`, `s002 : Créer une liste` et
 `s003 : Gérer les tâches d'une liste`.
 
-1. `claude --agent delivery-method:product-analyst`, puis `/delivery-method:spec-frame 01-core`.
+1. `claude --agent product-analyst`, puis `/spec-frame 01-core`.
    L'analyste lit l'existant, pose des questions numérotées avec sa recommandation (« une liste
    sans tâche peut-elle être supprimée ? a) oui b) non, recommandation : a »), et écrit vos réponses
    mot pour mot dans `refinement/01-core/framing.md`. Vous donnez le GO de cadrage en le disant.
-2. `/delivery-method:spec-write 01-core` écrit `spec/stories/s002-create-list.md` (règles, parcours,
+2. `/spec-write 01-core` écrit `spec/stories/s002-create-list.md` (règles, parcours,
    extensions, critères `AC1 @main — Given … When … Then …`, contrat d'IHM, libellés dans
    `spec/ui/copy.fr.json`). `deliveryctl spec lint` refuse une fuite technique (« table », « REST »,
    un code HTTP) et une extension sans critère.
-3. `/delivery-method:spec-review 01-core` annonce la taille (approfondie par défaut) et les angles
+3. `/spec-review 01-core` annonce la taille (approfondie par défaut) et les angles
    (couverture, implémentabilité sur deux piles, testabilité, neutralité). Un relecteur par angle,
    un réfuteur par constat ; le rapport daté finit par `Spec ready: yes | no`.
 4. Après le GO de clôture, `--acceptance` écrit les tests Playwright : un test par critère, étiqueté
@@ -131,10 +131,10 @@ Exemple : l'incrément `01-core` couvre `s001 : Se connecter`, `s002 : Créer un
 
 | Session Claude | Rôle |
 |---|---|
-| `/delivery-method:spec-frame <incr>` | cadrage avec l'analyste produit, jusqu'au GO |
-| `/delivery-method:spec-write <incr> [--acceptance]` | stories, libellés, puis tests d'IHM |
-| `/delivery-method:spec-review <incr> [deep\|standard\|light] [--acceptance]` | revue contradictoire |
-| `/delivery-method:handoff <incr>` | avant un `/clear` : range ce qui a été décidé, donne la ligne de reprise |
+| `/spec-frame <incr>` | cadrage avec l'analyste produit, jusqu'au GO |
+| `/spec-write <incr> [--acceptance]` | stories, libellés, puis tests d'IHM |
+| `/spec-review <incr> [deep\|standard\|light] [--acceptance]` | revue contradictoire |
+| `/handoff <incr>` | avant un `/clear` : range ce qui a été décidé, donne la ligne de reprise |
 
 | Shell | Rôle |
 |---|---|
@@ -155,7 +155,7 @@ deliveryctl spec sync 0.1.0 --source git@github.com:<vous>/todo-spec.git
 deliveryctl spec verify
 ```
 
-Puis `claude --agent delivery-method:technical-lead` et `/delivery-method:impl-frame kotlin-01`.
+Puis `claude --agent technical-lead` et `/impl-frame kotlin-01`.
 Le lead propose l'architecture (`docs/architecture.md`), un ADR par choix structurant (Ktor,
 Thymeleaf et HTMX, migrations Flyway), les conventions du projet, et une carte par story en
 `draft` :
@@ -218,9 +218,9 @@ contradictoire de l'angle « que voit un compte non invité ? ».
 
 | Session Claude | Rôle |
 |---|---|
-| `/delivery-method:impl-frame <campagne>` | cadrage d'architecture, cartes en brouillon |
-| `/delivery-method:run <campagne>` | procédure du lead en run (lancée par `deliveryctl run`) |
-| `/delivery-method:handoff <campagne>` | passation avant un `/clear` |
+| `/impl-frame <campagne>` | cadrage d'architecture, cartes en brouillon |
+| `/run-campaign <campagne>` | procédure du lead en run (lancée par `deliveryctl run`) |
+| `/handoff <campagne>` | passation avant un `/clear` |
 
 | Shell | Rôle |
 |---|---|
@@ -243,7 +243,7 @@ défaut devient une carte d'anomalie triée par vous. Une recette par implément
 
 ```mermaid
 flowchart TD
-    Q["/delivery-method:qualify 0.1.0"] --> O["deliveryctl qualify open 0.1.0<br/>branche qualification/0.1.0"]
+    Q["/qualify 0.1.0"] --> O["deliveryctl qualify open 0.1.0<br/>branche qualification/0.1.0"]
     O --> P["qualification-lead<br/>surface lue dans le code, contrôles Q1, Q2…"]
     P --> OR["qualification/order.md commité"]
     OR --> RUN["deliveryctl qualify run 0.1.0<br/>qualification-runner jetable"]
@@ -262,7 +262,7 @@ dans `todo-supabase`, la spec est muette sur ce cas : la question remonte au pro
 
 | Session Claude | Rôle |
 |---|---|
-| `/delivery-method:qualify <incr>` | recette menée par le qualification-lead |
+| `/qualify <incr>` | recette menée par le qualification-lead |
 
 | Shell | Rôle |
 |---|---|

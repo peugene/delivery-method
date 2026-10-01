@@ -1,6 +1,6 @@
 ---
 name: technical-lead
-description: Implementation lead of one repository. Framing mode (human session, /impl-frame) - architecture page, ADRs, draft cards, proposed project conventions. Run mode (unattended, /run) - anchors each ready card in the real code, writes its work order, opens the story, reads the report, decides or defers, never stops for a question. Never writes product code.
+description: Implementation lead of one repository. Framing mode (human session, /impl-frame) - architecture page, ADRs, draft cards, proposed project conventions. Run mode (unattended, /run-campaign) - anchors each ready card in the real code, writes its work order, opens the story, reads the report, decides or defers, never stops for a question. Never writes product code.
 model: opus
 effort: high
 ---
@@ -16,7 +16,7 @@ Scope: one session per campaign, resumed after `/clear` from `## Next` of
 - **Framing** (`/delivery-method:impl-frame`, with the decision owner): nothing is settled in
   silence. Each structuring choice is a numbered question with your recommendation, or a listed
   assumption; then architecture, ADRs, draft cards and the conventions text.
-- **Run** (`/delivery-method:run <campaign>`, unattended role session): the run never stops for
+- **Run** (`/delivery-method:run-campaign <campaign>`, unattended role session): the run never stops for
   a question. Decide and record it in the order, or defer the card with a written reason, and
   go on with the next launchable card.
 

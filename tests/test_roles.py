@@ -2,13 +2,16 @@
 the lead may reach; and the grace a starting interactive session gets before it counts as dead."""
 
 import importlib
+import os
 import re
+import shlex
 from datetime import datetime, timedelta, timezone
 from unittest import mock
 
-from support import RepoCase, git, write
+from support import ROOT, RepoCase, git, write
 
 from deliveryctl import config, roles
+from deliveryctl.core import EXIT_PRECONDITION, DeliveryError
 from deliveryctl.window import mentions
 
 
@@ -30,6 +33,27 @@ class RolesTest(RepoCase):
 
     def perms(self, role: str) -> dict:
         return roles.permissions(self.cfg, role, self.wt, "s001")
+
+    def test_launch_uses_the_project_copy_of_the_agent(self):
+        self.wt.mkdir(parents=True)
+        with self.assertRaises(DeliveryError) as ctx:
+            roles.launch(self.cfg, "story-implementer", self.wt, "s001", "go", headless=True)
+        self.assertEqual(ctx.exception.code, EXIT_PRECONDITION)
+        self.assertIn("deliveryctl init --upgrade", ctx.exception.message)
+        write(self.wt / ".claude" / "agents" / "story-implementer.md", "---\nname: story-implementer\n---\n")
+        spec = roles.launch(self.cfg, "story-implementer", self.wt, "s001", "go", headless=True)
+        argv = spec["argv"]
+        self.assertEqual(argv[argv.index("--agent") + 1], "story-implementer")
+        self.assertNotIn("--plugin-dir", argv)
+        self.assertEqual(spec["env"]["PATH"].split(os.pathsep)[0], str(self.wt / ".delivery"))
+        self.assertTrue(any(word.startswith(f"PATH={self.wt}/.delivery:")
+                            for word in shlex.split(roles.shell_line(spec))))
+        self.assertEqual(argv[argv.index("--setting-sources") + 1], "project")
+
+    def test_the_lead_runs_the_renamed_command(self):
+        self.assertEqual(roles.PROMPTS["technical-lead"].format(campaign="c1"), "/run-campaign c1")
+        self.assertTrue((ROOT / "commands" / "run-campaign.md").exists())
+        self.assertFalse((ROOT / "commands" / "run.md").exists())
 
     def test_verdict_files_have_one_author(self):
         wt = "/" + str(self.wt.resolve())

@@ -90,6 +90,28 @@ def check_engine(ctx):
         yield "warn", ".delivery/deliveryctl is not executable in git: git update-index --chmod=+x .delivery/deliveryctl"
 
 
+def check_method(ctx):
+    """The project copy of the agents, skills and commands, against the manifest written with it."""
+    manifest = init.read_manifest(ctx.root)
+    if not manifest:
+        yield "warn", "no .delivery/method.json: the project does not carry the method's agents, skills and commands: 'deliveryctl init --upgrade'"
+        return
+    problems = []
+    copy = init.copy_version(ctx.root)
+    if manifest.get("version") != copy:
+        problems.append(f"method copy {manifest.get('version')}, engine copy {copy or 'absent'}")
+    for rel, sha in sorted(manifest["files"].items()):
+        path = ctx.root / rel
+        if not path.exists():
+            problems.append(f"{rel} is missing")
+        elif init.sha(path.read_bytes()) != sha:
+            problems.append(f"{rel} was edited")
+    for problem in problems:
+        yield "warn", f"method copy: {problem}: 'deliveryctl init --upgrade' restores it"
+    if not problems:
+        yield "ok", f"method copy {manifest['version']} ({len(manifest['files'])} files in .claude/)"
+
+
 def check_project(ctx):
     ctx.cfg = config.load(ctx.root)
     yield "ok", f"delivery.toml (repo_role {ctx.cfg.repo_role}, forge {ctx.cfg.forge})"
@@ -166,12 +188,18 @@ def check_settings(ctx):
         yield "warn", f".claude/settings.json is not valid JSON: {exc}"
         return
     problems = []
-    if _get(data, "enabledPlugins", init.PLUGIN_KEY) is not True:
-        problems.append(f"enabledPlugins lacks {init.PLUGIN_KEY}")
+    if _get(data, "enabledPlugins", init.PLUGIN_KEY) is not False:
+        problems.append(f"enabledPlugins does not disable {init.PLUGIN_KEY} (the project carries its own copy)")
+    for event, command in (("Stop", init.HOOK_STOP), ("SessionStart", init.HOOK_SESSION_START)):
+        entries = _get(data, "hooks", event)
+        if not any(isinstance(h, dict) and h.get("command") == command
+                   for e in entries if isinstance(e, dict) for h in e.get("hooks") or []
+                   ) if isinstance(entries, list) else True:
+            problems.append(f"the {event} hook is missing")
     if "SendMessage" not in (_get(data, "permissions", "deny") or []):
         problems.append("SendMessage is not denied")
     for problem in problems:
-        yield "warn", f".claude/settings.json: {problem}: deliveryctl init adds it"
+        yield "warn", f".claude/settings.json: {problem}: 'deliveryctl init --upgrade' fixes it"
     if not problems:
         yield "ok", ".claude/settings.json"
     ref = _get(data, "extraKnownMarketplaces", init.MARKETPLACE, "source", "ref")
@@ -344,7 +372,7 @@ def check_mentions(ctx):
 
 
 GLOBAL = (check_repository, check_plugin, check_machine, check_claude)
-PROJECT = (check_engine, check_project, check_remote, check_gitignore, check_claude_md, check_settings,
+PROJECT = (check_engine, check_method, check_project, check_remote, check_gitignore, check_claude_md, check_settings,
            check_tools, check_ci, check_trust, check_worktrees, check_location, check_releases, check_mentions)
 
 

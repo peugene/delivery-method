@@ -19,7 +19,7 @@ CARD_TEMPLATES = {"story": ("card-story.md", "s004"), "task": ("card-task.md", "
                   "anomaly": ("card-anomaly.md", "a004")}
 PROMPT_DIRS = ("agents", "commands", "skills", "rules")
 MINE = ("agents/technical-lead.md", "agents/story-implementer.md", "agents/story-reviewer.md",
-        "commands/impl-frame.md", "commands/run.md", "skills/anchoring/SKILL.md",
+        "commands/impl-frame.md", "commands/run-campaign.md", "skills/anchoring/SKILL.md",
         "skills/testing-doctrine/SKILL.md", "skills/work-orders/SKILL.md",
         "templates/impl/", "templates/campaign/", "templates/story/")
 
@@ -244,7 +244,7 @@ class PromptContractTest(unittest.TestCase):
             self.assertIn("Outcome: ", ends_with(agent), agent)
 
     def test_run_reads_what_the_engine_prints_on_exit_3(self):
-        run, engine = text_of("commands/run.md"), text_of("engine/deliveryctl/story.py")
+        run, engine = text_of("commands/run-campaign.md"), text_of("engine/deliveryctl/story.py")
         for phrase in ("max_in_flight", "anchored before", "already open", "still running"):
             with self.subTest(phrase=phrase):
                 self.assertIn(phrase, run)
@@ -252,7 +252,7 @@ class PromptContractTest(unittest.TestCase):
         self.assertRegex(run, r"1: a malformed command or an\s+internal error")
 
     def test_run_anchors_ahead_without_preparing(self):
-        run = text_of("commands/run.md")
+        run = text_of("commands/run-campaign.md")
         for needle in ("do not prepare it", "git show origin/<target>:<path>",
                        "git grep <pattern> origin/<target>", "implicit", "to reconfirm after merge",
                        "right before opening", "without `cd`", "git grep <pattern> story/<id>",
@@ -296,7 +296,7 @@ class PromptContractTest(unittest.TestCase):
                             ("templates/campaign/campaign.md", "« <id> : <titre court> »"),
                             ("templates/qualification/report.md", "<A-1 : "),
                             ("templates/spec/review-report.md", "<s001 : <short title>, AC2"),
-                            ("commands/run.md", "`defer <id> : <title>`"),
+                            ("commands/run-campaign.md", "`defer <id> : <title>`"),
                             ("agents/technical-lead.md", "`<id> : <title>`"),
                             ("agents/product-analyst.md", "`D3 : the sharing rule`")):
             with self.subTest(rel=rel):

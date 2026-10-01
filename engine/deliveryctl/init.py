@@ -1,7 +1,9 @@
 """`deliveryctl init [--role R] [--upgrade] [--dry-run]`: equip the current repository with the
-method, or refresh its engine copy (CONTRACTS.md §2, §12.2). Every change is planned before
+method, or refresh its copy of it (CONTRACTS.md §2, §12.2). Every change is planned before
 any is written, so a conflict leaves the repository untouched. Never overwrites, never commits;
-`--upgrade` refreshes the engine copy, the rules, the templates and the marketplace ref only."""
+`--upgrade` refreshes what the method owns: the engine copy, the rules, the templates, the copy
+of the agents, skills and commands (recorded in `.delivery/method.json`), the method's settings
+and the marketplace ref."""
 
 from __future__ import annotations
 
@@ -19,6 +21,7 @@ from . import config, roles
 from .core import EXIT_ERROR, EXIT_OK, EXIT_PRECONDITION, fail, main_root, repo_root, run
 
 PLUGIN_KEY = "delivery-method@delivery-method"
+PLUGIN_NAMESPACE = "delivery-method"
 MARKETPLACE = "delivery-method"
 DEFAULT_REPO = "peugene/delivery-method"
 RULES_IMPORT = "@.delivery/rules.md"
@@ -30,6 +33,12 @@ GITIGNORE = (".delivery/run/", ".delivery/**/__pycache__/", "docs/stories/*/work
 # refuses it for a stopped story in a role session, and the lead closes merged stories.
 GESTURES = ("init", "run", "merge", "spec release", "spec sync", "nightly", "note",
             "journal report", "qualify submit")
+MANIFEST = ".delivery/method.json"
+COPY_SOURCES = ("agents", "skills", "commands")
+NOT_COPIED = {"commands/init.md"}               # init stays a plugin command: it equips a project
+HOOK_STOP = '"$CLAUDE_PROJECT_DIR"/.delivery/deliveryctl hook stop'
+HOOK_SESSION_START = '"$CLAUDE_PROJECT_DIR"/.delivery/deliveryctl hook session-start'
+HOOK_MARK = "deliveryctl hook "
 LANGUAGE_RX = re.compile(r"^[a-z]{2,3}(-[A-Za-z0-9]{2,8})?$")
 IGNORED = shutil.ignore_patterns("__pycache__", "*.pyc")
 LAUNCHER = '''#!/usr/bin/env python3
@@ -152,6 +161,104 @@ def engine_steps(root: Path, plugin: Path, version: str, refresh: bool) -> list[
             file_step(root, ".delivery/deliveryctl", LAUNCHER, refresh, executable=True)]
 
 
+# -- the method's agents, skills and commands, copied into .claude/ ---------------------------
+def method_files(plugin: Path) -> dict[str, bytes]:
+    """What the project copy holds, by project path: the plugin's agents, skills and commands, with
+    the plugin namespace removed from references to those same components."""
+    sources = {}
+    for kind in COPY_SOURCES:
+        folder = plugin / kind
+        for path in sorted(folder.rglob("*")):
+            rel = path.relative_to(plugin).as_posix()
+            if path.is_file() and rel not in NOT_COPIED and "__pycache__" not in path.parts:
+                sources[rel] = path
+    names = {name for rel in sources for name in (_component(rel),) if name}
+    alternatives = "|".join(sorted(map(re.escape, names), key=len, reverse=True))
+    rx = re.compile(rf"(?<![\w-])(/?){re.escape(PLUGIN_NAMESPACE)}:({alternatives})(?![\w-])")
+    files = {}
+    for rel, path in sources.items():
+        data = path.read_bytes()
+        if path.suffix == ".md":
+            data = rx.sub(r"\1\2", data.decode("utf-8")).encode("utf-8")
+        files[".claude/" + rel] = data
+    return files
+
+
+def _component(rel: str) -> str:
+    """Name of the agent, skill or command a plugin file belongs to."""
+    parts = rel.split("/")
+    if parts[0] == "skills":
+        return parts[1] if len(parts) > 2 else ""
+    return Path(parts[-1]).stem if len(parts) == 2 else ""
+
+
+def sha(data: bytes) -> str:
+    return hashlib.sha1(data).hexdigest()
+
+
+def read_manifest(root: Path) -> dict:
+    """The version and the digest of each copied file, as written; empty when absent."""
+    try:
+        data = json.loads((Path(root) / MANIFEST).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return data if isinstance(data, dict) and isinstance(data.get("files"), dict) else {}
+
+
+def _unlinker(root: Path, rel: str) -> Callable[[], None]:
+    def write():
+        path = root / rel
+        path.unlink()
+        for parent in path.parents:
+            if parent in (root / ".claude", root) or any(parent.iterdir()):
+                break
+            parent.rmdir()
+    return write
+
+
+def method_steps(root: Path, plugin: Path, version: str, refresh: bool) -> list[Step]:
+    """The copy and its manifest. A file at a copy path that the manifest does not vouch for,
+    or that was edited since, is the project's: the plan stops on it, before anything is written."""
+    wanted = method_files(plugin)
+    recorded = read_manifest(root).get("files", {})
+    steps, conflicts = [], []
+    for rel, data in wanted.items():
+        dest = root / rel
+        if not dest.exists():
+            steps.append(Step(rel, "created", _writer_bytes(dest, data)))
+            continue
+        current = dest.read_bytes()
+        if current == data:
+            steps.append(Step(rel, "kept"))
+        elif recorded.get(rel) == sha(current):
+            steps.append(Step(rel, "updated", _writer_bytes(dest, data)) if refresh else Step(rel, "kept"))
+        else:
+            conflicts.append(rel if recorded.get(rel) else f"{rel} (not written by the method)")
+    for rel in sorted(set(recorded) - set(wanted) if refresh else ()):
+        dest = root / rel
+        if not dest.exists():
+            continue
+        if sha(dest.read_bytes()) == recorded[rel]:
+            steps.append(Step(rel, "removed", _unlinker(root, rel)))
+        else:
+            conflicts.append(f"{rel} (edited, and the method no longer has it)")
+    if conflicts:
+        fail(EXIT_PRECONDITION, "files of .claude/ differ from the method's copy; keep your edits in "
+                                "files of another name, or delete these, then run init again:\n  "
+                                + "\n  ".join(conflicts))
+    manifest = json.dumps({"version": version, "files": {rel: sha(d) for rel, d in sorted(wanted.items())}},
+                          indent=2) + "\n"
+    steps.append(file_step(root, MANIFEST, manifest, refresh))
+    return steps
+
+
+def _writer_bytes(path: Path, data: bytes) -> Callable[[], None]:
+    def write():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+    return write
+
+
 def _set_toml(text: str, key: str, value) -> str:
     rx = re.compile(rf'^({re.escape(key)}\s*=\s*)("(?:[^"\\]|\\.)*"|\[[^\]]*\]|[^\s#]+)', re.MULTILINE)
     literal = json.dumps(value, ensure_ascii=False) if isinstance(value, str) else str(value)
@@ -220,9 +327,41 @@ def ask_rules() -> list[str]:
 
 def wanted_settings(plugin: Path, version: str) -> dict:
     source = {"source": "github", "repo": plugin_repo(plugin), "ref": f"{MARKETPLACE}--v{version}"}
-    return {"enabledPlugins": {PLUGIN_KEY: True},
+    # the project carries its own copy of the method: a local session must not load the plugin's
+    # next to it (duplicate agents, skills, commands and hooks)
+    return {"enabledPlugins": {PLUGIN_KEY: False},
             "extraKnownMarketplaces": {MARKETPLACE: {"source": source}},
-            "permissions": {"deny": ["SendMessage"], "ask": ask_rules()}}
+            "permissions": {"deny": ["SendMessage"], "ask": ask_rules()},
+            "hooks": method_hooks()}
+
+
+def method_hooks() -> dict:
+    def entry(command: str, timeout: int) -> dict:
+        return {"hooks": [{"type": "command", "command": command, "timeout": timeout}]}
+    return {"Stop": [entry(HOOK_STOP, 40)], "SessionStart": [entry(HOOK_SESSION_START, 10)]}
+
+
+def _owned(entry) -> bool:
+    return isinstance(entry, dict) and any(
+        HOOK_MARK in str(h.get("command", "")) for h in entry.get("hooks") or [] if isinstance(h, dict))
+
+
+def merge_hooks(merged: dict, wanted: dict, refresh: bool) -> None:
+    """The method owns its hook entries (those that call 'deliveryctl hook'): init adds them where
+    missing, --upgrade replaces them in place; the project's own hooks are never touched."""
+    hooks = merged.setdefault("hooks", {})
+    if not isinstance(hooks, dict):
+        return
+    for event, entries in wanted.items():
+        current = hooks.get(event)
+        if not isinstance(current, list):
+            hooks[event] = copy.deepcopy(entries)
+        elif not any(_owned(e) for e in current):
+            current += copy.deepcopy(entries)
+        elif refresh:
+            fresh = iter(copy.deepcopy(entries))
+            hooks[event] = [next(fresh, None) if _owned(e) else e for e in current]
+            hooks[event] = [e for e in hooks[event] if e is not None]
 
 
 def add_only(current: dict, wanted: dict, where: str = "") -> list[str]:
@@ -243,8 +382,11 @@ def add_only(current: dict, wanted: dict, where: str = "") -> list[str]:
 
 def merge_settings(current: dict, wanted: dict, refresh: bool) -> tuple[dict, list[str]]:
     """Once declared, the marketplace source belongs to the team (a fork, an internal mirror):
-    init only adds its ref, and --upgrade refreshes it."""
+    init only adds its ref, and --upgrade refreshes it. Both disable the plugin in the project;
+    --upgrade also replaces the method's hooks."""
     merged = copy.deepcopy(current)
+    wanted = dict(wanted)
+    merge_hooks(merged, wanted.pop("hooks"), refresh)
     ref = wanted["extraKnownMarketplaces"][MARKETPLACE]["source"]["ref"]
     known = merged.get("extraKnownMarketplaces")
     entry = known.get(MARKETPLACE) if isinstance(known, dict) else None
@@ -254,6 +396,11 @@ def merge_settings(current: dict, wanted: dict, refresh: bool) -> tuple[dict, li
         pinned = isinstance(source, dict) and ("ref" in source or source.get("source") in ("github", "git"))
         if pinned and (refresh or "ref" not in source):
             source["ref"] = ref
+    # the method owns this key: a project-scope plugin install writes it as true before init runs
+    plugins = merged.setdefault("enabledPlugins", {})
+    if isinstance(plugins, dict):
+        plugins[PLUGIN_KEY] = False
+    wanted.pop("enabledPlugins")
     if refresh:
         return merged, []
     return merged, add_only(merged, wanted)
@@ -344,6 +491,7 @@ def install_steps(root: Path, plugin: Path, version: str, args, notes: list[str]
     if existing and existing != version:
         notes.append(f"engine copy {existing}, plugin {version}: 'deliveryctl init --upgrade' refreshes it")
     steps += engine_steps(root, plugin, version, refresh=False)
+    steps += method_steps(root, plugin, version, refresh=False)
     steps.append(claude_md_step(root, plugin))
     steps.append(settings_step(root, plugin, existing or version, refresh=False))
     steps.append(gitignore_step(root))
@@ -363,8 +511,10 @@ def next_steps(root: Path, steps: list[Step], forge: str, upgrade: bool) -> list
     changed = [s.path for s in steps if s.status != "kept"]
     if not changed:
         return ["Rien à changer : le dépôt est déjà équipé. Diagnostic : .delivery/deliveryctl doctor"]
-    paths = sorted({".delivery" if p.startswith(".delivery/") else p.rstrip("/") for p in changed})
-    lines = ["Relisez le diff de .delivery/ et de .claude/settings.json, puis commitez-le."] if upgrade else \
+    paths = sorted({".delivery" if p.startswith(".delivery/") else
+                    ".claude/" + p.split("/")[1] if p.startswith(".claude/") and p != ".claude/settings.json" else
+                    p.rstrip("/") for p in changed})
+    lines = ["Relisez le diff de .delivery/, de .claude/ et de .claude/settings.json, puis commitez-le."] if upgrade else \
         ["Relisez les fichiers posés, puis commitez-les (init ne commite rien) :"]
     lines.append("  git add " + " ".join(paths))
     mode = run(["git", "config", "--get", "core.fileMode"], cwd=root, check=False).stdout.strip()
@@ -381,6 +531,10 @@ def next_steps(root: Path, steps: list[Step], forge: str, upgrade: bool) -> list
     if not config.machine_path().exists():
         lines.append(f"Réglages de la machine (notifications, journal) : {config.machine_path()} "
                      "(CONTRACTS.md §4).")
+    lines.append("Les agents, skills et commandes de la méthode sont copiés dans .claude/ : une session "
+                 "Claude Code du dépôt (locale ou dans le cloud) les trouve sans plugin ; "
+                 "les commandes s'appellent /spec-frame, /impl-frame, … ; ne les modifiez pas à la main : "
+                 "--upgrade refuse d'écraser une copie modifiée.")
     lines.append("Diagnostic : .delivery/deliveryctl doctor")
     return lines
 
@@ -400,6 +554,7 @@ def main(args) -> int:
             fail(EXIT_PRECONDITION, f"the project engine {existing} is newer than the plugin {version}: "
                                     "update the plugin first")
         steps = engine_steps(root, plugin, version, refresh=True)
+        steps += method_steps(root, plugin, version, refresh=True)
         steps.append(settings_step(root, plugin, version, refresh=True))
         forge = ""
     else:

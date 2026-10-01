@@ -51,7 +51,7 @@ PROMPTS = {
     "story-implementer": "Story {label} — read docs/stories/{id}/order.md and carry it out. Mode: {mode}.",
     "story-reviewer": "Story {label} — review the change at code tree {tree} against the target branch {target}. "
                       "Loop {loop}.",
-    "technical-lead": "/delivery-method:run {campaign}",
+    "technical-lead": "/run-campaign {campaign}",
     "qualification-runner": "Qualification {id}: carry out qualification/order.md.",
 }
 
@@ -168,19 +168,20 @@ def launch(cfg: Config, role: str, worktree: Path, scope: str, prompt: str, head
     """Everything a window needs to start a role session: argv, env, cwd, session id, name."""
     if role not in ROLES:
         fail(EXIT_ERROR, f"unknown role '{role}'")
-    plugin = plugin_root()
-    if not plugin:
-        fail(EXIT_PRECONDITION, "plugin not found: set plugin_dir in ~/.config/delivery-method/machine.toml")
+    if not (Path(worktree) / ".claude" / "agents" / f"{role}.md").exists():
+        fail(EXIT_PRECONDITION, f".claude/agents/{role}.md not found in {worktree}: the project does not "
+                                "carry the method's agents (commit them, or run 'deliveryctl init --upgrade')")
     settings = render(cfg, role, worktree, scope, extra_env)
     session_id = str(uuid.uuid4())
     name = f"{cfg.agent_prefix}-{scope}-{role}"
-    argv = ["claude", "--agent", f"{PLUGIN}:{role}", "--plugin-dir", str(plugin),
-            "--permission-mode", "dontAsk", "--setting-sources", "project",
+    argv = ["claude", "--agent", role, "--permission-mode", "dontAsk", "--setting-sources", "project",
             "--settings", str(settings), "--session-id", session_id, "--name", name]
     if headless:
         argv += ["-p", "--output-format", "stream-json", "--verbose"]
     argv.append(prompt)
-    env = {"DELIVERY_ROLE": role, "DELIVERY_STORY": scope}
+    # the project's engine first, whether or not the SessionStart hook runs
+    env = {"DELIVERY_ROLE": role, "DELIVERY_STORY": scope,
+           "PATH": f"{Path(worktree) / '.delivery'}{os.pathsep}{os.environ.get('PATH', '')}"}
     env.update(extra_env or {})
     return {"argv": argv, "env": env, "cwd": str(worktree), "session_id": session_id,
             "name": name, "settings": str(settings)}
