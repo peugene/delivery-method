@@ -101,7 +101,11 @@ def fake_forge(tmp: Path) -> Path:
 
 class RepoCase(unittest.TestCase):
     """Each test gets a bare 'origin', a main checkout with one commit on 'main', and an
-    isolated HOME / XDG dirs so no user setting leaks in or out."""
+    isolated HOME / XDG dirs so no user setting leaks in or out. The checkout carries a stub
+    agent per role in .claude/agents/, as an equipped project does (`with_agents = False` for
+    the tests of init, which writes them)."""
+
+    with_agents = True
 
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp(prefix="dm-test-"))
@@ -128,6 +132,9 @@ class RepoCase(unittest.TestCase):
         git(self.repo, "init", "--quiet")
         write(self.repo / "README.md", "# todo\n")
         write(self.repo / "src" / "app.txt", "v1\n")
+        from deliveryctl.core import ROLES
+        for role in ROLES if self.with_agents else ():     # the project copy role sessions launch from
+            write(self.repo / ".claude" / "agents" / f"{role}.md", f"---\nname: {role}\n---\n")
         git(self.repo, "add", "-A")
         git(self.repo, "commit", "--quiet", "-m", "initial")
         git(self.repo, "remote", "add", "origin", str(self.origin))

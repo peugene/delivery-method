@@ -18,6 +18,8 @@ def snapshot(root: Path) -> dict:
 
 
 class InitTest(RepoCase):
+    with_agents = False
+
     def cli(self, *argv):
         out, err = io.StringIO(), io.StringIO()
         with redirect_stdout(out), redirect_stderr(err):
@@ -49,9 +51,17 @@ class InitTest(RepoCase):
         self.assertIn("@.delivery/rules.md", claude_md)
         self.assertIn("## Project conventions", claude_md)
         data = self.settings()
-        self.assertIs(data["enabledPlugins"][init.PLUGIN_KEY], True)
+        self.assertIs(data["enabledPlugins"][init.PLUGIN_KEY], False)
         self.assertEqual(data["extraKnownMarketplaces"]["delivery-method"]["source"]["ref"],
                          f"delivery-method--v{VERSION}")
+        self.assertEqual(data["hooks"], init.method_hooks())
+        stop = data["hooks"]["Stop"][0]["hooks"][0]
+        self.assertEqual((stop["command"], stop["timeout"]),
+                         ('"$CLAUDE_PROJECT_DIR"/.delivery/deliveryctl hook stop', 40))
+        start = data["hooks"]["SessionStart"][0]
+        self.assertNotIn("matcher", start)
+        self.assertEqual((start["hooks"][0]["command"], start["hooks"][0]["timeout"]),
+                         ('"$CLAUDE_PROJECT_DIR"/.delivery/deliveryctl hook session-start', 10))
         self.assertIn("SendMessage", data["permissions"]["deny"])
         for rule in ("Bash(deliveryctl merge *)", "Bash(.delivery/deliveryctl merge *)",
                      "Bash(deliveryctl nightly)", "Bash(.delivery/deliveryctl story next *--go*)"):
@@ -83,7 +93,7 @@ class InitTest(RepoCase):
         self.assertEqual(data["model"], "opus")
         self.assertEqual(data["permissions"]["allow"], ["Bash(npm test)"])
         self.assertEqual(data["permissions"]["deny"], ["Read(./.env)", "SendMessage"])
-        self.assertIs(data["enabledPlugins"][init.PLUGIN_KEY], True)
+        self.assertIs(data["enabledPlugins"][init.PLUGIN_KEY], False)
         claude_md = (self.repo / "CLAUDE.md").read_text()
         self.assertTrue(claude_md.startswith("# Todo\n\nKeep answers short.\n"))
         self.assertIn("\n@.delivery/rules.md\n", claude_md)
@@ -94,12 +104,140 @@ class InitTest(RepoCase):
         self.assertEqual((self.repo / "Justfile").read_text(), "check:\n    npm test\n")
 
     def test_conflict_is_listed_and_nothing_is_written(self):
-        write(self.repo / ".claude" / "settings.json", json.dumps({"enabledPlugins": {init.PLUGIN_KEY: False}}))
+        write(self.repo / ".claude" / "settings.json", json.dumps({"enabledPlugins": {init.PLUGIN_KEY: True}}))
         code, out = self.cli("init", "--role", "impl", "--forge", "github")
         self.assertEqual(code, 3)
-        self.assertIn("enabledPlugins.delivery-method@delivery-method: false", out)
+        self.assertIn("enabledPlugins.delivery-method@delivery-method: true", out)
         self.assertFalse((self.repo / "delivery.toml").exists())
         self.assertFalse((self.repo / ".delivery").exists())
+
+    def test_copy_of_the_method_lands_in_claude_without_the_namespace(self):
+        self.init()
+        claude = self.repo / ".claude"
+        for agent in (ROOT / "agents").glob("*.md"):
+            self.assertTrue((claude / "agents" / agent.name).exists(), agent.name)
+        for skill in (ROOT / "skills").iterdir():
+            self.assertTrue((claude / "skills" / skill.name / "SKILL.md").exists(), skill.name)
+        commands = sorted(p.name for p in (claude / "commands").iterdir())
+        self.assertEqual(commands, sorted(p.name for p in (ROOT / "commands").glob("*.md") if p.name != "init.md"))
+        self.assertIn("run-campaign.md", commands)
+        lead = (claude / "agents" / "technical-lead.md").read_text()
+        self.assertIn("`/run-campaign <campaign>`", lead)
+        self.assertIn("skills `anchoring` and", lead)
+        self.assertNotIn("delivery-method:", lead)
+        plugin_lead = (ROOT / "agents" / "technical-lead.md").read_text()
+        self.assertIn("/delivery-method:run-campaign", plugin_lead)    # the plugin's own files keep it
+        spec_frame = (claude / "commands" / "spec-frame.md").read_text()
+        self.assertIn("`claude --agent product-analyst`", spec_frame)
+        self.assertIn("/spec-write <incr>", spec_frame)
+        self.assertNotIn("delivery-method:", spec_frame)
+        manifest = json.loads((self.repo / ".delivery" / "method.json").read_text())
+        self.assertEqual(manifest["version"], VERSION)
+        self.assertEqual(set(manifest["files"]), {p.relative_to(self.repo).as_posix()
+                                                  for p in claude.rglob("*") if p.is_file()} - {".claude/settings.json"})
+        for rel, sha in manifest["files"].items():
+            self.assertEqual(init.sha((self.repo / rel).read_bytes()), sha)
+
+    def test_namespace_is_removed_from_known_names_only(self):
+        plugin = self.tmp / "plugin"
+        for rel, text in {"agents/a.md": "see `delivery-method:s`, /delivery-method:c and /delivery-method:init, "
+                                         "delivery-method:other, delivery-method:s-x\n",
+                          "skills/s/SKILL.md": "x", "skills/s/notes.txt": "delivery-method:s\n",
+                          "commands/c.md": "y", "commands/init.md": "z"}.items():
+            write(plugin / rel, text)
+        files = init.method_files(plugin)
+        self.assertEqual(sorted(files), [".claude/agents/a.md", ".claude/commands/c.md",
+                                         ".claude/skills/s/SKILL.md", ".claude/skills/s/notes.txt"])
+        self.assertEqual(files[".claude/agents/a.md"].decode(),
+                         "see `s`, /c and /delivery-method:init, delivery-method:other, delivery-method:s-x\n")
+        self.assertEqual(files[".claude/skills/s/notes.txt"], b"delivery-method:s\n")
+
+    def test_init_refuses_a_different_file_at_a_copy_path(self):
+        write(self.repo / ".claude" / "agents" / "refuter.md", "mine\n")
+        code, out = self.cli("init", "--role", "impl", "--forge", "github")
+        self.assertEqual(code, 3)
+        self.assertIn(".claude/agents/refuter.md", out)
+        self.assertFalse((self.repo / ".delivery").exists())
+        write(self.repo / ".claude" / "agents" / "mine.md", "the project's own\n")
+
+    def test_upgrade_refreshes_the_copy_and_leaves_the_projects_own_files(self):
+        self.init()
+        write(self.repo / ".claude" / "agents" / "mine.md", "the project's own\n")
+        write(self.repo / ".claude" / "skills" / "mine" / "SKILL.md", "own skill\n")
+        manifest_path = self.repo / ".delivery" / "method.json"
+        manifest = json.loads(manifest_path.read_text())
+        old = self.repo / ".claude" / "commands" / "gone.md"
+        write(old, "from an older version\n")
+        write(self.repo / ".claude" / "skills" / "gone" / "SKILL.md", "from an older version\n")
+        manifest["files"][".claude/commands/gone.md"] = init.sha(old.read_bytes())
+        manifest["files"][".claude/skills/gone/SKILL.md"] = init.sha(b"from an older version\n")
+        old_text = "# an older refuter\n"
+        refuter = self.repo / ".claude" / "agents" / "refuter.md"
+        refuter.write_text(old_text)
+        manifest["files"][".claude/agents/refuter.md"] = init.sha(old_text.encode())
+        manifest_path.write_text(json.dumps(manifest))
+        data = self.settings()
+        data["enabledPlugins"][init.PLUGIN_KEY] = True              # equipped by 0.1.0
+        data["hooks"] = {"Stop": [{"hooks": [{"type": "command", "command": "mine"}]},
+                                  {"hooks": [{"type": "command", "command": "x/.delivery/deliveryctl hook stop"}]}]}
+        write(self.repo / ".claude" / "settings.json", json.dumps(data))
+        code, out = self.cli("init", "--upgrade")
+        self.assertEqual(code, 0, out)
+        self.assertIn("updated  .claude/agents/refuter.md", out)
+        self.assertIn("removed  .claude/commands/gone.md", out)
+        self.assertEqual(refuter.read_text(), (ROOT / "agents" / "refuter.md").read_text().replace(
+            "delivery-method:", ""))
+        self.assertFalse(old.exists())
+        self.assertFalse((self.repo / ".claude" / "skills" / "gone").exists())
+        self.assertEqual((self.repo / ".claude" / "agents" / "mine.md").read_text(), "the project's own\n")
+        self.assertTrue((self.repo / ".claude" / "skills" / "mine" / "SKILL.md").exists())
+        data = self.settings()
+        self.assertIs(data["enabledPlugins"][init.PLUGIN_KEY], False)
+        self.assertEqual(data["hooks"]["Stop"][0]["hooks"][0]["command"], "mine")
+        self.assertEqual([e["hooks"][0]["command"] for e in data["hooks"]["Stop"]],
+                         ["mine", init.HOOK_STOP])
+        self.assertEqual(data["hooks"]["SessionStart"], init.method_hooks()["SessionStart"])
+        self.assertNotIn(".claude/commands/gone.md", json.loads(manifest_path.read_text())["files"])
+        code, out = self.cli("doctor")
+        self.assertNotIn("warn: method copy", out)
+
+    def test_upgrade_refuses_a_hand_edited_copy_before_writing(self):
+        self.init()
+        edited = self.repo / ".claude" / "agents" / "refuter.md"
+        edited.write_text("edited by hand\n")
+        (self.repo / ".claude" / "commands" / "spec-frame.md").unlink()
+        data = self.settings()
+        data["enabledPlugins"][init.PLUGIN_KEY] = True
+        write(self.repo / ".claude" / "settings.json", json.dumps(data))
+        (self.repo / ".delivery" / "VERSION").write_text("0.0.1\n")
+        before = snapshot(self.repo)
+        code, out = self.cli("init", "--upgrade")
+        self.assertEqual(code, 3)
+        self.assertIn(".claude/agents/refuter.md", out)
+        self.assertEqual(snapshot(self.repo), before)
+
+    def test_doctor_warns_on_a_missing_or_edited_copy(self):
+        code, out = self.cli("doctor")
+        self.assertNotIn("method copy", out)            # no project copy at all: engine warning only
+        self.init()
+        code, out = self.cli("doctor")
+        self.assertIn("ok: method copy", out)
+        self.assertNotIn("warn: method copy", out)
+        (self.repo / ".claude" / "agents" / "refuter.md").write_text("edited\n")
+        (self.repo / ".claude" / "skills" / "anchoring" / "SKILL.md").unlink()
+        data = self.settings()
+        data["enabledPlugins"][init.PLUGIN_KEY] = True
+        del data["hooks"]["Stop"]
+        write(self.repo / ".claude" / "settings.json", json.dumps(data))
+        code, out = self.cli("doctor")
+        for text in ("warn: method copy: .claude/agents/refuter.md was edited",
+                     "warn: method copy: .claude/skills/anchoring/SKILL.md is missing",
+                     "does not disable delivery-method@delivery-method", "the Stop hook is missing"):
+            self.assertIn(text, out)
+        self.assertIn("deliveryctl init --upgrade", out)
+        (self.repo / ".delivery" / "method.json").unlink()
+        code, out = self.cli("doctor")
+        self.assertIn("warn: no .delivery/method.json", out)
 
     def test_role_is_required_and_dry_run_writes_nothing(self):
         code, out = self.cli("init", "--forge", "github")

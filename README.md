@@ -61,25 +61,32 @@ rapides, et le bit exécutable de `.delivery/deliveryctl` y est conservé.
 
 ```sh
 claude plugin marketplace add peugene/delivery-method
-claude plugin install delivery-method@delivery-method --scope project
+claude plugin install delivery-method@delivery-method
 ```
 
-Pour un essai sans installation : `claude --plugin-dir /chemin/vers/delivery-method`.
+L'installation pour l'utilisateur suffit : le plugin ne sert qu'à équiper un dépôt (`/delivery-method:init`),
+`init` copie ensuite la méthode dans le dépôt lui-même. Pour un essai sans installation : `claude --plugin-dir /chemin/vers/delivery-method`.
 
 **2. Équiper le dépôt.** Dans une session Claude ouverte à la racine de la copie principale,
 tapez `/delivery-method:init`. La commande pose cinq questions (contenu du dépôt ; langue du
 contenu ; forge `github` ou `gitlab` ; commande `check` ; commandes `acceptance` et
 `serve`), recommande une réponse pour chacune, lance `deliveryctl init` et affiche le bilan.
 `init` n'écrase rien et ne commite rien. Il pose `delivery.toml` (réglages du projet),
-`.delivery/` (copie du moteur, règles communes, gabarits), un `justfile` d'amorce dont les
+`.delivery/` (copie du moteur, règles communes, gabarits, manifeste `method.json`),
+`.claude/agents/`, `.claude/skills/` et `.claude/commands/` (copie des agents, skills et commandes de
+la méthode, sans espace de noms : `/spec-frame`, `/impl-frame`, `/run-campaign`…), un `justfile` d'amorce dont les
 recettes échouent tant qu'elles ne sont pas écrites, la CI de la forge
 (`.github/workflows/delivery.yml` ou `.gitlab/delivery-ci.yml`) et, pour un dépôt `spec` ou
 `single` qui n'en a pas encore, un squelette `spec/` (`spec.toml`, contrat du harnais, libellés,
 harnais Playwright et application vide, `CHANGELOG.md`, brief, glossaire) ; il complète par ajout
 `CLAUDE.md` (import `@.delivery/rules.md`, section `## Project conventions`), `.gitignore` et
-`.claude/settings.json` (plugin activé, messagerie entre sessions refusée, confirmation pour les
-gestes humains). Écrivez les recettes du `justfile` pour votre pile, relisez, puis commitez : un
-coéquipier qui ouvre le projet dans Claude Code se voit alors proposer le plugin.
+`.claude/settings.json` (plugin désactivé dans le projet, car sa copie ferait doublon avec celle du
+projet ; hooks `Stop` et `SessionStart` ; messagerie entre sessions refusée ; confirmation pour les
+gestes humains). Écrivez les recettes du `justfile` pour votre pile, relisez, puis commitez : toute
+session Claude Code qui clone le dépôt, y compris une session cloud qui n'installe aucun plugin,
+y trouve la méthode entière. Ne modifiez pas à la main les fichiers copiés sous `.claude/` :
+`--upgrade` refuse d'écraser une copie modifiée (les fichiers que vous y ajoutez vous-même ne sont
+jamais touchés).
 
 **3. Raccourci dans le shell.** Dans un projet, le moteur s'exécute toujours depuis sa copie,
 `.delivery/deliveryctl`. Pour votre shell, ajoutez à `~/.bashrc` ou `~/.zshrc` :
@@ -89,14 +96,17 @@ coéquipier qui ouvre le projet dans Claude Code se voit alors proposer le plugi
 ```
 
 La garde sur `CLAUDECODE` laisse les sessions Claude hors de cette fonction : Claude Code rejoue
-les fonctions de votre fichier de démarrage dans son outil Bash, où elle masquerait le lanceur du
-plugin. Dans ces sessions, `deliveryctl` est déjà dans le `PATH` : c'est le lanceur du plugin, qui
-exécute la copie du projet, ou celle du plugin hors de tout projet. Vérifiez enfin avec
+les fonctions de votre fichier de démarrage dans son outil Bash, où elle masquerait la copie du
+projet. Dans ces sessions, `deliveryctl` est déjà dans le `PATH` : le hook `SessionStart` du projet y met
+`.delivery/`, et c'est donc la copie du projet. Vérifiez enfin avec
 `deliveryctl doctor`, qui ne modifie rien : chaque ligne vaut `ok`, `note` ou `warn`.
 
 **Mettre à jour.** Mettez à jour le plugin (`/plugin` dans Claude Code), puis relancez
 `/delivery-method:init` : sur un dépôt équipé, il lance `deliveryctl init --upgrade`, qui
-rafraîchit `.delivery/` et la version épinglée dans `.claude/settings.json`. Relisez, commitez.
+rafraîchit `.delivery/`, la copie sous `.claude/` (en retirant les fichiers que la nouvelle version
+n'a plus), les hooks et la version épinglée dans `.claude/settings.json`, et désactive le plugin
+dans le projet. Si un fichier copié a été modifié à la main, il refuse, en les listant, avant
+d'écrire quoi que ce soit. Relisez, commitez.
 
 **Publier une version du plugin** (mainteneurs). `init` épingle la marketplace sur l'étiquette
 `delivery-method--vX.Y.Z` : sans elle, un coéquipier ne peut pas installer le plugin. Montez la
@@ -109,12 +119,12 @@ même version dans `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.jso
 Pour un parcours complet et illustré, une spec et deux implémentations d'une liste de tâches,
 avec le schéma de chaque phase et ses commandes : [`docs/guide.md`](docs/guide.md).
 
-Les commandes `/delivery-method:…` se tapent dans une session Claude, les commandes
-`deliveryctl …` dans le shell. Avant un `/clear`, `/delivery-method:handoff` range dans les
+Dans un dépôt équipé, les commandes `/spec-frame`, `/impl-frame`… se tapent dans une session Claude, les commandes
+`deliveryctl …` dans le shell. Avant un `/clear`, `/handoff` range dans les
 fichiers ce qui a été décidé et donne la ligne de reprise.
 
 Pour réfléchir à une idée avant d'en faire du travail, à n'importe quelle phase :
-`/delivery-method:brainstorm <idée>`. Rien n'est écrit pendant la discussion ; à la fin, vous
+`/brainstorm <idée>`. Rien n'est écrit pendant la discussion ; à la fin, vous
 choisissez d'oublier, d'archiver dans `docs/maybe/` (dossier qu'aucun agent ne lit de lui-même)
 ou de cadrer, et seules les décisions que vous avez validées passent au cadrage.
 
@@ -131,19 +141,19 @@ demande de fusion qui porte le changement.
    ```sh
    (cd spec/acceptance && npm install && npx playwright install chromium)
    ```
-2. `claude --agent delivery-method:product-analyst`, puis `/delivery-method:spec-frame 01-core`.
+2. `claude --agent product-analyst`, puis `/spec-frame 01-core`.
    L'analyste lit l'existant, donne son avis, pose des questions numérotées avec sa
    recommandation, et consigne vos décisions mot pour mot. Le **GO de cadrage** se donne
    explicitement.
-3. `/delivery-method:spec-write 01-core` : stories, contrat d'IHM, libellés ;
+3. `/spec-write 01-core` : stories, contrat d'IHM, libellés ;
    `deliveryctl spec lint` doit être vert.
-4. `/delivery-method:spec-review 01-core` : taille et angles annoncés, votre **GO de revue**,
+4. `/spec-review 01-core` : taille et angles annoncés, votre **GO de revue**,
    puis un relecteur par angle, un réfuteur par constat et un rapport daté dans
    `refinement/01-core/reviews/`.
-5. `/delivery-method:spec-write 01-core` applique vos réponses ; au **GO de clôture**, les
+5. `/spec-write 01-core` applique vos réponses ; au **GO de clôture**, les
    stories passent en `ready`.
-6. `/delivery-method:spec-write 01-core --acceptance`, puis
-   `/delivery-method:spec-review 01-core --acceptance` : les tests, tous rouges contre
+6. `/spec-write 01-core --acceptance`, puis
+   `/spec-review 01-core --acceptance` : les tests, tous rouges contre
    l'application vide.
 7. **Publication** : `deliveryctl spec release` calcule la version (critère retiré ou modifié :
    majeure ; ajouté : mineure ; sinon corrective ; `0.x` tant que `release_stage` vaut
@@ -155,8 +165,8 @@ demande de fusion qui porte le changement.
 1. Dépôt `impl` : `deliveryctl spec sync 0.1.0 --source <url du dépôt de spec>` copie une version
    publiée (un commit : `spec/`, `spec.lock`, `docs/conformance.md`) ; `deliveryctl spec verify`
    contrôle ensuite, sans réseau, que `spec/` n'a pas bougé.
-2. Cadrage : `claude --agent delivery-method:technical-lead`, puis
-   `/delivery-method:impl-frame <campagne>` : `docs/architecture.md`, un ADR par choix
+2. Cadrage : `claude --agent technical-lead`, puis
+   `/impl-frame <campagne>` : `docs/architecture.md`, un ADR par choix
    structurant, les cartes de `backlog/` en `draft`, et les `## Project conventions` proposées
    pour `CLAUDE.md`, que vous collez et commitez.
 3. **GO des cartes** : passez les cartes validées en `status: ready`, commitez, et amenez ce
@@ -194,7 +204,7 @@ la relancer de zéro après correction de la carte, supprimez aussi cette branch
 
 Une par implémentation et par version livrée, obligatoire avant toute livraison à un tiers.
 
-1. `claude --agent delivery-method:qualification-lead`, puis `/delivery-method:qualify 0.2.0`.
+1. `claude --agent qualification-lead`, puis `/qualify 0.2.0`.
    Le lead ouvre la recette (branche `qualification/0.2.0`), dresse la surface depuis le code
    (routes, commandes, tâches planifiées, installation, retrait, mise à jour), écrit les
    contrôles (`Q17 : un compte non invité ne lit pas une liste partagée`), confronte la
@@ -231,17 +241,20 @@ cron doit tourner (`sudo service cron start`) et la machine virtuelle être acti
 
 ## Commandes du plugin
 
+Dans un dépôt équipé, les commandes sont celles de la copie du projet, sans espace de noms ; seule
+`init`, qui équipe le dépôt, reste une commande du plugin (`/delivery-method:init`).
+
 | Commande | Session | Effet |
 |---|---|---|
-| `/delivery-method:init [--upgrade]` | humaine, racine du dépôt | équipe le dépôt, ou met à jour sa copie du moteur |
-| `/delivery-method:spec-frame <incr> [--discover] [--market <domaine>]` | `product-analyst` | cadrage d'un incrément jusqu'au GO de cadrage |
-| `/delivery-method:spec-write <incr> [<story>] [--acceptance]` | `product-analyst` | stories, corrections jusqu'au GO de clôture ; `--acceptance` : les tests |
-| `/delivery-method:spec-review <incr> [deep\|standard\|light] [--acceptance]` | `product-analyst` | relecture contradictoire, rapport daté |
-| `/delivery-method:impl-frame <campagne> [sujet]` | `technical-lead` | architecture, ADR, cartes en brouillon |
-| `/delivery-method:run <campagne>` | `technical-lead`, de rôle | le run ; lancée par `deliveryctl run`, jamais à la main |
-| `/delivery-method:qualify <incr>` | `qualification-lead` | recette d'un incrément |
-| `/delivery-method:handoff [<incr>\|<campagne>]` | tout lead, humaine | passation avant `/clear` |
-| `/delivery-method:brainstorm <idée>` | humaine, tout dépôt | explorer une idée sans rien engager ; clôture : oublier, archiver dans `docs/maybe/` ou cadrer |
+| `/delivery-method:init [--upgrade]` | humaine, racine du dépôt | équipe le dépôt, ou met à jour sa copie de la méthode (moteur, agents, skills, commandes) |
+| `/spec-frame <incr> [--discover] [--market <domaine>]` | `product-analyst` | cadrage d'un incrément jusqu'au GO de cadrage |
+| `/spec-write <incr> [<story>] [--acceptance]` | `product-analyst` | stories, corrections jusqu'au GO de clôture ; `--acceptance` : les tests |
+| `/spec-review <incr> [deep\|standard\|light] [--acceptance]` | `product-analyst` | relecture contradictoire, rapport daté |
+| `/impl-frame <campagne> [sujet]` | `technical-lead` | architecture, ADR, cartes en brouillon |
+| `/run-campaign <campagne>` | `technical-lead`, de rôle | le run ; lancée par `deliveryctl run`, jamais à la main |
+| `/qualify <incr>` | `qualification-lead` | recette d'un incrément |
+| `/handoff [<incr>\|<campagne>]` | tout lead, humaine | passation avant `/clear` |
+| `/brainstorm <idée>` | humaine, tout dépôt | explorer une idée sans rien engager ; clôture : oublier, archiver dans `docs/maybe/` ou cadrer |
 
 ## Rôles
 
@@ -256,7 +269,7 @@ cron doit tourner (`sudo service cron start`) et la machine virtuelle être acti
 | `qualification-lead` | recette | humaine | corriger le produit |
 | `qualification-runner` | recette | de rôle, jetable | corriger le produit ; pousser |
 
-Un lead en session humaine se lance par `claude --agent delivery-method:<rôle>`. Une session de
+Un lead en session humaine se lance par `claude --agent <rôle>`. Une session de
 rôle, lancée par le moteur, ne pose jamais de question : elle tranche et documente, ou elle
 diffère. Rédacteur et relecteur ne sont jamais la même session, et les sessions ne se parlent
 pas : elles passent par les fichiers du dépôt.
@@ -295,7 +308,7 @@ d'une story arrêtée.
 | `journal setup`, `journal flush`, `journal report` (**H**) | mise en place, envoi de la file locale, lecture hors de tout dépôt (voir Journal d'expérience) |
 | `kit lint [chemin]` | contrôle du plugin lui-même |
 
-`hook stop` et `hook session-start` sont appelés par les hooks du plugin. Codes de sortie :
+`hook stop` et `hook session-start` sont appelés par les hooks du projet (`.claude/settings.json`). Codes de sortie :
 0 succès ; 1 erreur d'usage ou interne ; 2 contrôle rouge ; 3 précondition non remplie ou délai
 écoulé ; 4 refusé ; 5 outil externe indisponible.
 

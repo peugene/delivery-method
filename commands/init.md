@@ -54,23 +54,25 @@ Fail closed: on the first failure, say why and stop.
 1. Compare `DELIVERY_USE_PLUGIN_ENGINE=1 deliveryctl --version` (plugin) with
    `.delivery/VERSION` (project). Not newer: run `deliveryctl doctor`, show it, and stop.
 2. Run `DELIVERY_USE_PLUGIN_ENGINE=1 deliveryctl init --upgrade`, so that the plugin's engine,
-   not the project copy, performs it. It refreshes `.delivery/` and the marketplace ref only.
+   not the project copy, performs it. It refreshes `.delivery/`, the copy of the agents, skills
+   and commands in `.claude/`, the method's hooks and the marketplace ref, and disables the
+   plugin in the project settings. It refuses, with the list, a copied file edited by hand.
 
 **Then, in both modes**
 1. Show the engine's summary as printed: each file with its status, notes, next steps.
-2. Show `git status --short` and `git diff -- CLAUDE.md .gitignore .claude/settings.json`,
+2. Show `git status --short` and `git diff -- CLAUDE.md .gitignore .claude/settings.json` (the copy in `.claude/` is the plugin's own files, listed by `git status`),
    and ask the owner to review. Give the `git add` line of the summary and a commit command;
    the owner commits, because settings, permissions and conventions are the owner's commits.
 3. Next steps, one line each: write the justfile recipes for the stack; the shell alias and
    the machine settings of the README; `deliveryctl doctor`; then the first command of the
-   phase: `claude --agent delivery-method:product-analyst` and
-   `/delivery-method:spec-frame <incr>` for a spec; `deliveryctl spec sync <version> --source <url>`
-   (in `impl`) and `claude --agent delivery-method:technical-lead` with
-   `/delivery-method:impl-frame <campaign>` for an implementation.
+   phase: `claude --agent product-analyst` and
+   `/spec-frame <incr>` for a spec; `deliveryctl spec sync <version> --source <url>`
+   (in `impl`) and `claude --agent technical-lead` with
+   `/impl-frame <campaign>` for an implementation.
 
 ## Outputs
 - Files written by the engine only: `delivery.toml`, `.delivery/`, `CLAUDE.md`,
-  `.claude/settings.json`, `.gitignore`, `justfile`, the CI file of the forge. Nothing committed.
+  `.claude/settings.json`, `.claude/agents|skills|commands/` (the method's copy), `.gitignore`, `justfile`, the CI file of the forge. Nothing committed.
 
 ## Ends with
 The summary and the owner's gestures (review, commit, next command), then a last line:

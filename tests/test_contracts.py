@@ -79,7 +79,7 @@ class DocsTest(RepoCase):
         self.assertIn(qualify.ORDER, roles.PROMPTS["qualification-runner"])
         os.environ.update(DELIVERY_ROLE="qualification-runner", DELIVERY_STORY="0.1.0")
         out = io.StringIO()
-        with mock.patch("sys.stdin", io.StringIO("{}")), redirect_stdout(out):
+        with mock.patch("sys.stdin", io.StringIO('{"source": "compact"}')), redirect_stdout(out):
             self.assertEqual(hooks.session_start(), 0)
         self.assertIn(qualify.ORDER, out.getvalue())
 

@@ -40,10 +40,12 @@ synchronise une version de spec, pousse, et change la méthode.
 | `delivery.toml` | oui | humain | réglages du projet (§3) |
 | `.delivery/deliveryctl` | oui | `deliveryctl init` | point d'entrée du moteur du projet (exécutable, Python standard) |
 | `.delivery/engine/`, `.delivery/templates/`, `.delivery/VERSION` | oui | `deliveryctl init` | copie du moteur et des gabarits, figée par projet |
+| `.delivery/method.json` | oui | `deliveryctl init` | manifeste de la copie de la méthode : version et empreinte (sha1) de chaque fichier copié sous `.claude/`, tel qu'écrit |
+| `.claude/agents/`, `.claude/skills/`, `.claude/commands/` | oui | `deliveryctl init` (copie du plugin), puis `--upgrade` | agents, skills et commandes de la méthode, copiés du plugin sauf la commande `init` (qui équipe le projet et reste une commande du plugin) ; dans chaque fichier copié, `delivery-method:<nom>` et `/delivery-method:<nom>` perdent l'espace de noms quand `<nom>` est un agent, un skill ou une commande copiés. Une session Claude Code sans plugin (session cloud) y trouve toute la méthode. Les fichiers absents du manifeste sont ceux du projet : jamais touchés |
 | `.delivery/rules.md` | oui | `deliveryctl init` | règles communes, importées par `CLAUDE.md` |
 | `.delivery/run/` | non | moteur seul | fichiers de rôle, sessions, ports, notifications, registre des verdicts (`verdicts.json`, §6), journaux de sortie ; aucun rôle n'y écrit |
 | `CLAUDE.md` | oui | `init` (crée ou ajoute `@.delivery/rules.md`), puis humain | règles et conventions du projet |
-| `.claude/settings.json` | oui | `init` (fusion par ajout), puis humain | activation du plugin, refus de `SendMessage` pour toute session du projet, `ask` sur les gestes humains |
+| `.claude/settings.json` | oui | `init` (fusion par ajout), puis humain | plugin désactivé dans le projet (`enabledPlugins` à `false` : sa copie ferait doublon avec celle du projet), hooks `Stop` et `SessionStart`, refus de `SendMessage` pour toute session du projet, `ask` sur les gestes humains |
 | `.gitignore` | oui | `init` (ajout) | `.delivery/run/`, `.delivery/**/__pycache__/`, `docs/stories/*/work/`, `docs/campaigns/work/`, `qualification/work/`, sorties de tests (`test-results/`, `playwright-report/`, `spec/acceptance/node_modules/`) |
 | `backlog/<id>-<slug>.md` | oui | leads (`draft`), humain (`ready`), rôles (anomalies) | cartes (§5) |
 | `docs/stories/<id>/` | oui | rôles, moteur | dossier de story (§6) |
@@ -60,11 +62,24 @@ Copie de travail d'une story : `<parent>/<dépôt>-wt/<id>`, branche `story/<id>
 `git worktree list` est la seule source de vérité sur les stories ouvertes.
 
 **Où tourne `deliveryctl`.** Dans un projet, c'est toujours `.delivery/deliveryctl` : le shell de
-l'humain (un alias suffit), la CI, les tâches planifiées. Le `deliveryctl` du plugin (`bin/`,
-présent dans le PATH des sessions Claude, et appelé par les hooks) n'est qu'un lanceur : il
-exécute la copie du projet si elle existe, celle du plugin hors de tout projet ; `init` et
-`init --upgrade` exécutent celle du plugin. Appelé pour un hook sans Python 3.11 ou plus, il rend
-la main en silence.
+l'humain (un alias suffit), la CI, les tâches planifiées. Dans une session Claude du
+projet, le hook `SessionStart` met `.delivery/` en tête du `PATH` (via `$CLAUDE_ENV_FILE`), si bien
+que `deliveryctl` y est la copie du projet, en local comme dans le cloud ; les hooks du projet
+l'appellent par son chemin. Le `deliveryctl` du plugin (`bin/`) n'est qu'un lanceur : il exécute la
+copie du projet si elle existe, celle du plugin hors de tout projet ; `init` et `init --upgrade`
+exécutent celle du plugin. Appelé pour un hook sans Python 3.11 ou plus, il rend la main en
+silence.
+
+**La méthode dans le projet.** `init` copie les agents, skills et commandes du plugin sous
+`.claude/` et inscrit leur empreinte dans `.delivery/method.json`. Les commandes y sont
+`/spec-frame`, `/impl-frame`, `/run-campaign`… sans espace de noms (`run` aurait pris le nom d'une
+commande native de Claude Code ; `init` reste `/delivery-method:init`). `init --upgrade` rafraîchit
+la copie, retire les fichiers que la nouvelle version n'a plus, et refuse, avant d'écrire quoi que
+ce soit et en listant les fichiers, d'écraser un fichier copié dont l'empreinte ne correspond plus
+au manifeste (modifié à la main). Un premier `init` voit un fichier différent à un chemin de copie
+comme un conflit. Les sessions de rôle du moteur lancent l'agent de cette copie, si bien qu'il n'y
+a qu'une source par projet. Le `hooks/hooks.json` du plugin ne sert qu'aux sessions hors d'un
+projet équipé.
 
 ## 3. `delivery.toml`
 
@@ -402,7 +417,10 @@ Il porte au journal (`refusal`), une seule fois, les refus de permission du tran
 session. Dans une session humaine, un arrêt dont la dernière ligne non vide est
 `Outcome: question` envoie la notification ⚠ « décision attendue », une par message.
 
-Après une compaction, dans une session de rôle, le hook de reprise réinjecte « re-read
+`deliveryctl hook session-start` tourne à chaque démarrage de session (démarrage, reprise, `clear`,
+compaction), lit la `source` dans l'entrée du hook et reste silencieux et rapide en cas d'erreur.
+Toujours : si `$CLAUDE_ENV_FILE` est défini, il y ajoute `export PATH="<racine du projet>/.delivery:$PATH"`
+(§2). Seulement pour la source `compact`, dans une session de rôle, le hook de reprise réinjecte « re-read
 order.md, plan.md, work/notes.md, then git status » (le `qualification-runner` :
 `qualification/order.md`, `qualification/work/notes.md` ; le `technical-lead` : les sections
 `## Next` et `## Run` de sa campagne, puis `deliveryctl story status`).
@@ -459,12 +477,14 @@ le remplace par les variables d'environnement de Claude Code dans ce même fichi
 ### 11.1 Lancement d'une session de rôle
 
 ```
-claude --agent delivery-method:<role> --plugin-dir <racine du plugin> \
+claude --agent <role> \
        --permission-mode dontAsk --setting-sources project \
        --settings <main>/.delivery/run/roles/<portée>-<role>.json --session-id <uuid> "<consigne>"
 ```
 
-`<portée>` est l'identifiant de la carte, `lead` pour le run, ou l'incrément recetté. Le fichier
+`<role>` est l'agent de la copie du projet, `.claude/agents/<role>.md` de la copie de travail du
+rôle (absent : erreur de précondition qui nomme `deliveryctl init --upgrade`) ; aucun plugin n'est
+passé à la session. `<portée>` est l'identifiant de la carte, `lead` pour le run, ou l'incrément recetté. Le fichier
 de rôle, généré par le moteur, porte `"env": {"DELIVERY_ROLE": …, "DELIVERY_STORY": …}`, plus
 `DELIVERY_PORT` pour les rôles d'une story : la session, ses hooks et son outil Bash en héritent,
 quel que soit le lanceur. Ses règles de chemin sont absolues (`//<chemin>/…`).
@@ -503,8 +523,8 @@ une carte en `ready`, taguer, pousser une branche de lead, passer en `released`,
 
 | Verbe | Effet |
 |---|---|
-| `init [--role R] [--upgrade]` | pose ou met à jour moteur, règles, réglages, CI, et pour un dépôt `spec` ou `single` sans `spec/`, un squelette de `spec/` ; n'écrase rien, ne commite rien |
-| `doctor` | diagnostic en lecture seule |
+| `init [--role R] [--upgrade]` | pose ou met à jour moteur, règles, copie des agents, skills et commandes sous `.claude/` (manifeste `.delivery/method.json`), réglages, CI, et pour un dépôt `spec` ou `single` sans `spec/`, un squelette de `spec/` ; n'écrase rien, ne commite rien |
+| `doctor` | diagnostic en lecture seule, dont la copie de la méthode (manifeste, version, fichiers modifiés ou absents, plugin désactivé, hooks) |
 | `cards list`, `cards order`, `cards lint` | `list`, `order` : lire, ordonner les cartes de la branche cible, celles que lit le run ; `lint` : contrôler celles de la copie de travail, avant commit ; seules les cartes `ready` dont les dépendances sont faites sont lançables |
 | `campaign open <nom> --phase P` | crée `docs/campaigns/<nom>.md` et son dossier `work/` |
 | `run [--campaign N]` | lance le `technical-lead` en mode run |
@@ -522,7 +542,7 @@ une carte en `ready`, taguer, pousser une branche de lead, passer en `released`,
 | `qualify open <incr>`, `qualify run <incr>`, `qualify lint <incr>`, `qualify submit <incr>`, `qualify close <incr>` | §15 |
 | `nightly` | suite complète des tests d'IHM (§16) |
 | `note "<texte>"`, `journal add`, `journal flush`, `journal report`, `journal setup` | §13 |
-| `hook stop`, `hook session-start` | appelés par les hooks du plugin |
+| `hook stop`, `hook session-start` | appelés par les hooks du projet (`.claude/settings.json`) |
 | `kit lint` | contrôle du plugin lui-même |
 
 **Sorties du moteur.** Une carte y est nommée par sa référence lisible (§1) ; plusieurs

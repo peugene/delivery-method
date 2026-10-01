@@ -191,6 +191,36 @@ class HookInRepoTest(RepoCase):
         session = json.loads((self.repo / ".delivery/run/sessions/s001.json").read_text())["story-implementer"]
         self.assertTrue(session["denials_recorded"])
 
+    def session_start(self, source: str, **env) -> str:
+        out = io.StringIO()
+        with mock.patch.dict(os.environ, env), mock.patch("sys.stdin", io.StringIO(json.dumps({"source": source}))), \
+                redirect_stdout(out):
+            self.assertEqual(hooks.session_start(), 0)
+        return out.getvalue()
+
+    def test_session_start_puts_the_project_copy_on_the_path_at_every_start(self):
+        write(self.repo / ".delivery" / "deliveryctl", "#!/bin/sh\n")
+        env_file = self.tmp / "claude-env.sh"
+        for source in ("startup", "resume", "clear", "compact"):
+            out = self.session_start(source, CLAUDE_ENV_FILE=str(env_file), CLAUDE_PROJECT_DIR=str(self.repo))
+            self.assertEqual(out, "")                  # no role: nothing to say
+        line = f'export PATH="{self.repo}/.delivery:$PATH"\n'
+        self.assertEqual(env_file.read_text(), line * 4)
+        self.assertEqual(self.session_start("startup"), "")      # no env file: silent
+
+    def test_session_start_reminds_a_role_after_a_compaction_only(self):
+        env = {"DELIVERY_ROLE": "story-implementer", "DELIVERY_STORY": "s001"}
+        self.assertEqual(self.session_start("startup", **env), "")
+        out = self.session_start("compact", **env)
+        self.assertIn("Context was compacted", out)
+        self.assertIn("docs/stories/s001/order.md", out)
+        self.assertEqual([e["category"] for e in self.queue()], ["compact"])
+
+    def test_session_start_stays_quiet_on_an_unwritable_env_file(self):
+        out = self.session_start("startup", CLAUDE_ENV_FILE=str(self.tmp / "no" / "dir" / "env"),
+                                 CLAUDE_PROJECT_DIR=str(self.repo))
+        self.assertEqual(out, "")
+
 
 class OldPythonTest(unittest.TestCase):
     """Outside role sessions, the hooks stay silent when the engine cannot run (Python < 3.11)."""

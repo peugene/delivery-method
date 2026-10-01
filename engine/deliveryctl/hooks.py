@@ -1,5 +1,5 @@
-"""Plugin hooks (CONTRACTS.md §9.2). They run in every session where the plugin is enabled,
-so outside role sessions they return at once, silently, except for the toast of a human-led
+"""Method hooks (CONTRACTS.md §9.2). They run in every session of an equipped project (its
+.claude/settings.json) and of a project where the plugin is enabled, so outside role sessions they return at once, silently, except for the toast of a human-led
 session that waits on 'Outcome: question'. The engine modules are imported only past the role
 test, so that an unsupported Python stays silent outside role sessions."""
 
@@ -12,7 +12,7 @@ import re
 import sys
 from pathlib import Path
 
-from .core import ID_RX, main_root
+from .core import ID_RX, main_root, repo_root
 
 OUTCOME_RX = re.compile(r"^Outcome:\s*(done|blocked|deferred|plan-ready|question)\b")
 LEAD_OUTCOMES = ("done", "blocked")
@@ -205,12 +205,30 @@ def stop() -> int:
     return 0
 
 
+def _put_on_path() -> None:
+    """Make 'deliveryctl' resolve to the project copy in every later Bash command of the session,
+    local or cloud (the plugin's bin/ is not on the PATH once the plugin is disabled here)."""
+    env_file = os.environ.get("CLAUDE_ENV_FILE")
+    if not env_file:
+        return
+    root = os.environ.get("CLAUDE_PROJECT_DIR") or str(repo_root())
+    if not (Path(root) / ".delivery" / "deliveryctl").exists():
+        return
+    with open(env_file, "a", encoding="utf-8") as fh:
+        fh.write(f'export PATH="{root}/.delivery:$PATH"\n')
+
+
 def session_start() -> int:
-    """After a compaction (matcher 'compact'), remind a role where its state lives."""
+    """At every session start: put the project copy of the engine on the PATH. After a compaction,
+    also remind a role where its state lives."""
+    data = _stdin()
+    try:
+        _put_on_path()
+    except Exception:
+        pass
     role = os.environ.get("DELIVERY_ROLE")
-    if not role:
+    if not role or data.get("source") != "compact":
         return 0
-    _stdin()
     scope = os.environ.get("DELIVERY_STORY", "<id>")
     reread = {
         "technical-lead": f"the '## Next' and '## Run' sections of docs/campaigns/{os.environ.get('DELIVERY_CAMPAIGN', '<name>')}.md, "
