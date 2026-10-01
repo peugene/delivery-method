@@ -4,6 +4,7 @@ the lead may reach; and the grace a starting interactive session gets before it 
 import importlib
 import os
 import re
+import shlex
 from datetime import datetime, timedelta, timezone
 from unittest import mock
 
@@ -45,7 +46,8 @@ class RolesTest(RepoCase):
         self.assertEqual(argv[argv.index("--agent") + 1], "story-implementer")
         self.assertNotIn("--plugin-dir", argv)
         self.assertEqual(spec["env"]["PATH"].split(os.pathsep)[0], str(self.wt / ".delivery"))
-        self.assertIn(f"PATH={self.wt}/.delivery:", roles.shell_line(spec))
+        self.assertTrue(any(word.startswith(f"PATH={self.wt}/.delivery:")
+                            for word in shlex.split(roles.shell_line(spec))))
         self.assertEqual(argv[argv.index("--setting-sources") + 1], "project")
 
     def test_the_lead_runs_the_renamed_command(self):
