@@ -724,8 +724,8 @@ carte suivante, et seulement elle, à la tête de la cible et sans préparer sa 
 `verify-exhausted`, `review-exhausted`) ni `merged` ; une story `submitted` compte. Le lead choisit
 entre séquentiel (défaut) et parallèle : il n'ouvre une seconde story pendant qu'une tourne que
 s'il est sûr qu'elles ne peuvent pas entrer en conflit (zones de code disjointes, aucune
-dépendance déclarée ni implicite), jamais au-delà de `max_in_flight` ; dans le doute, séquentiel. Le run ne
-s'interrompt pas pour une question : le lead tranche et documente dans l'ordre, ou il passe la
+dépendance déclarée ni implicite), jamais au-delà de `max_in_flight` ; dans le doute, séquentiel.
+Le run ne s'interrompt pas pour une question : le lead tranche et documente dans l'ordre, ou il passe la
 carte en `deferred` en le motivant. Il se termine quand plus rien n'est lançable, par la section
 `## Run` de la campagne et une ligne `Outcome: done`, ou `Outcome: blocked` quand il ne peut pas
 continuer.

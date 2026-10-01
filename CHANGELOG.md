@@ -8,8 +8,8 @@ changement de contrat monte la version mineure ; après 1.0.0, la version majeur
 
 ### Changements
 
-- `max_in_flight` vaut `3` par défaut (au lieu de `1`) : c'est un plafond, que le
-  `technical-lead` ne fait plus jouer à sa place. Le lead choisit entre séquentiel et parallèle ;
+- `max_in_flight` vaut `3` par défaut (au lieu de `1`) : c'est un plafond, sous lequel le
+  `technical-lead` choisit lui-même entre séquentiel et parallèle ;
   séquentiel est le défaut, et il n'ouvre une seconde story pendant qu'une tourne que s'il est sûr
   qu'elles ne peuvent pas entrer en conflit (zones de code disjointes, aucune dépendance déclarée
   ni implicite), jamais au-delà du plafond.
