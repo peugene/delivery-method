@@ -8,7 +8,7 @@ from pathlib import Path
 
 from . import cards
 from . import verdict as vd
-from .core import ID_RX, glob_match
+from .core import ID_RX, DeliveryError, glob_match
 from .gitops import Git
 from .verify import story_dir
 
@@ -22,7 +22,7 @@ def story_of_branch(git: Git, head: str = "HEAD") -> str | None:
     try:
         base = git.merge_base(head, git.target_ref())
         first = git.first_commit_files(base, head)
-    except SystemExit:
+    except DeliveryError:
         return None
     found = re.fullmatch(r"docs/stories/([^/]+)/order\.md", first[0]) if len(first) == 1 else None
     return found.group(1) if found and ID_RX.match(found.group(1)) else None
