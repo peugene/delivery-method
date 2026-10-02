@@ -184,8 +184,9 @@ Exemple : l'incrément `01-core` couvre `s001 : Se connecter`, `s002 : Créer un
 5. `deliveryctl spec release` calcule la version (`0.1.0` pour la première), écrit le
    `spec/CHANGELOG.md` et affiche les commandes de commit, de tag `spec-v0.1.0` et de push.
 
-Les trois premières se tapent dans la session de l'analyste, `claude --agent product-analyst` ;
-ailleurs, elles s'arrêtent. `/handoff` se tape dans la session humaine de n'importe quel lead.
+`/spec-frame` et `/spec-write` se tapent dans la session de l'analyste,
+`claude --agent product-analyst` : ailleurs, elles s'arrêtent. `/spec-review` s'y tape aussi,
+d'ordinaire ; `/handoff`, dans la session humaine de n'importe quel lead.
 
 | Session Claude | Rôle |
 |---|---|

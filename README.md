@@ -132,8 +132,9 @@ fichiers ce qui a été décidé et donne la ligne de reprise.
 Pour réfléchir à une idée avant d'en faire du travail, à n'importe quelle phase :
 `/brainstorm <idée>`. Une idée qui sera cadrée se brainstorme dans la session qui la cadrera,
 `claude --agent product-analyst` (idée produit, dépôt de spec) ou `claude --agent technical-lead`
-(idée technique) : `/spec-frame` et `/impl-frame` ne s'ouvrent que dans leur session. Le brainstorm s'ouvre sur son objectif : ciblé (étroit et profond, court)
-ou, avec `--vision`, vision (large et peu profond, une longue session : le produit entier). Rien
+(idée technique) : `/spec-frame` et `/impl-frame` ne s'ouvrent que dans leur session. Le
+brainstorm s'ouvre sur son objectif : ciblé (étroit et profond, court) ou, avec `--vision`,
+vision (large et peu profond, une longue session : le produit entier). Rien
 n'est écrit pendant la discussion, sauf au mot « point » : un brouillon
 `docs/maybe/<date>-<slug>.draft.md` garde alors vos décisions mot pour mot, que le résumé
 automatique d'une longue session pourrait paraphraser (le brouillon n'est pas suivi par git ;
