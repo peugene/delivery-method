@@ -59,9 +59,10 @@ Supabase en local. Relisez les fichiers posés, écrivez les recettes du `justfi
 ## Explorer une idée, à n'importe quelle phase
 
 Avant qu'une idée devienne du travail, vous pouvez y réfléchir avec Claude sans rien engager :
-aucune mémoire, aucune note, aucun fichier pendant la discussion. Claude reformule l'idée, donne
-un avis franc, propose deux ou trois angles, puis avance à votre rythme, une ou deux questions
-par tour. La discussion se clôt sur votre mot.
+aucune mémoire, aucune note, aucun fichier pendant la discussion, sauf le brouillon d'un point
+que vous demandez (voir plus bas). Claude reformule l'idée, donne un avis franc, propose deux ou
+trois angles, puis avance à votre rythme, une ou deux questions par tour. La discussion se clôt
+sur votre mot.
 
 **Deux objectifs.** Le brainstorm s'ouvre en annonçant son objectif. *Ciblé* (par défaut) : étroit
 et profond, court, une idée. *Vision* (`/brainstorm --vision <idée>`) : large et peu profond, une

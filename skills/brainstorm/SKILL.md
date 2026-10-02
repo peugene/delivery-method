@@ -1,6 +1,6 @@
 ---
 name: brainstorm
-description: Explore an idea with the decision owner without committing to anything - no memory, no note, no file - then close on the owner's word - forget, archive or frame. Invoked by the owner only, in a human session, on any topic and at any phase.
+description: Explore an idea with the decision owner without committing to anything - vision or targeted, no memory, no note, no file but a draft at the owner's checkpoint - then close on the owner's word - forget, archive or frame. Invoked by the owner only, in a human session, on any topic and at any phase.
 argument-hint: "[--vision] <the idea to explore>"
 disable-model-invocation: true
 ---
