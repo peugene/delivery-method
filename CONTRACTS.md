@@ -46,7 +46,9 @@ synchronise une version de spec, pousse, et change la méthode.
 | `.delivery/run/` | non | moteur seul | fichiers de rôle, sessions, ports, notifications, registre des verdicts (`verdicts.json`, §6), journaux de sortie ; aucun rôle n'y écrit |
 | `CLAUDE.md` | oui | `init` (crée ou ajoute `@.delivery/rules.md`), puis humain | règles et conventions du projet |
 | `.claude/settings.json` | oui | `init` (fusion par ajout), puis humain | plugin désactivé dans le projet (`enabledPlugins` à `false`, dès le premier `init`, même si une installation du plugin à la portée projet l'a écrit à `true` : sa copie ferait doublon avec celle du projet), hooks `Stop`, `SessionStart` et `PreToolUse` (matcher `Bash`, filtré par `if` sur les commandes `deliveryctl *` et `.delivery/deliveryctl *`), refus de `SendMessage` pour toute session du projet, `ask` sur les gestes humains |
-| `.gitignore` | oui | `init` (ajout) | `.delivery/run/`, `.delivery/**/__pycache__/`, `docs/stories/*/work/`, `docs/campaigns/work/`, `qualification/work/`, sorties de tests (`test-results/`, `playwright-report/`, `spec/acceptance/node_modules/`) |
+| `.gitignore` | oui | `init` (ajout) | `.delivery/run/`, `.delivery/**/__pycache__/`, `docs/stories/*/work/`, `docs/campaigns/work/`, `qualification/work/`, `docs/maybe/*.draft.md`, sorties de tests (`test-results/`, `playwright-report/`, `spec/acceptance/node_modules/`) |
+| `docs/maybe/` | oui | brainstorm, à la clôture « archiver » ; commité par l'humain | archives hors de toute décision, lues seulement quand l'humain nomme un fichier, refusées aux rôles |
+| `docs/maybe/*.draft.md` | non | brainstorm, à un point d'enregistrement | brouillon d'un brainstorm en cours, supprimé à la clôture |
 | `backlog/<id>-<slug>.md` | oui | leads (`draft`), humain (`ready`), rôles (anomalies) | cartes (§5) |
 | `docs/stories/<id>/` | oui | rôles, moteur | dossier de story (§6) |
 | `docs/stories/<id>/work/` | non | rôles ; moteur pour `verify.log` | état de travail de la story (§6.7) |
@@ -87,6 +89,18 @@ au manifeste (modifié à la main). Un premier `init` voit un fichier différent
 comme un conflit. Les sessions de rôle du moteur lancent l'agent de cette copie, si bien qu'il n'y
 a qu'une source par projet. Le `hooks/hooks.json` du plugin ne sert qu'aux sessions hors d'un
 projet équipé.
+
+**Brainstorm.** `/brainstorm` s'ouvre sur son objectif : *vision* (`--vision` : large et peu
+profond, une longue session) ou *ciblé* (sans option : étroit et profond, court). L'objectif règle
+la conduite de la session, jamais la clôture. Au mot « point » (checkpoint) de l'humain, le
+brainstorm écrit `docs/maybe/<AAAA-MM-JJ>-<slug>.draft.md`, un seul fichier par brainstorm, réécrit
+en entier à chaque point, dans la langue du projet : une première ligne qui dit que c'est le
+brouillon d'un brainstorm en cours, hors de toute décision, puis quatre sections (décisions
+validées par l'humain, citées mot pour mot ; écartées ; ouvertes ; mises de côté). Le brouillon
+n'est pas suivi par git ; l'humain le nomme pour reprendre. Clôture, sur le mot de l'humain :
+*oublier* supprime le brouillon et n'écrit rien ; *archiver* écrit `docs/maybe/<AAAA-MM-JJ>-<slug>.md`
+à partir du brouillon et de la discussion depuis, puis supprime le brouillon ; *cadrer* cite les
+décisions validées, celles du brouillon et celles d'après, puis supprime le brouillon.
 
 ## 3. `delivery.toml`
 

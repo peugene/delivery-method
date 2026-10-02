@@ -129,9 +129,14 @@ Dans un dépôt équipé, les commandes `/spec-frame`, `/impl-frame`… se tapen
 fichiers ce qui a été décidé et donne la ligne de reprise.
 
 Pour réfléchir à une idée avant d'en faire du travail, à n'importe quelle phase :
-`/brainstorm <idée>`. Rien n'est écrit pendant la discussion ; à la fin, vous
-choisissez d'oublier, d'archiver dans `docs/maybe/` (dossier qu'aucun agent ne lit de lui-même)
-ou de cadrer, et seules les décisions que vous avez validées passent au cadrage.
+`/brainstorm <idée>`. Le brainstorm s'ouvre sur son objectif : ciblé (étroit et profond, court)
+ou, avec `--vision`, vision (large et peu profond, une longue session : le produit entier). Rien
+n'est écrit pendant la discussion, sauf au mot « point » : un brouillon
+`docs/maybe/<date>-<slug>.draft.md` garde alors vos décisions mot pour mot, que le résumé
+automatique d'une longue session pourrait paraphraser (le brouillon n'est pas suivi par git ;
+nommez-le pour reprendre). À la fin, vous choisissez d'oublier, d'archiver dans `docs/maybe/`
+(dossier qu'aucun agent ne lit de lui-même) ou de cadrer ; le brouillon est alors supprimé, et
+seules les décisions que vous avez validées passent au cadrage.
 
 ### Spécification (dépôt `spec` ou `single`)
 
@@ -259,7 +264,7 @@ Dans un dépôt équipé, les commandes sont celles de la copie du projet, sans 
 | `/run-campaign <campagne>` | `technical-lead`, de rôle | le run ; lancée par `deliveryctl run`, jamais à la main |
 | `/qualify <incr>` | `qualification-lead` | recette d'un incrément |
 | `/handoff [<incr>\|<campagne>]` | tout lead, humaine | passation avant `/clear` |
-| `/brainstorm <idée>` | humaine, tout dépôt | explorer une idée sans rien engager ; clôture : oublier, archiver dans `docs/maybe/` ou cadrer |
+| `/brainstorm [--vision] <idée>` | humaine, tout dépôt | explorer une idée sans rien engager (ciblé, ou vision) ; « point » : brouillon dans `docs/maybe/` ; clôture : oublier, archiver dans `docs/maybe/` ou cadrer |
 
 ## Rôles
 

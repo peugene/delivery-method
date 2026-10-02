@@ -2,8 +2,8 @@
 method, or refresh its copy of it (CONTRACTS.md §2, §12.2). Every change is planned before
 any is written, so a conflict leaves the repository untouched. Never overwrites, never commits;
 `--upgrade` refreshes what the method owns: the engine copy, the rules, the templates, the copy
-of the agents, skills and commands (recorded in `.delivery/method.json`), the method's settings
-and the marketplace ref."""
+of the agents, skills and commands (recorded in `.delivery/method.json`), the method's settings,
+the marketplace ref and the missing `.gitignore` lines."""
 
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ RULES_IMPORT = "@.delivery/rules.md"
 CONVENTIONS_RX = re.compile(r"^##\s+Project conventions\s*$", re.MULTILINE)
 GITIGNORE = (".delivery/run/", ".delivery/**/__pycache__/", "docs/stories/*/work/",
              "docs/campaigns/work/", "qualification/work/", "test-results/", "playwright-report/",
-             "spec/acceptance/node_modules/")
+             "spec/acceptance/node_modules/", "docs/maybe/*.draft.md")
 # Human gestures (§12.1) asked for in Claude sessions. 'story close' is left out: the engine
 # refuses it for a stopped story in a role session, and the lead closes merged stories.
 GESTURES = ("init", "run", "merge", "spec release", "spec sync", "nightly", "note",
@@ -574,6 +574,7 @@ def main(args) -> int:
         steps = engine_steps(root, plugin, version, refresh=True)
         steps += method_steps(root, plugin, version, refresh=True)
         steps.append(settings_step(root, plugin, version, refresh=True))
+        steps.append(gitignore_step(root))
         forge = ""
     else:
         steps, forge = install_steps(root, plugin, version, args, notes)

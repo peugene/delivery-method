@@ -59,9 +59,27 @@ Supabase en local. Relisez les fichiers posés, écrivez les recettes du `justfi
 ## Explorer une idée, à n'importe quelle phase
 
 Avant qu'une idée devienne du travail, vous pouvez y réfléchir avec Claude sans rien engager :
-aucune mémoire, aucune note, aucun fichier pendant la discussion. Claude reformule l'idée, donne
-un avis franc, propose deux ou trois angles, puis avance à votre rythme, une ou deux questions
-par tour. La discussion se clôt sur votre mot.
+aucune mémoire, aucune note, aucun fichier pendant la discussion, sauf le brouillon d'un point
+que vous demandez (voir plus bas). Claude reformule l'idée, donne un avis franc, propose deux ou
+trois angles, puis avance à votre rythme, une ou deux questions par tour. La discussion se clôt
+sur votre mot.
+
+**Deux objectifs.** Le brainstorm s'ouvre en annonçant son objectif. *Ciblé* (par défaut) : étroit
+et profond, court, une idée. *Vision* (`/brainstorm --vision <idée>`) : large et peu profond, une
+longue session : à qui s'adresse le produit, le problème, quelques principes, les grands blocs
+dans l'ordre. Si vous plongez dans le détail d'une fonctionnalité, Claude propose de la mettre de
+côté pour un brainstorm ciblé et la note, au lieu de creuser. Dans un dépôt de spec dont le
+brief est vide et sans story, Claude propose la vision en une phrase. L'objectif règle la
+conduite, jamais la clôture.
+
+**Le point d'enregistrement.** Une longue session est résumée automatiquement, et ce résumé peut
+paraphraser ou perdre vos mots exacts, alors que le cadrage doit les citer. Dites « point » :
+Claude écrit `docs/maybe/<date>-<slug>.draft.md`, réécrit en entier à chaque point, avec vos
+décisions validées citées mot pour mot, puis les pistes écartées, les questions ouvertes et les
+sujets mis de côté. En vision, Claude en propose un après plusieurs décisions validées ou avant de
+changer de sujet ; en ciblé, seulement à votre mot. Le brouillon n'est pas suivi par git. Pour
+reprendre, nommez-le : `/brainstorm docs/maybe/<…>.draft.md`. À la clôture, il est supprimé :
+« oublier » ne garde rien, « archiver » l'intègre à l'archive, « cadrer » en cite les décisions.
 
 **Lancez le brainstorm dans la session qui cadrera.** Une session ne voit pas la conversation
 d'une autre, et `/spec-frame` ne s'ouvre que dans la session de l'analyste produit,
@@ -76,6 +94,8 @@ qui part de ces décisions.
 flowchart LR
     S["claude --agent product-analyst<br/>(ou technical-lead)"] --> A["/brainstorm &lt;idée&gt;"]
     A --> B[discussion<br/>rien n'est écrit]
+    B -- point --> P["docs/maybe/…draft.md<br/>décisions citées"]
+    P --> B
     B --> C{votre mot}
     C -- oublier --> D[aucune trace]
     C -- archiver --> E["docs/maybe/2026-10-02-rappels.md<br/>hors de toute décision"]
@@ -86,8 +106,9 @@ flowchart LR
 | Où | Commande | Effet |
 |---|---|---|
 | shell | `claude --agent product-analyst` (idée produit) ou `claude --agent technical-lead` (idée technique) | ouvre la session qui cadrera ; `claude` suffit pour une idée que vous ne pensez pas cadrer |
-| cette session | `/brainstorm <idée>` | ouvre la discussion |
-| même session | « oublier », « archiver » ou « cadrer » | clôt : rien, une archive, ou la liste des décisions validées |
+| cette session | `/brainstorm [--vision] <idée>` | ouvre la discussion, ciblée ou vision |
+| même session | « point » | écrit ou réécrit le brouillon `docs/maybe/<date>-<slug>.draft.md` (non suivi par git) |
+| même session | « oublier », « archiver » ou « cadrer » | clôt : rien, une archive, ou la liste des décisions validées ; le brouillon est supprimé |
 | même session | `/spec-frame <incr>` ou `/impl-frame <campagne>` | après « cadrer » : ouvre le cadrage avec ces décisions |
 | shell | `git add docs/maybe/… && git commit` | garde l'archive, si vous le voulez ; le commit est votre geste |
 
