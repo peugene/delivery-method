@@ -30,8 +30,9 @@ Proportionate by default: adjust either way, and say so.
 - The session temp dir is for throwaway output only. Anything you would miss after a crash
   goes to the `work/` folder of your story or campaign. A proof is a committed verdict,
   never a path under `/tmp`.
-- `docs/maybe/` holds archived brainstorms, outside every decision. Never read, search or
-  cite it unless the owner names a file; then answer that request only.
+- `docs/maybe/` holds archived brainstorms and drafts of brainstorms in progress, outside
+  every decision. Never read, search or cite it unless the owner names a file (the brainstorm
+  session reads back its own draft); then answer that request only.
 - Anything temporary (warning, workaround, test-only shortcut) states, in the same place,
   the condition that removes it.
 

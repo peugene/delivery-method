@@ -122,6 +122,22 @@ class InitTest(RepoCase):
         self.assertFalse((self.repo / "justfile").exists())
         self.assertEqual((self.repo / "Justfile").read_text(), "check:\n    npm test\n")
 
+    def test_brainstorm_drafts_are_ignored_by_a_new_gitignore(self):
+        self.init()
+        self.assertIn("docs/maybe/*.draft.md", (self.repo / ".gitignore").read_text().splitlines())
+
+    def test_brainstorm_drafts_are_added_to_an_existing_gitignore_and_on_upgrade(self):
+        write(self.repo / ".gitignore", "node_modules/\n")
+        self.init()
+        path = self.repo / ".gitignore"
+        self.assertIn("docs/maybe/*.draft.md", path.read_text().splitlines())
+        path.write_text("node_modules/\n.delivery/run/\n")           # a project equipped before drafts
+        code, out = self.cli("init", "--upgrade")
+        self.assertEqual(code, 0, out)
+        ignored = path.read_text().splitlines()
+        self.assertEqual(ignored.count("docs/maybe/*.draft.md"), 1)
+        self.assertEqual(ignored[:2], ["node_modules/", ".delivery/run/"])
+
     def test_conflict_is_listed_and_nothing_is_written(self):
         write(self.repo / ".claude" / "settings.json", json.dumps({"permissions": {"deny": "SendMessage"}}))
         code, out = self.cli("init", "--role", "impl", "--forge", "github")
