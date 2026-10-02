@@ -42,14 +42,14 @@ portez au cadrage suivant.
 
 ## 0. Équiper les trois dépôts
 
-Dans chaque dépôt, une fois :
+Les deux premières lignes se font une fois par machine, les deux suivantes une fois par dépôt :
 
 | Où | Commande | Effet |
 |---|---|---|
 | shell | `claude plugin marketplace add peugene/delivery-method` | déclare la marketplace |
 | shell | `claude plugin install delivery-method@delivery-method` | installe le plugin pour l'utilisateur (une fois par machine) |
 | session Claude | `/delivery-method:init` | cinq questions, puis `deliveryctl init` : `delivery.toml`, `.delivery/`, la copie des agents, skills et commandes sous `.claude/` (commandes sans espace de noms : `/spec-frame`…), `CLAUDE.md`, `.claude/settings.json`, `.gitignore`, `justfile`, CI ; un squelette `spec/` pour `todo-spec` |
-| shell | `deliveryctl doctor` | diagnostic en lecture seule |
+| shell | `deliveryctl doctor` | diagnostic en lecture seule (le raccourci de shell est dans le README) |
 
 Réponses types : `todo-spec` → rôle `spec` ; `todo-kotlin` → rôle `impl`, `check = "just check"`
 (Gradle : lint, build, tests), `acceptance = "just acceptance {grep}"`, `serve = "just serve {port}"`,
@@ -101,7 +101,7 @@ flowchart LR
     P --> B
     B --> C{votre mot}
     C -- oublier --> D[aucune trace]
-    C -- archiver --> E["docs/maybe/2026-10-02-rappels.md<br/>hors de toute décision"]
+    C -- archiver --> E["docs/maybe/AAAA-MM-JJ-rappels.md<br/>hors de toute décision"]
     C -- cadrer --> F["liste des décisions validées"]
     F --> G["/spec-frame ou /impl-frame<br/>dans la même session"]
     C -- "vision (dépôt de spec)" --> V["liste des décisions validées"]
@@ -115,7 +115,7 @@ flowchart LR
 | même session | « point » | écrit ou réécrit le brouillon `docs/maybe/<date>-<slug>.draft.md` (non suivi par git) |
 | même session | « oublier », « archiver », « cadrer » ou « vision » | clôt : rien, une archive, ou la liste des décisions validées (« vision » : dépôt de spec seulement) ; le brouillon est supprimé |
 | même session | `/spec-frame <incr>` ou `/impl-frame <campagne>` | après « cadrer » : ouvre le cadrage avec ces décisions |
-| même session | `/spec-frame 01-… --discover` | après « vision » : écrit le brief avec ces décisions et cadre le premier bloc |
+| même session | `/spec-frame 01-… --discover` | après « vision » : l'analyste demande le nom court du premier bloc, puis écrit le brief avec ces décisions et cadre ce bloc |
 | shell | `git add docs/maybe/… && git commit` | garde l'archive, si vous le voulez ; le commit est votre geste |
 
 Si le brainstorm a lieu dans une autre session, une session ordinaire par exemple, dites-y
@@ -184,16 +184,20 @@ Exemple : l'incrément `01-core` couvre `s001 : Se connecter`, `s002 : Créer un
 5. `deliveryctl spec release` calcule la version (`0.1.0` pour la première), écrit le
    `spec/CHANGELOG.md` et affiche les commandes de commit, de tag `spec-v0.1.0` et de push.
 
+`/spec-frame` et `/spec-write` se tapent dans la session de l'analyste,
+`claude --agent product-analyst` : ailleurs, elles s'arrêtent. `/spec-review` s'y tape aussi,
+d'ordinaire ; `/handoff`, dans la session humaine de n'importe quel lead.
+
 | Session Claude | Rôle |
 |---|---|
-| `/spec-frame <incr>` | cadrage avec l'analyste produit, jusqu'au GO |
-| `/spec-write <incr> [--acceptance]` | stories, libellés, puis tests d'IHM |
+| `/spec-frame <incr> [--discover] [--market <domaine>]` | cadrage avec l'analyste produit, jusqu'au GO ; `--discover` écrit le brief s'il est vide |
+| `/spec-write <incr> [<story>] [--acceptance]` | stories, libellés, puis tests d'IHM |
 | `/spec-review <incr> [deep\|standard\|light] [--acceptance]` | revue contradictoire |
 | `/handoff <incr>` | avant un `/clear` : range ce qui a été décidé, donne la ligne de reprise |
 
 | Shell | Rôle |
 |---|---|
-| `deliveryctl spec lint` | schéma, neutralité, un test par critère, aucune étiquette orpheline |
+| `deliveryctl spec lint` | schéma, neutralité (stories et brief), un test par critère, aucune étiquette orpheline |
 | `deliveryctl spec release [version]` | version calculée, CHANGELOG, commandes de tag affichées (geste humain) |
 
 ## 2. Phase implémentation — dans `todo-kotlin`, puis `todo-supabase`
@@ -271,9 +275,11 @@ Une story s'arrête sur un point qui vous revient, et vous recevez un toast :
 volontairement le contrôle d'accès, vérifie qu'un test échoue, puis restaure) et une relecture
 contradictoire de l'angle « que voit un compte non invité ? ».
 
+`/impl-frame` se tape dans la session `claude --agent technical-lead`.
+
 | Session Claude | Rôle |
 |---|---|
-| `/impl-frame <campagne>` | cadrage d'architecture, cartes en brouillon |
+| `/impl-frame <campagne> [sujet]` | cadrage d'architecture, cartes en brouillon |
 | `/run-campaign <campagne>` | procédure du lead en run (lancée par `deliveryctl run`) |
 | `/handoff <campagne>` | passation avant un `/clear` |
 
@@ -286,7 +292,7 @@ contradictoire de l'angle « que voit un compte non invité ? ».
 | `deliveryctl story status [<id>] [--watch]` | état, prochaine étape, votre prochain geste |
 | `deliveryctl story prepare \| open \| next \| wait \| close <id>` | cycle d'une story (le lead s'en sert en run) |
 | `deliveryctl verify <id>` | vérification par le moteur |
-| `deliveryctl gate <id>` | contrôle d'intégration (aussi en CI) |
+| `deliveryctl gate <id> [--head <rev>]` | contrôle d'intégration (aussi en CI) |
 | `deliveryctl submit <id>` | push et demande de fusion |
 | `deliveryctl merge <id>` | fusion (geste humain) |
 
@@ -295,6 +301,9 @@ contradictoire de l'angle « que voit un compte non invité ? ».
 Régime : **on constate et on consigne.** Le produit ne change pas pendant une recette ; chaque
 défaut devient une carte d'anomalie triée par vous. Une recette par implémentation : celle de
 `todo-kotlin` et celle de `todo-supabase` n'ont ni la même surface ni la même installation.
+
+La recette se mène dans la session `claude --agent qualification-lead`, une fois les stories de
+l'incrément fusionnées.
 
 ```mermaid
 flowchart TD
@@ -317,7 +326,7 @@ dans `todo-supabase`, la spec est muette sur ce cas : la question remonte au pro
 
 | Session Claude | Rôle |
 |---|---|
-| `/qualify <incr>` | recette menée par le qualification-lead |
+| `/qualify <incr>` | recette menée par le qualification-lead (`claude --agent qualification-lead`) |
 
 | Shell | Rôle |
 |---|---|
