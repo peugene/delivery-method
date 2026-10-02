@@ -472,7 +472,7 @@ def spec_steps(root: Path, plugin: Path) -> list[Step]:
         dest = "spec/" + (rel if rel != "harness-contract.md" else "acceptance/harness-contract.md")
         steps.append(file_step(root, dest, (source / rel).read_text(encoding="utf-8")))
     steps.append(file_step(root, "spec/CHANGELOG.md", "# Changelog de la spécification\n"))
-    steps.append(file_step(root, "spec/product/brief.md", "# Brief\n"))
+    steps.append(file_step(root, "spec/product/brief.md", (source / "brief.md").read_text(encoding="utf-8")))
     steps.append(file_step(root, "spec/product/glossary.md", "# Glossaire\n"))
     return steps
 

@@ -8,7 +8,7 @@ from pathlib import Path
 
 from support import ROOT, RepoCase, git, sh, write
 
-from deliveryctl import VERSION, cli, config, init
+from deliveryctl import VERSION, cli, config, init, spec
 from deliveryctl.window import mentions
 
 
@@ -303,6 +303,16 @@ class InitTest(RepoCase):
         self.assertEqual(code, 0, out)
         self.assertIn("created  delivery.toml", out)
         self.assertEqual(snapshot(self.repo), before)
+
+    def test_init_writes_the_brief_from_the_template(self):
+        code, out = self.cli("init", "--role", "spec", "--forge", "github")
+        self.assertEqual(code, 0, out)
+        brief = (self.repo / "spec" / "product" / "brief.md").read_text()
+        self.assertEqual(brief, (ROOT / "templates" / "spec" / "brief.md").read_text())
+        self.assertTrue(brief.startswith("# Brief\n"))
+        for section in ("Purpose", "Users", "Principles", "Blocks", "Not the product"):
+            self.assertIn(f"\n## {section}\n", brief)
+        self.assertEqual(spec.lint(self.repo), [])
 
     def test_init_writes_the_implementer_key(self):
         self.init()

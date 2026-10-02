@@ -26,11 +26,19 @@ Fail closed: on the first failure, say why and stop.
 1. Absent `framing.md`: create it from `.delivery/templates/spec/framing.md` (missing: the
    sections of step 5, then `## Next`) with `id: <incr>`, `status: discussing`, `scope: []`.
    Present: read its `## Next` first, then the files it names.
-2. Read the existing before you speak: `spec/product/`, `spec/stories/`, earlier
+2. Read the existing before you speak: `spec/product/brief.md` first (every framing starts from
+   it), then the rest of `spec/product/`, `spec/stories/`, earlier
    `refinement/*/framing.md` (their deferred points and exclusions), and what the owner brought
    (notes, brief, `spec-question.md`).
 3. With `--discover`, settle first the problem, the actors, the scope and the observable
    success. With `--market <domain>`, look at comparable products for feature ideas only.
+   The brief is empty when it has no content of its own: only headings, `<!-- -->` comments
+   and `<…>` placeholders. When the owner brings vision decisions (closing word vision, in this
+   session or pasted), or with `--discover` while the brief is empty, write or update
+   `spec/product/brief.md` from `.delivery/templates/spec/brief.md`, in the project language,
+   product words only; the increment covers one block of `## Blocks`, named in its
+   `## Purpose`. A firm decision that contradicts the brief updates it in the same framing; the
+   recap and the GO frame name each change of the brief.
 4. Open: your opinion, the structuring point, the option you discard and why; then numbered
    questions, each with lettered options, their consequence and your recommendation.
 5. At the owner's rhythm, after each answer, write `framing.md`:
@@ -49,15 +57,17 @@ Fail closed: on the first failure, say why and stop.
 6. When no observable behaviour of the scope is left open, submit the GO frame: purpose, firm
    decisions, scope, exclusions, assumptions to accept, story map.
 7. On the owner's explicit GO frame: accepted assumptions become firm decisions, the others
-   return as questions; set `status: framed` and `scope: [<story ids>]`; commit with trailers
-   `Campaign: <incr>` and `Agent: product-analyst`. When the project works by merge requests,
+   return as questions; set `status: framed` and `scope: [<story ids>]`; commit `framing.md`
+   and, when it changed, `spec/product/brief.md`, with trailers `Campaign: <incr>` and
+   `Agent: product-analyst`. When the project works by merge requests,
    the approval of the one carrying this commit is the GO; pushing it is the owner's gesture.
    In a cloud session the session's own `claude/` branch is pushed for the pull request.
 
 ## Outputs
 - `refinement/<incr>/framing.md`, 80 lines targeted, in the project language; section names
   and keys in English.
-- Commits of that file only, never pushed.
+- `spec/product/brief.md` when it is written or updated, 40 lines targeted, same languages.
+- Commits of these two files only, never pushed.
 
 ## Ends with
 - Waiting for the owner: the recap and the numbered questions, then
