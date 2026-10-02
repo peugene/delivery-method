@@ -59,9 +59,9 @@ message), read it and continue from it.
   `/delivery-method:impl-frame` (technical) or the session the owner names.
 - **vision** (`spec` or `single` only; in `impl` the technical vision is `docs/architecture.md`,
   framed by `/impl-frame`): list the validated decisions as for frame, word for word, then
-  delete the draft; discarded alternatives stay behind. In the `product-analyst` session,
-  continue with `/spec-frame <incr> --discover` for the first block to frame (ask its short
-  name). In another session, give the two lines to type, `claude --agent product-analyst` then
+  delete the draft; discarded alternatives stay behind. In the `product-analyst` session, ask
+  the short name of the first block to frame; the owner types `/spec-frame <incr> --discover`
+  here. In another session, give the two lines to type, `claude --agent product-analyst` then
   `/spec-frame <incr> --discover`, and say to paste the list after the command.
 
 ## Defaults and levers

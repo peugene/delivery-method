@@ -70,8 +70,7 @@ longue session : à qui s'adresse le produit, le problème, quelques principes, 
 dans l'ordre. Si vous plongez dans le détail d'une fonctionnalité, Claude propose de la mettre de
 côté pour un brainstorm ciblé et la note, au lieu de creuser. Dans un dépôt de spec dont le
 brief est vide (que des titres, des commentaires et des marqueurs) et sans story, Claude propose
-la vision en une phrase. L'objectif règle la
-conduite, jamais la clôture.
+la vision en une phrase. L'objectif règle la conduite, jamais la clôture.
 
 **Le point d'enregistrement.** Une longue session est résumée automatiquement, et ce résumé peut
 paraphraser ou perdre vos mots exacts, alors que le cadrage doit les citer. Dites « point » :
@@ -120,9 +119,9 @@ flowchart LR
 | shell | `git add docs/maybe/… && git commit` | garde l'archive, si vous le voulez ; le commit est votre geste |
 
 Si le brainstorm a lieu dans une autre session, une session ordinaire par exemple, dites-y
-« cadrer » (ou « vision ») avant de la quitter et copiez la liste. Ouvrez ensuite la session de l'analyste ou du
-lead technique, tapez la commande de cadrage et collez la liste à sa suite : elle seule passe,
-ni la discussion ni les pistes écartées.
+« cadrer » (ou « vision ») avant de la quitter et copiez la liste. Ouvrez ensuite la session de
+l'analyste ou du lead technique, tapez la commande de cadrage et collez la liste à sa suite :
+elle seule passe, ni la discussion ni les pistes écartées.
 
 Deux exemples sur le banc :
 
