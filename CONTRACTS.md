@@ -91,18 +91,26 @@ a qu'une source par projet. Le `hooks/hooks.json` du plugin ne sert qu'aux sessi
 projet équipé.
 
 **Brainstorm.** `/brainstorm` s'ouvre sur son objectif : *vision* (`--vision` : large et peu
-profond, une longue session) ou *ciblé* (sans option : étroit et profond, court). L'objectif règle
-la conduite de la session, jamais la clôture. Au mot « point » (checkpoint) de l'humain, le
-brainstorm écrit `docs/maybe/<AAAA-MM-JJ>-<slug>.draft.md`, un seul fichier par brainstorm, réécrit
-en entier à chaque point, dans la langue du projet : une première ligne qui dit que c'est le
-brouillon d'un brainstorm en cours, hors de toute décision, puis quatre sections (décisions
-validées par l'humain, citées mot pour mot ; écartées ; ouvertes ; mises de côté). Le brouillon
-n'est pas suivi par git ; l'humain le nomme pour reprendre. Clôture, sur le mot de l'humain :
-*oublier* supprime le brouillon et n'écrit rien ; *archiver* écrit `docs/maybe/<AAAA-MM-JJ>-<slug>.md`
-à partir du brouillon et de la discussion depuis, puis supprime le brouillon ; *cadrer* cite les
-décisions validées, celles du brouillon et celles d'après, puis supprime le brouillon ; *vision*
-(dépôt `spec` ou `single` seulement) les cite de même, puis supprime le brouillon, et les passe à
-`/spec-frame <incr> --discover` qui en écrit le brief (§14.1).
+profond, une longue session) ou *ciblé* (sans option : étroit et profond, court). L'objectif
+règle la conduite de la session, jamais la clôture. Un brainstorm dont l'idée sera cadrée se tient
+dans la session qui la cadrera (`product-analyst` ou `technical-lead`) : `/spec-frame` et
+`/impl-frame` ne s'ouvrent que dans la session de leur rôle.
+
+Au mot « point » (checkpoint) de l'humain, le brainstorm écrit
+`docs/maybe/<AAAA-MM-JJ>-<slug>.draft.md`, un seul fichier par brainstorm, réécrit en entier à
+chaque point, dans la langue du projet : une première ligne qui dit que c'est le brouillon d'un
+brainstorm en cours, hors de toute décision, puis quatre sections (décisions validées par
+l'humain, citées mot pour mot ; écartées ; ouvertes ; mises de côté). Le brouillon n'est pas suivi
+par git ; l'humain le nomme pour reprendre.
+
+Clôture, sur le mot de l'humain :
+- *oublier* supprime le brouillon et n'écrit rien ;
+- *archiver* écrit `docs/maybe/<AAAA-MM-JJ>-<slug>.md` à partir du brouillon et de la discussion
+  depuis, puis supprime le brouillon ;
+- *cadrer* cite les décisions validées, celles du brouillon et celles d'après, puis supprime le
+  brouillon ;
+- *vision* (dépôt `spec` ou `single` seulement) les cite de même, puis supprime le brouillon, et
+  les passe à `/spec-frame <incr> --discover` qui en écrit le brief (§14.1).
 
 ## 3. `delivery.toml`
 
@@ -145,6 +153,13 @@ libre. La CI posée par `init` substitue `{grep}`, et `{port}` par `DELIVERY_POR
 | `reinforced_risks` | `{authz = ["bite", "adversarial-review"], data-write = ["adversarial-review"], file-upload = ["adversarial-review"], data-leak = ["adversarial-review"]}` | contrôles automatiques par risque ; une clé écrite remplace le défaut de ce seul risque, les autres risques gardent le leur ; une clé nouvelle déclare un risque propre au projet ; une liste vide retire ses contrôles (risque noté au compte rendu) |
 | `doc_globs` | `["docs/**", "*.md"]` | un diff entièrement dans ces chemins se vérifie par `check` seul |
 | `max_order_lines` | `60` | `story open` avertit au-delà, sans refuser |
+
+**Défauts.** `repo_role` n'en a pas : une clé absente fait échouer toute commande. Les autres
+clés absentes prennent : `content_language = "en"`, `release_stage = "pre-release"`,
+`external_contracts = []`, `forge = "github"`, `integration = "human"`, `implementer` (selon la
+forge, voir plus bas), `max_in_flight = 3` (au moins 1), `agent_prefix` (les initiales des mots du
+nom du dépôt, quatre au plus ; `dm` à défaut), `port_prefix = 31` (de 10 à 64), `[commands]` vide,
+`[permissions] extra_allow = []`, `[levers]` vide (défauts ci-dessus).
 
 Une clé inconnue fait échouer toute commande. La branche cible se déduit de `origin/HEAD` ; à
 défaut, de la branche cible fournie par la CI (`GITHUB_BASE_REF`,
@@ -538,10 +553,11 @@ récent de `pushed_at` et de l'heure de son dernier commit rapatrié (`last_comm
 et qu'aucune session ne sert est relancée par ces mêmes balayages. Une erreur passagère sur une
 story (forge, réseau) est affichée et le balayage continue.
 
-## 10. Contrôle d'intégration — `deliveryctl gate <id> [--head <rev>]`
+## 10. Contrôle d'intégration — `deliveryctl gate <id> [--base <rev>] [--head <rev>]`
 
 Porte sur la tête de `story/<id>` (par défaut HEAD de sa copie de travail ; en CI, le sha de
 tête de la demande de fusion, jamais le commit de fusion synthétique), avec l'historique complet.
+La base est `git merge-base <cible> <tête>`, sauf `--base`.
 Tous les points sont bloquants :
 
 1. Le premier commit depuis `git merge-base <cible> <tête>` n'ajoute que `docs/stories/<id>/order.md` ;
@@ -688,27 +704,27 @@ validerait.
 
 | Verbe | Effet |
 |---|---|
-| `init [--role R] [--upgrade]` | pose ou met à jour moteur, règles, copie des agents, skills et commandes sous `.claude/` (manifeste `.delivery/method.json`), réglages, CI, et pour un dépôt `spec` ou `single` sans `spec/`, un squelette de `spec/` ; n'écrase rien, ne commite rien |
+| `init [--role R] [--language L] [--forge F] [--check C] [--acceptance A] [--serve S] [--upgrade] [--dry-run]` | pose ou met à jour moteur, règles, copie des agents, skills et commandes sous `.claude/` (manifeste `.delivery/method.json`), réglages, CI, et pour un dépôt `spec` ou `single` sans `spec/`, un squelette de `spec/` ; n'écrase rien, ne commite rien |
 | `doctor` | diagnostic en lecture seule (dans une session cloud, il le dit et saute réglages de machine, herdr, commande de notification, plugin et connexion `claude`, ne vérifie pas `gh auth status` (une note : le forge passe par le proxy GitHub de la session, les gestes de forge se font depuis l'ordinateur du propriétaire) et n'avertit pas d'un `origin/HEAD` absent, au plus une note), dont la copie de la méthode (manifeste, version, fichiers modifiés ou absents, plugin désactivé, hooks) et, avec `implementer = "cloud"`, la connexion `claude.ai` et `origin` sur github.com ; pour un `origin` sur github.com dont `gh repo view` dit le dépôt public, il avertit si l'adresse `git config user.email` ne finit pas par `@users.noreply.github.com` (elle est publiée dans chaque commit et dans le trailer `Approved-By` de chaque fusion), `ok` sinon, et ne dit rien si `gh` manque ou ne répond pas ; la confiance de Claude Code pour le dépôt est aussi vérifiée avec `implementer = "cloud"`, quelle que soit la fenêtre de la machine |
 | `cards list`, `cards order`, `cards lint` | `list`, `order` : lire, ordonner les cartes de la branche cible, celles que lit le run ; `lint` : contrôler celles de la copie de travail, avant commit ; seules les cartes `ready` dont les dépendances sont faites sont lançables |
-| `campaign open <nom> --phase P` | crée `docs/campaigns/<nom>.md` et son dossier `work/` |
+| `campaign open <nom> [--phase spec\|impl\|qualification]` | crée `docs/campaigns/<nom>.md` et son dossier `work/` |
 | `run [--campaign N]` | lance le `technical-lead` en mode run |
 | `story prepare <id>` | copie de travail depuis la tête de la cible, squelette d'ordre ; rien n'est commité |
-| `story open <id> [--order <brouillon>]` | contrôle l'ordre, le commite, calcule le port, lance l'exécutant ; refuse si une dépendance n'est pas faite ou n'est pas contenue dans `base:` ; avertit au-delà de `max_order_lines` |
+| `story open <id> [--order <brouillon>] [--no-start]` | contrôle l'ordre, le commite, calcule le port, lance l'exécutant (sauf `--no-start`) ; refuse si une dépendance n'est pas faite ou n'est pas contenue dans `base:` ; avertit au-delà de `max_order_lines` |
 | `story status [<id>] [--watch]` | état, prochaine étape du moteur, prochain geste humain |
 | `story next <id> [--go\|--relaunch]` | enchaîne la suite (§9) ; `--go` relance après `plan-ready` ; `--relaunch` abandonne l'exécutant cloud (sans `ended`, ou dont les commits ont été refusés : sinon code 3), pose `ended` (`abandoned`), porte un événement `resume` au journal et lance un nouvel exécutant depuis la tête locale |
-| `story wait <id> [--timeout S] [--until merged]` | rend la main à un arrêt (`blocked`, `deferred`, `plan-ready`, bornes, `merged`, et `submitted` si `integration = human`) ou au délai (code 3) |
+| `story wait <id> [--timeout S] [--until checkpoint\|merged]` | rend la main à un arrêt (`blocked`, `deferred`, `plan-ready`, bornes, `merged`, et `submitted` si `integration = human`) ou au délai (code 3) |
 | `story close <id>` | supprime la copie de travail d'une story fusionnée ou arrêtée ; garde la branche d'une story arrêtée |
 | `verify <id>` | lance les vérifications sur le port de la story, écrit `work/verify.log`, commite `verification.md` |
-| `gate <id> [--head R]` | contrôle d'intégration (§10) |
+| `gate <id> [--base R] [--head R]` | contrôle d'intégration (§10) |
 | `submit <id>` | contrôle, pousse la branche, ouvre la demande de fusion ; refuse (code 3) une branche dont la demande de fusion est déjà fusionnée |
-| `merge <id>` | fusionne une demande de fusion dont la CI est verte (au moins un contrôle, tous réussis ; sans contrôle encore : code 3) et dont la tête est celle contrôlée |
+| `merge <id> [--keep]` | fusionne une demande de fusion dont la CI est verte (au moins un contrôle, tous réussis ; sans contrôle encore : code 3) et dont la tête est celle contrôlée ; ferme ensuite la copie de travail de la story, sauf `--keep` |
 | `spec lint`, `spec release`, `spec sync <version>`, `spec verify` | §14 |
 | `qualify open <incr>`, `qualify run <incr>`, `qualify lint <incr>`, `qualify submit <incr>`, `qualify close <incr>` | §15 |
 | `nightly` | suite complète des tests d'IHM (§16) |
-| `note "<texte>"`, `journal add`, `journal flush`, `journal report`, `journal setup` | §13 |
+| `note "<texte>" [--story ID]`, `journal add [--category C]`, `journal flush`, `journal report [--limit N]`, `journal setup` | §13 |
 | `hook stop`, `hook session-start`, `hook pre-tool` | appelés par les hooks du projet (`.claude/settings.json`) ; `hook pre-tool` ne dit rien hors d'une session cloud et, dans une session cloud, rend sur la sortie standard la décision `deny` (`hookSpecificOutput`, `permissionDecisionReason` : la ligne de refus du §12.1) quand la commande Bash appelle, où que ce soit, un geste refusé ; silencieux et rapide en cas d'erreur |
-| `kit lint` | contrôle du plugin lui-même |
+| `kit lint [chemin]` | contrôle du plugin lui-même |
 
 **Sorties du moteur.** Une carte y est nommée par sa référence lisible (§1) ; plusieurs
 références se séparent par `; `, un titre pouvant contenir une virgule :
@@ -771,7 +787,7 @@ inconnu : `<id> — <quoi>`.
 **Journal d'expérience** : événements JSON, lus par l'humain seul, jamais renvoyés aux agents.
 
 ```json
-{"schema": "delivery-event/1", "ts": "…", "method_version": "0.2.0", "repo": "…", "story": "s004",
+{"schema": "delivery-event/1", "ts": "…", "method_version": "0.3.0", "repo": "…", "story": "s004",
  "role": "engine", "source": "engine | human | agent", "category": "…", "text": "…", "evidence": "…"}
 ```
 

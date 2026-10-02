@@ -12,7 +12,7 @@
       "name": "delivery-method",
       "source": "./",
       "description": "Méthode de livraison en trois phases : spécification, implémentation story par story, recette.",
-      "version": "0.2.2",
+      "version": "0.3.0",
       "license": "MIT",
       "category": "development"
     }

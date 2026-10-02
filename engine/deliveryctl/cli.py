@@ -245,14 +245,15 @@ def build() -> argparse.ArgumentParser:
     s = sub.add_parser("story", help="story life cycle")
     s.add_argument("action", choices=["prepare", "open", "status", "next", "wait", "close"])
     s.add_argument("id", nargs="?")
-    s.add_argument("--watch", action="store_true")
+    s.add_argument("--watch", action="store_true", help="story status: refresh until interrupted")
     s.add_argument("--no-start", action="store_true", help="open without starting the implementer")
     s.add_argument("--order", help="order draft to commit as docs/stories/<id>/order.md")
     s.add_argument("--go", action="store_true", help="continue after plan-ready (human gesture)")
     s.add_argument("--relaunch", action="store_true",
                    help="abandon the cloud implementer and start a new one (human gesture)")
-    s.add_argument("--timeout", type=int, default=540)
-    s.add_argument("--until", choices=["checkpoint", "merged"], default="checkpoint")
+    s.add_argument("--timeout", type=int, default=540, help="story wait: seconds before giving up")
+    s.add_argument("--until", choices=["checkpoint", "merged"], default="checkpoint",
+                   help="story wait: stop at the next checkpoint (default) or only at the merge")
     s.set_defaults(func=cmd_story)
 
     for verb, func, helptext in (("verify", cmd_verify, "run the checks of a story and commit the verdict"),
@@ -276,7 +277,7 @@ def build() -> argparse.ArgumentParser:
     s.add_argument("--campaign")
     s.set_defaults(func=cmd_run)
 
-    s = sub.add_parser("campaign", help="campaign branch of a lead")
+    s = sub.add_parser("campaign", help="open the campaign file of a lead")
     s.add_argument("action", choices=["open"])
     s.add_argument("name")
     s.add_argument("--phase", choices=["spec", "impl", "qualification"], default="impl")
@@ -304,7 +305,7 @@ def build() -> argparse.ArgumentParser:
     s.add_argument("--source")
     s.set_defaults(func=cmd_spec)
 
-    s = sub.add_parser("qualify", help="qualification: open, run, lint, submit")
+    s = sub.add_parser("qualify", help="qualification: open, run, lint, submit, close")
     s.add_argument("action", choices=["open", "run", "lint", "submit", "close"])
     s.add_argument("increment")
     s.set_defaults(func=cmd_qualify)

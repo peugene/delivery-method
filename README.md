@@ -64,8 +64,9 @@ claude plugin marketplace add peugene/delivery-method
 claude plugin install delivery-method@delivery-method
 ```
 
-L'installation pour l'utilisateur suffit : le plugin ne sert qu'à équiper un dépôt (`/delivery-method:init`),
-`init` copie ensuite la méthode dans le dépôt lui-même. Pour un essai sans installation : `claude --plugin-dir /chemin/vers/delivery-method`.
+Installez le plugin pour l'utilisateur, jamais avec `--scope project` : il ne sert qu'à équiper un
+dépôt (`/delivery-method:init`), et `init` copie ensuite la méthode dans le dépôt lui-même.
+Pour un essai sans installation : `claude --plugin-dir /chemin/vers/delivery-method`.
 
 **2. Équiper le dépôt.** Dans une session Claude ouverte à la racine de la copie principale,
 tapez `/delivery-method:init`. La commande pose cinq questions (contenu du dépôt ; langue du
@@ -104,14 +105,14 @@ projet. Dans ces sessions, `deliveryctl` est déjà dans le `PATH` : le hook `Se
 `.delivery/`, et c'est donc la copie du projet. Vérifiez enfin avec
 `deliveryctl doctor`, qui ne modifie rien : chaque ligne vaut `ok`, `note` ou `warn`.
 
-**Mettre à jour** (depuis 0.1.0). Mettez à jour le plugin (`/plugin` dans Claude Code), puis
+**Mettre à jour.** Mettez à jour le plugin (`/plugin` dans Claude Code), puis
 relancez `/delivery-method:init` : sur un dépôt équipé, il lance `deliveryctl init --upgrade` depuis
 le lanceur du plugin (`DELIVERY_USE_PLUGIN_ENGINE=1 deliveryctl init --upgrade`, qui exécute le
 moteur du plugin et non la copie du projet, encore ancienne). La mise à jour rafraîchit
 `.delivery/`, la copie sous `.claude/` (en retirant les fichiers que la nouvelle version n'a plus),
-les hooks et la version épinglée dans `.claude/settings.json`, désactive le plugin dans le projet et
-renomme la commande `/delivery-method:run` en `/run-campaign`. Si un fichier copié a été modifié à
-la main, elle refuse, en les listant, avant d'écrire quoi que ce soit. Relisez le diff, commitez.
+les hooks et la version épinglée dans `.claude/settings.json`, et désactive le plugin dans le projet.
+Si un fichier copié a été modifié à la main, elle refuse, en les listant, avant d'écrire quoi que
+ce soit. Relisez le diff, commitez.
 
 **Publier une version du plugin** (mainteneurs). `init` épingle la marketplace sur l'étiquette
 `delivery-method--vX.Y.Z` : sans elle, un coéquipier ne peut pas installer le plugin. Montez la
@@ -129,7 +130,9 @@ Dans un dépôt équipé, les commandes `/spec-frame`, `/impl-frame`… se tapen
 fichiers ce qui a été décidé et donne la ligne de reprise.
 
 Pour réfléchir à une idée avant d'en faire du travail, à n'importe quelle phase :
-`/brainstorm <idée>`. Le brainstorm s'ouvre sur son objectif : ciblé (étroit et profond, court)
+`/brainstorm <idée>`. Une idée qui sera cadrée se brainstorme dans la session qui la cadrera,
+`claude --agent product-analyst` (idée produit, dépôt de spec) ou `claude --agent technical-lead`
+(idée technique) : `/spec-frame` et `/impl-frame` ne s'ouvrent que dans leur session. Le brainstorm s'ouvre sur son objectif : ciblé (étroit et profond, court)
 ou, avec `--vision`, vision (large et peu profond, une longue session : le produit entier). Rien
 n'est écrit pendant la discussion, sauf au mot « point » : un brouillon
 `docs/maybe/<date>-<slug>.draft.md` garde alors vos décisions mot pour mot, que le résumé
@@ -273,6 +276,23 @@ Dans un dépôt équipé, les commandes sont celles de la copie du projet, sans 
 | `/handoff [<incr>\|<campagne>]` | tout lead, humaine | passation avant `/clear` |
 | `/brainstorm [--vision] <idée>` | humaine, tout dépôt | explorer une idée sans rien engager (ciblé, ou vision) ; « point » : brouillon dans `docs/maybe/` ; clôture : oublier, archiver dans `docs/maybe/`, cadrer ou « vision » (dépôt de spec : les décisions deviennent le brief) |
 
+## Skills
+
+Les skills portent la doctrine que les rôles chargent ; seul `brainstorm` se tape (voir
+« Commandes du plugin »).
+
+| Skill | Utilisé par | Sujet |
+|---|---|---|
+| `brainstorm` | vous, `/brainstorm [--vision] <idée>` | explorer une idée sans rien engager |
+| `framing-discussion` | `product-analyst`, `technical-lead` (cadrage) | discuter, recommander, consigner mot pour mot |
+| `spec-writing` | `product-analyst`, relecteurs de spec | écrire des stories neutres en technologie |
+| `acceptance-by-role` | `product-analyst`, relecteurs de spec | écrire la suite d'acceptation Playwright |
+| `adversarial-review` | `spec-reviewer`, `refuter`, `story-reviewer`, leads | relecture contradictoire en toute phase |
+| `anchoring` | `technical-lead`, `story-implementer`, `story-reviewer` | établir un fait avant de le transmettre |
+| `work-orders` | `technical-lead` | écrire l'ordre de travail d'une story, lire son compte rendu |
+| `testing-doctrine` | `story-implementer`, `story-reviewer` | quoi tester, à quelle couche, quand |
+| `qualification-doctrine` | `qualification-lead`, `qualification-runner`, réfuteurs | observer et consigner en recette |
+
 ## Rôles
 
 | Rôle | Phase | Session | Ne fait jamais |
@@ -300,20 +320,20 @@ d'une story arrêtée.
 
 | Verbe | Effet |
 |---|---|
-| `init [--role R] [--upgrade] [--dry-run]` **H** | pose ou met à jour moteur, règles, copie des agents, skills et commandes sous `.claude/`, réglages, CI ; n'écrase rien, ne commite rien |
+| `init [--role R] [--language L] [--forge F] [--check C] [--acceptance A] [--serve S] [--upgrade] [--dry-run]` **H** | pose ou met à jour moteur, règles, copie des agents, skills et commandes sous `.claude/`, réglages, CI ; n'écrase rien, ne commite rien |
 | `doctor` | diagnostic en lecture seule (dont la copie de la méthode, la confiance de Claude Code et, en dépôt GitHub public, l'adresse de commit) |
 | `cards list`, `cards order` | lire, ordonner les cartes de la branche cible, celles que lit le run |
 | `cards lint` | contrôler les cartes de la copie de travail, avant de les commiter |
-| `campaign open <nom> --phase P` | crée `docs/campaigns/<nom>.md` et son dossier de travail |
+| `campaign open <nom> [--phase spec\|impl\|qualification]` | crée `docs/campaigns/<nom>.md` et son dossier de travail |
 | `run [--campaign N]` **H** | lance le `technical-lead` en mode run |
 | `story prepare <id>` | copie de travail et squelette d'ordre ; rien n'est commité |
-| `story open <id>` | contrôle et commite l'ordre, lance l'exécutant |
+| `story open <id> [--order <brouillon>] [--no-start]` | contrôle et commite l'ordre, lance l'exécutant (sauf `--no-start`) |
 | `story status [<id>] [--watch]` | état, prochaine étape du moteur, prochain geste humain |
 | `story next <id> [--go\|--relaunch]` | enchaîne la suite ; `--go` (**H**) relance après `plan-ready` ; `--relaunch` (**H**) abandonne l'exécutant cloud et en lance un nouveau |
-| `story wait <id> [--timeout S] [--until merged]` | attend un arrêt, ou la fusion |
+| `story wait <id> [--timeout S] [--until checkpoint\|merged]` | attend un arrêt (`checkpoint`, par défaut), ou la fusion |
 | `story close <id>` | supprime la copie de travail d'une story fusionnée, ou arrêtée (**H**) |
-| `verify <id>`, `gate <id> [--head R]`, `submit <id>` | vérification et verdict commité ; contrôle d'intégration ; push et demande de fusion (refusé si elle est déjà fusionnée) |
-| `merge <id> [--keep]` **H** | fusionne une demande de fusion à CI verte (au moins un contrôle, tous réussis ; sinon code 3, ou 2 si elle est rouge) dont la tête est celle contrôlée |
+| `verify <id>`, `gate <id> [--base R] [--head R]`, `submit <id>` | vérification et verdict commité ; contrôle d'intégration ; push et demande de fusion (refusé si elle est déjà fusionnée) |
+| `merge <id> [--keep]` **H** | fusionne une demande de fusion à CI verte (au moins un contrôle, tous réussis ; sinon code 3, ou 2 si elle est rouge) dont la tête est celle contrôlée ; ferme ensuite la copie de travail, sauf `--keep` |
 | `spec lint`, `spec verify` | contrôle de `spec/` ; conformité de `spec/` à `spec.lock` |
 | `spec release [<version>]` **H** | calcule la version, prépare le CHANGELOG, affiche commit, tag et push |
 | `spec sync <version> [--source URL]` **H** | copie une version publiée de la spec, en un commit |
@@ -322,8 +342,9 @@ d'une story arrêtée.
 | `qualify close <incr>` | supprime la copie de travail de la recette (la branche reste) |
 | `nightly` **H** | suite complète des tests d'IHM sur la branche cible |
 | `note "<texte>" [--story ID]` **H** | remarque au journal d'expérience |
-| `journal setup`, `journal flush`, `journal report` (**H**) | mise en place, envoi de la file locale, lecture hors de tout dépôt (voir Journal d'expérience) |
+| `journal add [--category C] "<texte>"`, `journal setup`, `journal flush`, `journal report [--limit N]` (**H**) | ajout d'un événement, mise en place, envoi de la file locale, lecture hors de tout dépôt (voir Journal d'expérience) |
 | `kit lint [chemin]` | contrôle du plugin lui-même |
+| `--version` | version du moteur |
 
 `hook stop`, `hook session-start` et `hook pre-tool` sont appelés par les hooks du projet (`.claude/settings.json`). Codes de sortie :
 0 succès ; 1 erreur d'usage ou interne ; 2 contrôle rouge ; 3 précondition non remplie ou délai
@@ -334,16 +355,23 @@ d'une story arrêtée.
 ### Projet : `delivery.toml`
 
 Commité et tenu par l'humain ; une clé inconnue fait échouer toute commande. Les commentaires du
-fichier posé par `init` décrivent chaque clé : `repo_role`, `content_language`, `release_stage`
-(`released` après la première livraison à un tiers : la compatibilité compte),
-`external_contracts` (détenteurs externes d'un état ou d'une API), `forge`, `integration`
-(`human`, ou `ai` : le moteur fusionne quand la relecture dit oui et que la CI est verte),
-`implementer` (`cloud` ou `local` : où tourne le `story-implementer`, voir « Exécutant dans le cloud »),
-`max_in_flight` (stories en cours en même temps, `3` par défaut ; le lead choisit séquentiel ou
-parallèle sous ce plafond ; une story arrêtée ne compte pas), `agent_prefix`, `port_prefix`, `[commands]` (`check`, `acceptance` avec `{grep}`, `serve`
-avec `{port}`, `test` avec `{selector}`, facultatif : le test ciblé permis aux rôles,
-`just test <selector>`) et `[permissions] extra_allow` (règles ajoutées aux rôles, par exemple
-`"Bash(./gradlew *)"`).
+fichier posé par `init` décrivent chaque clé. Une clé absente prend son défaut :
+
+| Clé | Défaut | Effet |
+|---|---|---|
+| `repo_role` | aucun : obligatoire | `single`, `spec` ou `impl` : ce que contient le dépôt |
+| `content_language` | `en` | langue des textes que lit un humain (cartes, ordres, comptes rendus) |
+| `release_stage` | `pre-release` | `released` après la première livraison à un tiers : la compatibilité compte |
+| `external_contracts` | `[]` | détenteurs externes d'un état ou d'une API |
+| `forge` | `github` | `github` ou `gitlab` |
+| `integration` | `human` | `human`, ou `ai` : le moteur fusionne quand la relecture dit oui et que la CI est verte |
+| `implementer` | `cloud` avec `github`, `local` avec `gitlab` | où tourne le `story-implementer` (voir « Exécutant dans le cloud ») |
+| `max_in_flight` | `3` | plafond des stories en cours en même temps (au moins `1`) ; le lead choisit séquentiel ou parallèle sous ce plafond ; une story arrêtée ne compte pas |
+| `agent_prefix` | initiales des mots du nom du dépôt (quatre au plus) | préfixe des noms de session |
+| `port_prefix` | `31` | de `10` à `64` : préfixe du port d'une story |
+| `[commands]` | aucun | `check`, `acceptance` avec `{grep}`, `serve` avec `{port}`, et `test` avec `{selector}` (facultatif : le test ciblé permis aux rôles, `just test <selector>`) |
+| `[permissions] extra_allow` | `[]` | règles ajoutées aux rôles, par exemple `"Bash(./gradlew *)"` |
+| `[levers]` | vide | voir ci-dessous |
 
 Chaque story a son port, `<port_prefix><numéro>` ou le suivant libre. Le moteur le substitue à
 `{port}` dans ce qu'il lance (vérification, suite de nuit) et l'exporte dans `DELIVERY_PORT`, que
@@ -541,7 +569,7 @@ Premier réflexe : `deliveryctl doctor`, puis `deliveryctl story status`.
 | un rôle se voit refuser une commande légitime | le refus figure dans `report.md` ; ajoutez la règle à `[permissions] extra_allow` |
 | `nightly` : `anomalies/<date> already exists with anomaly cards` | triez la demande de fusion en cours, ou lancez la commande de suppression affichée pour relancer |
 
-## Limites de la version 0.1
+## Limites
 
 - Le tri des anomalies se fait en éditant les cartes dans la demande de fusion qui les porte,
   sans outil dédié.

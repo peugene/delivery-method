@@ -4,6 +4,45 @@ Chaque version liste ses ajouts, changements et corrections. La rubrique `Contra
 tout changement de [`CONTRACTS.md`](CONTRACTS.md) : tant que le plugin est en `0.x`, un
 changement de contrat monte la version mineure ; après 1.0.0, la version majeure.
 
+## 0.3.0
+
+### Ajouts
+
+- L'objectif d'un brainstorm : `/brainstorm --vision` (large et peu profond, une longue session)
+  ou ciblé (étroit et profond, court), annoncé à l'ouverture ; l'objectif règle la conduite, jamais
+  la clôture.
+- Les points d'enregistrement : au mot « point », le brainstorm écrit un brouillon
+  `docs/maybe/<date>-<slug>.draft.md` (non suivi par git) qui garde les décisions validées mot pour
+  mot, qu'un résumé automatique d'une longue session pourrait paraphraser ; le brouillon se reprend
+  en le nommant et se supprime à la clôture.
+- Le mot de clôture « vision » (dépôt `spec` ou `single`) : les décisions validées passent à
+  `/spec-frame <incr> --discover`, et le brief `spec/product/brief.md` est écrit par l'analyste
+  produit, commité avec `framing.md` au GO de cadrage. Une décision ferme qui contredit le brief le
+  met à jour dans le même cadrage.
+- `spec lint` contrôle la neutralité technologique du brief, avec le lexique des stories.
+
+### Changements
+
+- Le guide dit où brainstormer une idée qui sera cadrée : dans la session de l'analyste produit ou
+  du lead technique, qui seules ouvrent `/spec-frame` et `/impl-frame`.
+- Documentation remise d'accord avec le plugin : verbes et options du moteur (`init`, `campaign`,
+  `story open`, `story wait`, `gate`, `merge`, `journal`, `note`), tableau des défauts de
+  `delivery.toml`, tableau des skills, sessions et arguments des commandes du guide, installation
+  pour l'utilisateur seulement ; plus de titre ni de phrase qui nomme une ancienne version.
+- L'aide du moteur : `campaign` ouvre le fichier de campagne d'un lead (il n'y a pas de branche de
+  campagne), `qualify` cite `close`, les options de `story` ont leur ligne d'aide.
+
+### Contracts
+
+- §2 : le brainstorm (objectif, brouillon, quatre mots de clôture) et la session où il se tient.
+- §3 : les défauts des clés de `delivery.toml`.
+- §10 : l'option `--base` de `gate`.
+- §12.2 : les options de `init`, `campaign`, `story open`, `story wait`, `merge`, `note`, `journal`
+  et `kit lint`.
+- §14.1 : le brief, ses deux circuits et son écriture par `--discover`.
+- §14.2 : le gabarit du brief.
+- §14.3 : la neutralité du brief.
+
 ## 0.2.2
 
 ### Changements
