@@ -107,6 +107,20 @@ class LintTest(unittest.TestCase):
         words = sorted(f.message.split("'")[1] for f in self.lint(story=body, toml=toml))
         self.assertEqual(words, ["Kanban", "SQL", "endpoint"])
 
+    def test_brief_neutrality(self):
+        brief = self.root / "spec/product/brief.md"
+        self.assertEqual(self.lint(), [])                       # no brief: no finding
+        write(brief, "# Brief\n<!-- une base SQL\nsur deux lignes -->\n## SQL\n"
+                     "Des listes dans une base SQL via un endpoint.\n")
+        found = spec.lint(self.root)
+        self.assertEqual([str(f).split(" (")[0] for f in found],
+                         ["spec/product/brief.md:5: neutrality: technology word 'SQL': say what the user observes",
+                          "spec/product/brief.md:5: neutrality: technology word 'endpoint': say what the user observes"])
+        write(self.root / "spec/spec.toml", TOML + '[neutrality]\nallow = ["SQL"]\n')
+        self.assertEqual([f.message.split("'")[1] for f in spec.lint(self.root)], ["endpoint"])
+        write(brief, "# Brief\nlint-exempt: neutrality — nom du produit\nUn endpoint SQL.\n")
+        self.assertEqual(spec.lint(self.root), [])
+
     def test_extension_rules(self):
         body = STORY.replace("## Acceptance criteria", "- 3b. La liste existe déjà : rien ne change.\n"
                              "## Acceptance criteria\n- AC3 @ext-9z — Given a, When b, Then c")

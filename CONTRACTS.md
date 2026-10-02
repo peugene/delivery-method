@@ -100,7 +100,9 @@ validées par l'humain, citées mot pour mot ; écartées ; ouvertes ; mises de 
 n'est pas suivi par git ; l'humain le nomme pour reprendre. Clôture, sur le mot de l'humain :
 *oublier* supprime le brouillon et n'écrit rien ; *archiver* écrit `docs/maybe/<AAAA-MM-JJ>-<slug>.md`
 à partir du brouillon et de la discussion depuis, puis supprime le brouillon ; *cadrer* cite les
-décisions validées, celles du brouillon et celles d'après, puis supprime le brouillon.
+décisions validées, celles du brouillon et celles d'après, puis supprime le brouillon ; *vision*
+(dépôt `spec` ou `single` seulement) les cite de même, puis supprime le brouillon, et les passe à
+`/spec-frame <incr> --discover` qui en écrit le brief (§14.1).
 
 ## 3. `delivery.toml`
 
@@ -798,6 +800,18 @@ Quatre GO humains : cadrage (`framed`), revue, clôture (`closed`), publication 
 GO est le statut, posé par l'analyste sur message explicite de l'humain ; en équipe, la demande
 de fusion approuvée.
 
+Le brief (`spec/product/brief.md`) est le point de départ de tout cadrage : `/spec-frame` le lit
+en premier. Il est écrit par l'analyste produit dans `/spec-frame <incr> --discover`, à partir des
+décisions que l'humain a validées au mot de clôture *vision* d'un brainstorm (dans la session, ou
+collées après la commande), ou, avec `--discover`, quand le brief est vide ; l'incrément couvre
+alors un seul bloc de `## Blocks`, nommé dans son `## Purpose`. Une décision ferme qui contredit
+le brief le met à jour dans le même cadrage ; le récapitulatif et le GO de cadrage nomment chaque
+changement du brief. Au GO de cadrage, l'analyste commite `framing.md` et, s'il a changé, le
+brief : toujours quatre GO, pas de GO propre au brief. Deux circuits : au début d'un produit (ou
+pour un tournant), brainstorm → *vision* → cadrage ; ensuite, pour un cadrage ciblé, brainstorm →
+*cadrer* → cadrage. Dans un dépôt `impl`, la vision technique est `docs/architecture.md`, cadrée
+par `/impl-frame` ; le mot *vision* n'y est pas proposé.
+
 Rapport de revue : `refinement/<incr>/reviews/<date>.md` (`-2`, `-3` pour une autre revue du même
 jour), terminé par `Max severity: blocking | to-decide | note | none` et `Spec ready: yes | no`
 (`yes` seulement sans constat `blocking` ni `to-decide` ouvert). Taille choisie à chaque revue
@@ -813,6 +827,13 @@ spec/ui/copy.<locale>.json
 spec/acceptance/          suite Playwright, harness-contract.md, fixtures/empty-app/
 spec/CHANGELOG.md
 ```
+
+Brief (`spec/product/brief.md`, 40 lignes visées, gabarit `templates/spec/brief.md`, écrit par
+`init` quand `spec/` est absent) : titre `# Brief`, puis `## Purpose` (le problème, pour qui,
+le succès observable), `## Users`, `## Principles`, `## Blocks` (les grands blocs du produit dans
+l'ordre, une ligne chacun : `<n>. <bloc> — <ce que l'utilisateur obtient> — <incrément, ou
+« not framed »>`), `## Not the product`. Un brief est *vide* quand il n'a aucun contenu propre :
+seulement des titres, des commentaires `<!-- -->` et des marqueurs `<…>`.
 
 Story de spec : frontmatter `id`, `title` (titre court, 3 à 8 mots, repris par la carte de la
 story), `status` (`draft`, `ready`) ; sections `## Business rules`, `## Main flow`,
@@ -837,8 +858,10 @@ Règles `schema`, `neutrality`, `extension`, `coverage`, `orphan-tag`, `test-tag
 critère) ne visent que les stories `ready`, pour qu'un incrément en cours ne bloque pas une
 publication ; lexique de neutralité technologique extensible (`extra` et `allow` sous `[neutrality]`
 de `spec.toml`) ; aucune étiquette de test orpheline ; `spec.toml` et les fichiers
-`ui/copy.<locale>.json` lisibles. Sortie `chemin:ligne: règle: message`. Un constat se lève par une
-ligne `lint-exempt: <règle> — <raison>` dans la story, sauf le schéma d'une story `ready`.
+`ui/copy.<locale>.json` lisibles. La règle `neutrality` couvre aussi `spec/product/brief.md` (même
+lexique, mêmes `allow` et `extra`, `lint-exempt` honoré ; titres et commentaires HTML ignorés) ;
+un brief absent n'est pas un constat. Sortie `chemin:ligne: règle: message`. Un constat se lève par
+une ligne `lint-exempt: <règle> — <raison>` dans la story, sauf le schéma d'une story `ready`.
 
 ### 14.4 Versions
 

@@ -135,8 +135,15 @@ n'est écrit pendant la discussion, sauf au mot « point » : un brouillon
 `docs/maybe/<date>-<slug>.draft.md` garde alors vos décisions mot pour mot, que le résumé
 automatique d'une longue session pourrait paraphraser (le brouillon n'est pas suivi par git ;
 nommez-le pour reprendre). À la fin, vous choisissez d'oublier, d'archiver dans `docs/maybe/`
-(dossier qu'aucun agent ne lit de lui-même) ou de cadrer ; le brouillon est alors supprimé, et
-seules les décisions que vous avez validées passent au cadrage.
+(dossier qu'aucun agent ne lit de lui-même), de cadrer ou, dans un dépôt de spec, de dire
+« vision » ; le brouillon est alors supprimé, et seules les décisions que vous avez validées
+passent au cadrage.
+
+Dans un dépôt de spec, le brief `spec/product/brief.md` (le problème, les utilisateurs, les
+principes, les grands blocs) est le point de départ de tout cadrage. Deux circuits. Au début d'un
+produit : `/brainstorm --vision`, « vision », puis `/spec-frame 01-… --discover`, qui écrit le brief
+et cadre le premier bloc. Ensuite, pour un cadrage ciblé : `/brainstorm <idée>`, « cadrer », puis
+`/spec-frame <incr>`.
 
 ### Spécification (dépôt `spec` ou `single`)
 
@@ -257,14 +264,14 @@ Dans un dépôt équipé, les commandes sont celles de la copie du projet, sans 
 | Commande | Session | Effet |
 |---|---|---|
 | `/delivery-method:init [--upgrade]` | humaine, racine du dépôt | équipe le dépôt, ou met à jour sa copie de la méthode (moteur, agents, skills, commandes) |
-| `/spec-frame <incr> [--discover] [--market <domaine>]` | `product-analyst` | cadrage d'un incrément jusqu'au GO de cadrage |
+| `/spec-frame <incr> [--discover] [--market <domaine>]` | `product-analyst` | cadrage d'un incrément jusqu'au GO de cadrage ; part du brief, que `--discover` écrit s'il est vide |
 | `/spec-write <incr> [<story>] [--acceptance]` | `product-analyst` | stories, corrections jusqu'au GO de clôture ; `--acceptance` : les tests |
 | `/spec-review <incr> [deep\|standard\|light] [--acceptance]` | `product-analyst` | relecture contradictoire, rapport daté |
 | `/impl-frame <campagne> [sujet]` | `technical-lead` | architecture, ADR, cartes en brouillon |
 | `/run-campaign <campagne>` | `technical-lead`, de rôle | le run ; lancée par `deliveryctl run`, jamais à la main |
 | `/qualify <incr>` | `qualification-lead` | recette d'un incrément |
 | `/handoff [<incr>\|<campagne>]` | tout lead, humaine | passation avant `/clear` |
-| `/brainstorm [--vision] <idée>` | humaine, tout dépôt | explorer une idée sans rien engager (ciblé, ou vision) ; « point » : brouillon dans `docs/maybe/` ; clôture : oublier, archiver dans `docs/maybe/` ou cadrer |
+| `/brainstorm [--vision] <idée>` | humaine, tout dépôt | explorer une idée sans rien engager (ciblé, ou vision) ; « point » : brouillon dans `docs/maybe/` ; clôture : oublier, archiver dans `docs/maybe/`, cadrer ou « vision » (dépôt de spec : les décisions deviennent le brief) |
 
 ## Rôles
 

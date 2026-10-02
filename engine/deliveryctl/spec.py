@@ -28,6 +28,7 @@ from .core import (EXIT_ERROR, EXIT_OK, EXIT_PRECONDITION, EXIT_RED, fail, repo_
 from .gitops import Git, trailer_values
 
 SPEC = "spec"
+BRIEF = SPEC + "/product/brief.md"
 STORIES = f"{SPEC}/stories"
 LOCK = "spec.lock"
 CONFORMANCE = "docs/conformance.md"
@@ -268,6 +269,38 @@ def _neutrality(story: Story, terms: list[re.Pattern]) -> list[Finding]:
     return out
 
 
+def _brief(root: Path, terms: list[re.Pattern]) -> list[Finding]:
+    """Neutrality of spec/product/brief.md: its own words, not headings nor HTML comments."""
+    path = root / BRIEF
+    if not path.is_file():
+        return []
+    story, comment = Story(id="", path=BRIEF), False
+    for n, line in enumerate(path.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
+        exempt = EXEMPT_RX.match(line)
+        if exempt and exempt.group(1) == "neutrality":
+            return []
+        text, comment = _uncommented(line, comment)
+        if text.strip() and not text.lstrip().startswith("#"):
+            story.scan.append((n, text))
+    return _neutrality(story, terms)
+
+
+def _uncommented(line: str, inside: bool) -> tuple[str, bool]:
+    """The line without its HTML comments, blanked in place so that columns stay; and whether a
+    comment is still open at its end."""
+    out, i = [], 0
+    while i < len(line):
+        if inside:
+            end = line.find("-->", i)
+            out.append(" " * ((len(line) if end < 0 else end + 3) - i))
+            i, inside = (len(line), True) if end < 0 else (end + 3, False)
+        else:
+            start = line.find("<!--", i)
+            out.append(line[i:] if start < 0 else line[i:start])
+            i, inside = (len(line), False) if start < 0 else (start, True)
+    return "".join(out), inside
+
+
 def scan_titles(root: Path) -> list[tuple[str, int, str, str]]:
     """(path, line, 'test' | 'describe', title) of every Playwright title in spec/acceptance."""
     base, out = root / SPEC / "acceptance", []
@@ -378,7 +411,7 @@ def lint(root: Path) -> list[Finding]:
             found.append(Finding(rel, 1, "schema", f"id {story.id} is also used by {stories[story.id].path}", story.id))
         elif story.id:
             stories[story.id] = story
-    found += _tests(scan_titles(root), stories)
+    found += _brief(root, terms) + _tests(scan_titles(root), stories)
     kept = [f for f in found if not _lifted(f, stories)]
     return sorted(kept, key=lambda f: (f.path, f.line, f.rule, f.message))
 

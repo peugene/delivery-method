@@ -69,7 +69,8 @@ et profond, court, une idée. *Vision* (`/brainstorm --vision <idée>`) : large 
 longue session : à qui s'adresse le produit, le problème, quelques principes, les grands blocs
 dans l'ordre. Si vous plongez dans le détail d'une fonctionnalité, Claude propose de la mettre de
 côté pour un brainstorm ciblé et la note, au lieu de creuser. Dans un dépôt de spec dont le
-brief est vide et sans story, Claude propose la vision en une phrase. L'objectif règle la
+brief est vide (que des titres, des commentaires et des marqueurs) et sans story, Claude propose
+la vision en une phrase. L'objectif règle la
 conduite, jamais la clôture.
 
 **Le point d'enregistrement.** Une longue session est résumée automatiquement, et ce résumé peut
@@ -79,7 +80,8 @@ décisions validées citées mot pour mot, puis les pistes écartées, les quest
 sujets mis de côté. En vision, Claude en propose un après plusieurs décisions validées ou avant de
 changer de sujet ; en ciblé, seulement à votre mot. Le brouillon n'est pas suivi par git. Pour
 reprendre, nommez-le : `/brainstorm docs/maybe/<…>.draft.md`. À la clôture, il est supprimé :
-« oublier » ne garde rien, « archiver » l'intègre à l'archive, « cadrer » en cite les décisions.
+« oublier » ne garde rien, « archiver » l'intègre à l'archive, « cadrer » et « vision » en citent
+les décisions.
 
 **Lancez le brainstorm dans la session qui cadrera.** Une session ne voit pas la conversation
 d'une autre, et `/spec-frame` ne s'ouvre que dans la session de l'analyste produit,
@@ -88,7 +90,9 @@ bonne session et s'arrêtent. Pour une idée produit, dans le dépôt de spec, o
 `claude --agent product-analyst` ; pour une idée technique, dans un dépôt d'implémentation,
 `claude --agent technical-lead`. Au mot « cadrer », Claude liste les décisions que vous avez
 validées, citées mot pour mot ; vous tapez alors la commande de cadrage dans la même session,
-qui part de ces décisions.
+qui part de ces décisions. « Vision » (dépôt de spec seulement) fait de même, mais pour le brief :
+voir la phase spécification. Dans un dépôt d'implémentation, la vision technique est
+`docs/architecture.md`, cadrée par `/impl-frame` : « vision » n'y est pas proposé.
 
 ```mermaid
 flowchart LR
@@ -101,6 +105,8 @@ flowchart LR
     C -- archiver --> E["docs/maybe/2026-10-02-rappels.md<br/>hors de toute décision"]
     C -- cadrer --> F["liste des décisions validées"]
     F --> G["/spec-frame ou /impl-frame<br/>dans la même session"]
+    C -- "vision (dépôt de spec)" --> V["liste des décisions validées"]
+    V --> W["/spec-frame 01-… --discover<br/>écrit le brief"]
 ```
 
 | Où | Commande | Effet |
@@ -108,12 +114,13 @@ flowchart LR
 | shell | `claude --agent product-analyst` (idée produit) ou `claude --agent technical-lead` (idée technique) | ouvre la session qui cadrera ; `claude` suffit pour une idée que vous ne pensez pas cadrer |
 | cette session | `/brainstorm [--vision] <idée>` | ouvre la discussion, ciblée ou vision |
 | même session | « point » | écrit ou réécrit le brouillon `docs/maybe/<date>-<slug>.draft.md` (non suivi par git) |
-| même session | « oublier », « archiver » ou « cadrer » | clôt : rien, une archive, ou la liste des décisions validées ; le brouillon est supprimé |
+| même session | « oublier », « archiver », « cadrer » ou « vision » | clôt : rien, une archive, ou la liste des décisions validées (« vision » : dépôt de spec seulement) ; le brouillon est supprimé |
 | même session | `/spec-frame <incr>` ou `/impl-frame <campagne>` | après « cadrer » : ouvre le cadrage avec ces décisions |
+| même session | `/spec-frame 01-… --discover` | après « vision » : écrit le brief avec ces décisions et cadre le premier bloc |
 | shell | `git add docs/maybe/… && git commit` | garde l'archive, si vous le voulez ; le commit est votre geste |
 
 Si le brainstorm a lieu dans une autre session, une session ordinaire par exemple, dites-y
-« cadrer » avant de la quitter et copiez la liste. Ouvrez ensuite la session de l'analyste ou du
+« cadrer » (ou « vision ») avant de la quitter et copiez la liste. Ouvrez ensuite la session de l'analyste ou du
 lead technique, tapez la commande de cadrage et collez la liste à sa suite : elle seule passe,
 ni la discussion ni les pistes écartées.
 
@@ -135,7 +142,8 @@ décidez. Quatre GO humains jalonnent un incrément.
 
 ```mermaid
 flowchart TD
-    A["/spec-frame 01-core"] --> B{GO de cadrage}
+    Z["brief : spec/product/brief.md"] --> A["/spec-frame 01-core"]
+    A --> B{GO de cadrage}
     B -- "framing.md : framed" --> C["/spec-write 01-core"]
     C --> L["deliveryctl spec lint"]
     L --> D["/spec-review 01-core"]
@@ -152,9 +160,15 @@ flowchart TD
 Exemple : l'incrément `01-core` couvre `s001 : Se connecter`, `s002 : Créer une liste` et
 `s003 : Gérer les tâches d'une liste`.
 
-1. `claude --agent product-analyst`, puis `/spec-frame 01-core`. Si l'incrément naît d'un
-   brainstorm, faites-le dans cette session et dites « cadrer » avant `/spec-frame` : vos
-   décisions validées y entrent comme décisions fermes (voir « Explorer une idée »).
+1. `claude --agent product-analyst`, puis `/spec-frame 01-core`. Tout cadrage part du brief
+   `spec/product/brief.md` (le problème, les utilisateurs, les principes, les grands blocs).
+   Deux circuits. Au début du produit : `/brainstorm --vision`, vous dites « vision », puis
+   `/spec-frame 01-core --discover` écrit le brief à partir de vos décisions validées et cadre le
+   premier bloc, que `## Blocks` nomme. Ensuite, pour un cadrage ciblé : `/brainstorm <idée>`,
+   « cadrer », puis `/spec-frame <incr>` ; vos décisions validées y entrent comme décisions
+   fermes, et une décision ferme qui contredit le brief le met à jour dans le même cadrage (le
+   récapitulatif et le GO de cadrage nomment chaque changement). Au GO, `framing.md` et le brief
+   modifié sont commités ensemble. Voir « Explorer une idée ».
    L'analyste lit l'existant, pose des questions numérotées avec sa recommandation (« une liste
    sans tâche peut-elle être supprimée ? a) oui b) non, recommandation : a »), et écrit vos réponses
    mot pour mot dans `refinement/01-core/framing.md`. Vous donnez le GO de cadrage en le disant.
