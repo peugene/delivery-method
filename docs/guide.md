@@ -63,13 +63,14 @@ aucune mémoire, aucune note, aucun fichier pendant la discussion. Claude reform
 un avis franc, propose deux ou trois angles, puis avance à votre rythme, une ou deux questions
 par tour. La discussion se clôt sur votre mot.
 
-**Lancez le brainstorm dans la session qui cadrera.** Une session ne voit pas la conversation d'une
-autre, et chaque commande de cadrage ne s'ouvre que dans sa session de rôle : hors d'elle, elle
-affiche la commande de lancement et s'arrête. Pour une idée produit, dans le dépôt de spec,
-ouvrez la session de l'analyste (`claude --agent product-analyst`) ; pour une idée technique,
-dans un dépôt d'implémentation, celle du lead technique (`claude --agent technical-lead`). Au mot
-« cadrer », Claude liste les décisions que vous avez validées, citées mot pour mot ; vous tapez
-alors la commande de cadrage dans la même session, qui part de ces décisions.
+**Lancez le brainstorm dans la session qui cadrera.** Une session ne voit pas la conversation
+d'une autre, et `/spec-frame` ne s'ouvre que dans la session de l'analyste produit,
+`/impl-frame` que dans celle du lead technique : ailleurs, ils affichent la commande qui ouvre la
+bonne session et s'arrêtent. Pour une idée produit, dans le dépôt de spec, ouvrez donc
+`claude --agent product-analyst` ; pour une idée technique, dans un dépôt d'implémentation,
+`claude --agent technical-lead`. Au mot « cadrer », Claude liste les décisions que vous avez
+validées, citées mot pour mot ; vous tapez alors la commande de cadrage dans la même session,
+qui part de ces décisions.
 
 ```mermaid
 flowchart LR
@@ -90,14 +91,14 @@ flowchart LR
 | même session | `/spec-frame <incr>` ou `/impl-frame <campagne>` | après « cadrer » : ouvre le cadrage avec ces décisions |
 | shell | `git add docs/maybe/… && git commit` | garde l'archive, si vous le voulez ; le commit est votre geste |
 
-Si le brainstorm a eu lieu dans une autre session (une session ordinaire, ou la veille), dites
-quand même « cadrer » et copiez la liste. Ouvrez la session de rôle, tapez la commande de
-cadrage et collez la liste à sa suite : elle seule passe, ni la discussion ni les pistes
-écartées.
+Si le brainstorm a lieu dans une autre session, une session ordinaire par exemple, dites-y
+« cadrer » avant de la quitter et copiez la liste. Ouvrez ensuite la session de l'analyste ou du
+lead technique, tapez la commande de cadrage et collez la liste à sa suite : elle seule passe,
+ni la discussion ni les pistes écartées.
 
 Deux exemples sur le banc :
 
-- Dans `todo-spec`, `claude --agent product-analyst`, puis
+- Dans `todo-spec`, vous ouvrez `claude --agent product-analyst` et tapez
   `/brainstorm des rappels pour les tâches échues`. Vous concluez que l'idée vaut un incrément,
   mais sans notification par e-mail : « cadrer ». L'analyste liste la seule décision validée,
   « rappel dans l'application, pas d'e-mail » ; dans la même session, `/spec-frame 02-rappels`
