@@ -790,7 +790,7 @@ validerait.
 | `gate <id> [--base R] [--head R]` | contrôle d'intégration (§10) |
 | `submit <id>` | contrôle, pousse la branche, ouvre la demande de fusion ; refuse (code 3) une branche dont la demande de fusion est déjà fusionnée |
 | `merge <id> [--keep]` | fusionne une demande de fusion dont la CI est verte (au moins un contrôle, tous réussis ; sans contrôle encore : code 3) et dont la tête est celle contrôlée ; ferme ensuite la copie de travail de la story, sauf `--keep` ; exige alors la CI de la branche par défaut dans sa protection quand elle n'y est pas encore (§2) |
-| `spec lint`, `spec push`, `spec release`, `spec sync <version>`, `spec verify` | §14 |
+| `spec lint`, `spec push`, `spec release [<version>]`, `spec sync <version> [--source URL]`, `spec verify` | §14 |
 | `qualify open <incr>`, `qualify run <incr>`, `qualify lint <incr>`, `qualify submit <incr>`, `qualify close <incr>` | §15 |
 | `nightly` | suite complète des tests d'IHM (§16) |
 | `note "<texte>" [--story ID]`, `journal add [--category C]`, `journal flush`, `journal report [--limit N]`, `journal setup` | §13 |
@@ -858,7 +858,7 @@ inconnu : `<id> — <quoi>`.
 **Journal d'expérience** : événements JSON, lus par l'humain seul, jamais renvoyés aux agents.
 
 ```json
-{"schema": "delivery-event/1", "ts": "…", "method_version": "0.3.0", "repo": "…", "story": "s004",
+{"schema": "delivery-event/1", "ts": "…", "method_version": "0.4.0", "repo": "…", "story": "s004",
  "role": "engine", "source": "engine | human | agent", "category": "…", "text": "…", "evidence": "…"}
 ```
 
