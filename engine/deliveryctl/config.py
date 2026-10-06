@@ -58,8 +58,12 @@ MACHINE_DEFAULTS = {
     "plugin_dir": "",
     "language": "fr",
     "visibility": "private",
+    "forge": "github",
+    "gitlab_host": "",
+    "gitlab_group": "",
 }
-MACHINE_VALUES = {"window": ("auto", "herdr", "terminal"), "visibility": ("private", "public")}
+MACHINE_VALUES = {"window": ("auto", "herdr", "terminal"), "visibility": ("private", "public", "internal"),
+                  "forge": ("github", "gitlab")}
 
 
 @dataclass

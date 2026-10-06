@@ -91,6 +91,62 @@ comme un conflit. Les sessions de rôle du moteur lancent l'agent de cette copie
 a qu'une source par projet. Le `hooks/hooks.json` du plugin ne sert qu'aux sessions hors d'un
 projet équipé.
 
+**L'équipement par `init`.** Après un résumé de huit lignes au plus (dossier, dépôt à créer ou
+`origin` trouvé avec sa visibilité, disposition, adresse git, branche du commit, protection) et un
+seul « ok » (`o`, `oui`, `y` ou `yes` ; toute autre réponse, ou pas de terminal sans `--yes` :
+rien n'est écrit ; `--dry-run` montre le résumé, n'écrit rien et ne change rien sur la forge),
+`init` fait, dans cet ordre :
+
+1. le dossier et son dépôt git (`git init`, branche `main`) quand il n'y en a pas ;
+2. le dépôt sur la forge, quand le dossier n'est pas un dépôt git, quand le dépôt n'a pas
+   d'`origin`, ou quand un nom est donné (`init spec todo-spec`, `init impl todo-spec todo-kotlin` :
+   le dossier est créé et vide, un dossier plein ou déjà muni d'un `origin` est refusé avec la ligne
+   à taper) ; le nom est celui du dossier ; la forge est `--forge`, sinon le réglage de machine
+   `forge`. GitHub : `gh repo create <utilisateur de gh>/<nom> --private|--public --source .
+   --remote origin`. GitLab : `glab repo create <groupe>/<nom> --private|--public|--internal` sur
+   l'hôte `gitlab_host` (variable `GITLAB_HOST`), dans le groupe `gitlab_group` ou, à défaut,
+   l'espace de l'utilisateur, puis `origin` pris à l'adresse que `glab` donne du projet (SSH ou
+   HTTPS, selon sa configuration). La visibilité vient de `--private`, `--public`, `--internal`,
+   sinon du réglage `visibility` ; `internal` n'existe que sur GitLab et est refusé sur GitHub,
+   avant tout geste. Le nom court d'un dépôt de spec (`impl`) se lit chez le propriétaire ou le
+   groupe où le dépôt est créé ;
+3. l'adresse git : pour un dépôt GitHub public, créé ou trouvé, `git config user.email
+   <id>+<login>@users.noreply.github.com`, lue de `gh api user`, avant le premier commit, sauf si
+   l'adresse configurée en est déjà une ; un dépôt privé garde la sienne ;
+4. les fichiers, dont, avec GitLab, l'`include:` de `.gitlab/delivery-ci.yml` dans le
+   `.gitlab-ci.yml` du projet : fichier créé s'il manque, item ajouté à une liste `include:` en
+   blocs, bloc ajouté à un fichier sans `include:` ; toute autre forme (une chaîne, une liste en
+   ligne, des ancres) est laissée telle quelle et une `note` donne les deux lignes à ajouter ; le
+   reste du fichier n'est jamais réécrit ;
+5. un commit unique de ce que `init` a posé, rien d'autre, même si l'arbre de travail porte d'autres
+   changements ou que d'autres fichiers sont indexés (« Équipe le dépôt avec delivery-method
+   <version> (<disposition>) », trailer `Delivery-Method: <version>`), sur la branche par défaut
+   (`init` refuse une autre branche courante et donne la commande pour changer), puis le push
+   (`-u origin`) ; un push refusé laisse le commit local, le dit en `note` et finit en code 5 ;
+6. la protection de la branche par défaut, seulement quand `init` a posé quelque chose ; une forge
+   qui refuse (dépôt privé sur un forfait sans protection, droits manquants) donne une `note` qui
+   nomme le réglage, jamais un échec de `init` ;
+7. `doctor`, sans rien afficher quand tout est `ok`, sinon ses lignes `note` et `warn` ;
+8. la ligne de suite.
+
+`init --upgrade` suit le même chemin (résumé, « ok », commit « Met à jour delivery-method vers
+<version> » de ce qu'il a rafraîchi, push), sans création de dépôt ni protection.
+
+**Protection de la branche par défaut.** GitHub : `gh api -X PUT
+repos/<propriétaire>/<dépôt>/branches/<branche>/protection` : demande de fusion exigée, 0
+approbation, administrateurs inclus, ni force push ni suppression ; dans un dépôt `spec`, le job de
+CI `checks` est exigé, branches à jour (sa vérification est `spec lint`, verte dès le premier
+commit) ; sur le dépôt, `allow_squash_merge` et `allow_rebase_merge` à false (commits de fusion
+seuls). GitLab, par `glab api` sur le projet : branche protégée avec push à personne, fusion aux
+mainteneurs, pas de force push (déprotégée puis reprotégée quand GitLab la protège déjà avec d'autres
+niveaux) ; méthode de fusion `merge` ; approbations laissées à 0 ; `only_allow_merge_if_pipeline_succeeds`
+à true d'emblée dans un dépôt `spec`. Dans un dépôt `single` ou `impl`, la CI n'est pas exigée
+d'abord : son `just check` reste rouge tant que le squelette du produit manque, et bloquerait les
+premières demandes de fusion. `deliveryctl merge <id>` l'exige (`Forge.require_checks`) après une
+fusion dont la CI était verte, quand la protection ne l'exige pas encore : une fois, sans bruit, par
+une seule ligne affichée ; les autres réglages du propriétaire sont gardés, l'absence de protection
+ou le refus de la forge ne font pas échouer la fusion.
+
 **Brainstorm.** `/brainstorm` s'ouvre sur son objectif : *vision* (`--vision` : large et peu
 profond, une longue session) ou *ciblé* (sans option : étroit et profond, court). L'objectif
 règle la conduite de la session, jamais la clôture. Un brainstorm dont l'idée sera cadrée se tient
@@ -178,7 +234,8 @@ rôles. Les autres rôles et la vérification restent locaux. Défaut : `cloud` 
 "github"`, `local` avec `gitlab` ; `cloud` avec `gitlab` fait échouer le chargement (une session
 cloud ne pousse que sur GitHub). `init` écrit la clé.
 
-Le dépôt a un remote `origin` sur GitHub ou GitLab ; `init` refuse un dépôt sans `origin`. Il
+Le dépôt a un remote `origin` sur GitHub ou GitLab ; `init` crée le dépôt sur la forge quand il
+manque (§2). Il
 n'y a pas de fusion locale : une story, une recette ou une suite de nuit passe toujours par une
 demande de fusion.
 
@@ -193,7 +250,10 @@ notify_story_end = false       # true : un toast à chaque story fusionnée, en 
 journal_dsn = ""               # postgresql://… ; vide = la file locale est le journal
 plugin_dir = ""                # racine du plugin, si le moteur ne la trouve pas seul
 language = "fr"                # langue de contenu (content_language) que `init` écrit dans delivery.toml d'un nouveau projet
-visibility = "private"         # private | public ; visibilité d'un dépôt que la méthode crée sur la forge
+visibility = "private"         # private | public | internal ; visibilité d'un dépôt que `init` crée sur la forge ; internal : GitLab seulement
+forge = "github"               # github | gitlab ; la forge où `init` crée un dépôt (sans `origin`, ou avec un nom)
+gitlab_host = ""               # hôte GitLab où `init` crée un dépôt ; vide = l'hôte par défaut de `glab`
+gitlab_group = ""              # groupe GitLab où `init` crée un dépôt ; vide = l'espace de l'utilisateur de `glab`
 ```
 
 Aucune question n'est posée : une clé absente prend son défaut.
@@ -715,7 +775,7 @@ validerait.
 
 | Verbe | Effet |
 |---|---|
-| `init [single\|spec\|impl [SPEC]] [--language L] [--forge F] [--check C] [--acceptance A] [--serve S] [--upgrade] [--dry-run]` | pose ou met à jour moteur, règles, copie des agents, skills et commandes sous `.claude/` (manifeste `.delivery/method.json`), réglages, CI, et pour un dépôt `spec` ou `single` sans `spec/`, un squelette de `spec/` ; ne pose aucune question : la disposition est l'argument (`single` par défaut ; `impl` exige le dépôt de spec : nom court, `propriétaire/nom`, URL ou chemin local, écrit en `spec_source`), la langue vient des réglages de machine (§4), la forge de `origin`, les commandes sont celles du `justfile`. Affiche au plus quatre lignes de suite : fichiers posés, commande suivante, aide `include:` GitLab ; n'écrase rien, ne commite rien |
+| `init [single\|spec\|impl [SPEC]] [NAME] [--language L] [--forge F] [--check C] [--acceptance A] [--serve S] [--private\|--public\|--internal] [--upgrade] [--dry-run] [--yes]` | équipe le dépôt, ou le crée sur la forge, après un résumé et un seul « ok » (§2, « L'équipement par `init` ») : pose ou met à jour moteur, règles, copie des agents, skills et commandes sous `.claude/` (manifeste `.delivery/method.json`), réglages, CI (avec GitLab, son `include:` dans `.gitlab-ci.yml`), et pour un dépôt `spec` ou `single` sans `spec/`, un squelette de `spec/` ; puis règle l'adresse git d'un dépôt GitHub public, commite ce qu'il a posé (un commit, ses chemins seuls), pousse, protège la branche par défaut, lance `doctor` et affiche la suite. Il ne pose aucune autre question : la disposition est l'argument (`single` par défaut ; `impl` exige le dépôt de spec : nom court, `propriétaire/nom`, URL ou chemin local, écrit en `spec_source`), un nom crée le dossier et le dépôt, la langue vient des réglages de machine (§4), la forge de `origin` (ou `--forge`, ou le réglage `forge`, pour un dépôt à créer), les commandes sont celles du `justfile`. `--dry-run` montre le résumé et n'écrit rien ; `--yes` passe la question (la commande Claude et les scripts la passent après leur propre confirmation) ; sans terminal ni `--yes`, rien n'est écrit (code 3). N'écrase aucun fichier |
 | `doctor` | diagnostic en lecture seule (dans une session cloud, il le dit et saute réglages de machine, herdr, commande de notification, plugin et connexion `claude`, ne vérifie pas `gh auth status` (une note : le forge passe par le proxy GitHub de la session, les gestes de forge se font depuis l'ordinateur du propriétaire) et n'avertit pas d'un `origin/HEAD` absent, au plus une note), dont la copie de la méthode (manifeste, version, fichiers modifiés ou absents, plugin désactivé, hooks) et, avec `implementer = "cloud"`, la connexion `claude.ai` et `origin` sur github.com ; pour un `origin` sur github.com dont `gh repo view` dit le dépôt public, il avertit si l'adresse `git config user.email` ne finit pas par `@users.noreply.github.com` (elle est publiée dans chaque commit et dans le trailer `Approved-By` de chaque fusion), `ok` sinon, et ne dit rien si `gh` manque ou ne répond pas ; la confiance de Claude Code pour le dépôt est aussi vérifiée avec `implementer = "cloud"`, quelle que soit la fenêtre de la machine |
 | `cards list`, `cards order`, `cards lint` | `list`, `order` : lire, ordonner les cartes de la branche cible, celles que lit le run ; `lint` : contrôler celles de la copie de travail, avant commit ; seules les cartes `ready` dont les dépendances sont faites sont lançables |
 | `campaign open <nom> [--phase spec\|impl\|qualification]` | crée `docs/campaigns/<nom>.md` et son dossier `work/` |
@@ -729,7 +789,7 @@ validerait.
 | `verify <id>` | lance les vérifications sur le port de la story, écrit `work/verify.log`, commite `verification.md` |
 | `gate <id> [--base R] [--head R]` | contrôle d'intégration (§10) |
 | `submit <id>` | contrôle, pousse la branche, ouvre la demande de fusion ; refuse (code 3) une branche dont la demande de fusion est déjà fusionnée |
-| `merge <id> [--keep]` | fusionne une demande de fusion dont la CI est verte (au moins un contrôle, tous réussis ; sans contrôle encore : code 3) et dont la tête est celle contrôlée ; ferme ensuite la copie de travail de la story, sauf `--keep` |
+| `merge <id> [--keep]` | fusionne une demande de fusion dont la CI est verte (au moins un contrôle, tous réussis ; sans contrôle encore : code 3) et dont la tête est celle contrôlée ; ferme ensuite la copie de travail de la story, sauf `--keep` ; exige alors la CI de la branche par défaut dans sa protection quand elle n'y est pas encore (§2) |
 | `spec lint`, `spec release`, `spec sync <version>`, `spec verify` | §14 |
 | `qualify open <incr>`, `qualify run <incr>`, `qualify lint <incr>`, `qualify submit <incr>`, `qualify close <incr>` | §15 |
 | `nightly` | suite complète des tests d'IHM (§16) |

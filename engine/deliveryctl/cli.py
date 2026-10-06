@@ -316,15 +316,21 @@ def build() -> argparse.ArgumentParser:
     s = sub.add_parser("init", help="install or upgrade the method in this repository (human)")
     s.add_argument("layout", nargs="?", choices=["single", "spec", "impl"],
                    help="what the repository holds (default single); impl takes the spec repository next")
-    s.add_argument("spec_repo", nargs="?", metavar="SPEC",
-                   help="impl: the spec repository (short name, owner/name, URL or local path)")
+    s.add_argument("names", nargs="*", metavar="NAME",
+                   help="[SPEC] [NAME]: impl takes the spec repository (short name, owner/name, URL or local "
+                        "path), then the name of a new folder and repository; the other layouts take the name")
     s.add_argument("--language")
     s.add_argument("--forge", choices=["github", "gitlab"])
     s.add_argument("--check")
     s.add_argument("--acceptance")
     s.add_argument("--serve")
     s.add_argument("--upgrade", action="store_true")
-    s.add_argument("--dry-run", action="store_true")
+    s.add_argument("--dry-run", action="store_true", help="show the summary and write nothing")
+    s.add_argument("--yes", "-y", action="store_true", help="do not ask for the ok")
+    visibility = s.add_mutually_exclusive_group()
+    for word in ("private", "public", "internal"):
+        visibility.add_argument(f"--{word}", dest="visibility", action="store_const", const=word,
+                                help="visibility of the repository to create" + (" (GitLab only)" if word == "internal" else ""))
     s.set_defaults(func=cmd_init)
 
     s = sub.add_parser("doctor", help="read-only diagnosis")

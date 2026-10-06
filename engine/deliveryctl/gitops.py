@@ -150,7 +150,8 @@ class Git:
 
     # -- writing ----------------------------------------------------------------------------
     def commit(self, paths: list[str], subject: str, trailers: list[tuple[str, str]] | None = None,
-               body: str = "", allow_empty: bool = False) -> str:
+               body: str = "", allow_empty: bool = False, only: bool = False) -> str:
+        """Commit what is staged, or with `only` exactly `paths`, whatever else is staged."""
         if paths:
             self.run("add", "--", *paths)
         message = subject.strip() + "\n"
@@ -161,6 +162,8 @@ class Git:
         args = ["commit", "--quiet", "-F", "-"]
         if allow_empty:
             args.append("--allow-empty")
+        if only and paths:
+            args += ["--only", "--", *paths]
         proc = run(["git", *args], cwd=self.cwd, check=False, input_text=message)
         if proc.returncode != 0:
             fail(EXIT_TOOL, f"git commit failed: {(proc.stderr or proc.stdout).strip()}")

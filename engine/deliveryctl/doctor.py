@@ -462,14 +462,19 @@ PROJECT = (check_engine, check_method, check_project, check_remote, check_gitign
            check_tools, check_cloud, check_public_address, check_ci, check_trust, check_worktrees, check_location, check_releases, check_mentions)
 
 
-def main(args) -> int:
+def collect():
+    """The (level, message) of every check, in order."""
     ctx = Context()
     for check in GLOBAL + PROJECT:
         if check in PROJECT and ctx.root is None:
             continue
         try:
-            for level, message in check(ctx):
-                print(f"{level}: {message}")
+            yield from check(ctx)
         except DeliveryError as exc:
-            print(f"warn: {exc.message}")
+            yield "warn", exc.message
+
+
+def main(args) -> int:
+    for level, message in collect():
+        print(f"{level}: {message}")
     return EXIT_OK
