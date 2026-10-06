@@ -43,19 +43,28 @@ Fail closed: on the first failure, say why and stop.
      `depends_on` and `risks` set, sized for one order of 60 lines; `show_plan: true` only
      as an exception the owner asks for.
    Then `deliveryctl cards lint` must be green.
-5. Propose the `## Project conventions` for `CLAUDE.md` (layers, naming, code language, the
-   commands of `delivery.toml`) as a ready-to-paste block. The targeted test is named
-   `just test <selector>`, with the selector syntax of the stack and the body of the `test`
-   recipe of the `justfile`: roles may run it (implementer's work, reviewer's bite). A test
-   command other than `just test` comes with its `[permissions] extra_allow` rule, proposed
-   with it. The owner edits `CLAUDE.md`, the `justfile` and `delivery.toml`, and commits them.
+5. Propose, for the stack chosen in this framing, ready-to-paste blocks:
+   - the `## Project conventions` for `CLAUDE.md` (layers, naming, code language, the commands
+     of `delivery.toml`). The targeted test is named `just test <selector>`, with the selector
+     syntax of the stack: roles may run it (implementer's work, reviewer's bite). A test command
+     other than `just test` comes with its `[permissions] extra_allow` rule, proposed with it;
+   - the four recipes of the `justfile`: `check` (lint, build, unit and integration tests,
+     judged on its exit code), `test selector`, `acceptance grep=''` (Playwright against
+     `just serve` on the port of `DELIVERY_PORT`, 3999 by default, as in the template's
+     comment) and `serve port`
+     (the application of the working copy, in test mode, on that port);
+   - the install lines of the stack for the CI file of the forge (`.github/workflows/delivery.yml`
+     or `.gitlab/delivery-ci.yml`), at the place the template marks.
+   Say that the recipes and the CI lines turn green once the skeleton task card is merged. The
+   owner edits `CLAUDE.md`, the `justfile`, the CI file and `delivery.toml`, and commits them.
 6. Commit the architecture, the ADRs, the cards and the campaign file, trailers
    `Campaign: <name>` and `Agent: technical-lead`, without push. Rewrite `## Next`.
 
 ## Outputs
 - `docs/architecture.md`, `docs/adr/`, draft cards in `backlog/`, the campaign file; content in
   the project language, section names in English.
-- The conventions text, the `test` recipe and any `extra_allow` rule, in the conversation only.
+- The conventions text, the four `justfile` recipes, the CI install lines and any `extra_allow`
+  rule, in the conversation only.
 
 ## Ends with
 A summary: files written, draft cards in dependency order as `<id> : <title>`, questions still

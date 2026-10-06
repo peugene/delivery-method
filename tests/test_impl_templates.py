@@ -221,6 +221,15 @@ class PromptContractTest(unittest.TestCase):
             self.assertIn("Bash(just test *)", allow, role)
         self.assertRegex(text_of("templates/project/justfile"), r"(?m)^test selector:")
 
+    def test_impl_frame_proposes_the_recipes_and_the_ci_install_lines(self):
+        frame = text_of("commands/impl-frame.md")
+        for recipe in ("`check`", "`test selector`", "`acceptance grep=\'\'`", "`serve port`"):
+            self.assertIn(recipe, frame)
+        for ci_file in (".github/workflows/delivery.yml", ".gitlab/delivery-ci.yml"):
+            self.assertIn(ci_file, frame)
+        self.assertIn("skeleton task card is merged", frame)
+        self.assertIn("the four `justfile` recipes, the CI install lines", frame)
+
     def test_reviewer_bites_with_check_when_no_test_command(self):
         reviewer = text_of("agents/story-reviewer.md")
         self.assertIn("`check` on the broken tree", reviewer)
