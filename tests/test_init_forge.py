@@ -395,6 +395,42 @@ class UpgradeTest(ForgeInitCase):
         self.assertEqual([c for c in self.calls()[before:] if "protection" in c], [])
 
 
+    def refuse_main(self):
+        hook = self.origin / "hooks" / "pre-receive"
+        write(hook, "#!/bin/sh\nwhile read old new ref; do\n  [ \"$ref\" = refs/heads/main ] && "
+                    "{ echo 'protected branch' >&2; exit 1; }\ndone\nexit 0\n").chmod(0o755)
+
+    def test_a_protected_default_branch_gets_the_refresh_through_a_merge_request(self):
+        self.old_equipment()
+        write(self.repo / "src" / "app.txt", "owner's change\n")
+        remote = git(self.repo, "rev-parse", "origin/main")
+        self.refuse_main()
+        code, out = self.cli("init", "--upgrade")
+        self.assertEqual(code, 0, out)
+        branch = f"delivery-method/upgrade-{VERSION}"
+        self.assertIn("merge request https://forge.test/pr/1", out)
+        self.assertIn("main is protected", out)
+        self.assertNotIn("push refused", out)
+        self.assertEqual(git(self.repo, "branch", "--show-current"), "main")
+        self.assertEqual(git(self.repo, "rev-parse", "main"), remote)
+        self.assertEqual(git(self.origin, "rev-parse", "main"), remote)
+        self.assertEqual(git(self.repo, "rev-parse", f"{branch}~1"), remote)
+        self.assertEqual(git(self.repo, "log", "-1", "--format=%s", branch), f"Met à jour delivery-method vers {VERSION}")
+        self.assertEqual(git(self.origin, "rev-parse", branch), git(self.repo, "rev-parse", branch))
+        self.assertEqual(sh(["git", "status", "--porcelain"], self.repo).stdout, " M src/app.txt\n")
+        request = json.loads((self.forge_dir / "requests.json").read_text())[branch]
+        self.assertEqual((request["base"], request["title"]), ("main", f"Met à jour delivery-method vers {VERSION}"))
+        self.assertIn("commités sur une branche", out)
+
+    def test_the_branch_of_a_refused_refresh_is_kept_local_when_even_it_is_refused(self):
+        self.old_equipment()
+        write(self.origin / "hooks" / "pre-receive", "#!/bin/sh\nexit 1\n").chmod(0o755)
+        code, out = self.cli("init", "--upgrade")
+        self.assertEqual(code, core.EXIT_TOOL, out)
+        self.assertEqual(git(self.repo, "branch", "--show-current"), "main")
+        self.assertEqual(git(self.repo, "log", "-1", "--format=%s", "main"), f"Met à jour delivery-method vers {VERSION}")
+
+
 class DiagnosisTest(ForgeInitCase):
     def test_doctor_prints_nothing_when_all_is_ok_and_its_notes_and_warns_otherwise(self):
         from deliveryctl import doctor

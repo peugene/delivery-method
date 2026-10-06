@@ -810,9 +810,33 @@ def commit_paths(root: Path, steps: list[Step]) -> list[str]:
     return paths
 
 
+def _move_to_request(plan: Plan, git: Git, subject: str, notes: list[str]) -> bool:
+    """The default branch refuses the refresh commit: move it to the branch
+    `delivery-method/upgrade-<version>`, open its merge request, and put the default branch back
+    on its remote head. False, with the checkout as it was, when that cannot be done."""
+    branch, remote = f"delivery-method/upgrade-{plan.version}", f"origin/{plan.branch}"
+    if not git.rev(remote):
+        return False
+    git.run("checkout", "--quiet", "-B", branch)
+    body = (f"Met à jour la copie de la méthode vers {plan.version} : `.delivery/`, la copie des agents, skills et "
+            "commandes dans `.claude/`, les hooks et les réglages du projet. Rien d'autre ne change.\n")
+    try:
+        url = Forge(config.load(plan.root), git).open_branch(branch, subject, body)
+    except DeliveryError as exc:
+        git.run("checkout", "--quiet", plan.branch)
+        notes.append(f"merge request not opened ({exc.message.splitlines()[0] if exc.message else ''})")
+        return False
+    git.run("branch", "-f", plan.branch, remote)
+    git.run("checkout", "--quiet", plan.branch)
+    notes.append(f"{plan.branch} is protected: the refresh is on the branch {branch}, merge request {url}; "
+                 f"merge it, then 'git pull' on {plan.branch}")
+    return True
+
+
 def apply(plan: Plan) -> tuple[str, list[str]]:
     """Write the plan, then the forge gestures; returns what became of the commit ('pushed',
-    'local' when the push was refused, 'none' when the files equal the last commit) and the notes."""
+    'request' when an upgrade went to a merge request because the push was refused, 'local' when
+    the push was refused, 'none' when the files equal the last commit) and the notes."""
     root, notes = plan.root, []
     root.mkdir(parents=True, exist_ok=True)
     if not plan.git_repo:
@@ -840,6 +864,8 @@ def apply(plan: Plan) -> tuple[str, list[str]]:
         git.push(plan.branch)
     except DeliveryError as exc:
         detail = exc.message.splitlines()[-1] if exc.message else ""
+        if plan.upgrade and _move_to_request(plan, git, subject, notes):
+            return "request", notes
         notes.append(f"push refused ({detail}): the commit stays local; push it with 'git push -u origin {plan.branch}' "
                      "or, on a protected branch, from a branch and a merge request")
         return "local", notes
@@ -859,6 +885,7 @@ def next_steps(root: Path, steps: list[Step], forge: str, layout: str, upgrade: 
     if not changed:
         return ["Rien à changer : le dépôt est déjà équipé. Diagnostic : .delivery/deliveryctl doctor"]
     done = {"pushed": f"commités et poussés sur {branch}", "local": f"commités sur {branch}, push à refaire",
+            "request": f"commités sur une branche, à fusionner par demande de fusion ({branch} est protégée)",
             "none": "écrits, identiques au dernier commit"}[outcome]
     if upgrade:
         return [f"{len(changed)} fichiers mis à jour, {done}"]

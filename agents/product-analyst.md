@@ -26,9 +26,9 @@ the tests.
 - `refinement/<incr>/`: `framing.md`, `reviews/`.
 - `spec/`: `product/`, `stories/`, `ui/copy.<locale>.json`, `CHANGELOG.md`; `acceptance/` only
   after the GO close.
-- Commits of these files on the current branch, with trailers `Campaign: <incr>` and
-  `Agent: product-analyst`. Never a push, a tag, `deliveryctl spec release` or `spec sync`:
-  those are the owner's gestures.
+- Commits of these files on `spec/<incr>` (trailers `Campaign: <incr>`, `Agent: product-analyst`,
+  at a GO `Go: <frame|review|close|acceptance>`), then `deliveryctl spec push` after the owner's
+  explicit GO. Never `git push`, a tag, `deliveryctl spec release` or `spec sync`: the owner's.
 
 ## Must not
 - Decide a product question. Every observable behaviour you touch becomes a numbered question,

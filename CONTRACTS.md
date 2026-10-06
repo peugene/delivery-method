@@ -775,7 +775,7 @@ validerait.
 
 | Verbe | Effet |
 |---|---|
-| `init [single\|spec\|impl [SPEC]] [NAME] [--language L] [--forge F] [--check C] [--acceptance A] [--serve S] [--private\|--public\|--internal] [--upgrade] [--dry-run] [--yes]` | équipe le dépôt, ou le crée sur la forge, après un résumé et un seul « ok » (§2, « L'équipement par `init` ») : pose ou met à jour moteur, règles, copie des agents, skills et commandes sous `.claude/` (manifeste `.delivery/method.json`), réglages, CI (avec GitLab, son `include:` dans `.gitlab-ci.yml`), et pour un dépôt `spec` ou `single` sans `spec/`, un squelette de `spec/` ; puis règle l'adresse git d'un dépôt GitHub public, commite ce qu'il a posé (un commit, ses chemins seuls), pousse, protège la branche par défaut, lance `doctor` et affiche la suite. Il ne pose aucune autre question : la disposition est l'argument (`single` par défaut ; `impl` exige le dépôt de spec : nom court, `propriétaire/nom`, URL ou chemin local, écrit en `spec_source`), un nom crée le dossier et le dépôt, la langue vient des réglages de machine (§4), la forge de `origin` (ou `--forge`, ou le réglage `forge`, pour un dépôt à créer), les commandes sont celles du `justfile`. `--dry-run` montre le résumé et n'écrit rien ; `--yes` passe la question (la commande Claude et les scripts la passent après leur propre confirmation) ; sans terminal ni `--yes`, rien n'est écrit (code 3). N'écrase aucun fichier |
+| `init [single\|spec\|impl [SPEC]] [NAME] [--language L] [--forge F] [--check C] [--acceptance A] [--serve S] [--private\|--public\|--internal] [--upgrade] [--dry-run] [--yes]` | équipe le dépôt, ou le crée sur la forge, après un résumé et un seul « ok » (§2, « L'équipement par `init` ») : pose ou met à jour moteur, règles, copie des agents, skills et commandes sous `.claude/` (manifeste `.delivery/method.json`), réglages, CI (avec GitLab, son `include:` dans `.gitlab-ci.yml`), et pour un dépôt `spec` ou `single` sans `spec/`, un squelette de `spec/` ; puis règle l'adresse git d'un dépôt GitHub public, commite ce qu'il a posé (un commit, ses chemins seuls), pousse, protège la branche par défaut (avec `--upgrade`, un push refusé de la branche par défaut déplace le commit sur la branche `delivery-method/upgrade-<version>`, remet la branche par défaut sur sa tête distante et ouvre la demande de fusion que le propriétaire fusionne), lance `doctor` et affiche la suite. Il ne pose aucune autre question : la disposition est l'argument (`single` par défaut ; `impl` exige le dépôt de spec : nom court, `propriétaire/nom`, URL ou chemin local, écrit en `spec_source`), un nom crée le dossier et le dépôt, la langue vient des réglages de machine (§4), la forge de `origin` (ou `--forge`, ou le réglage `forge`, pour un dépôt à créer), les commandes sont celles du `justfile`. `--dry-run` montre le résumé et n'écrit rien ; `--yes` passe la question (la commande Claude et les scripts la passent après leur propre confirmation) ; sans terminal ni `--yes`, rien n'est écrit (code 3). N'écrase aucun fichier |
 | `doctor` | diagnostic en lecture seule (dans une session cloud, il le dit et saute réglages de machine, herdr, commande de notification, plugin et connexion `claude`, ne vérifie pas `gh auth status` (une note : le forge passe par le proxy GitHub de la session, les gestes de forge se font depuis l'ordinateur du propriétaire) et n'avertit pas d'un `origin/HEAD` absent, au plus une note), dont la copie de la méthode (manifeste, version, fichiers modifiés ou absents, plugin désactivé, hooks) et, avec `implementer = "cloud"`, la connexion `claude.ai` et `origin` sur github.com ; pour un `origin` sur github.com dont `gh repo view` dit le dépôt public, il avertit si l'adresse `git config user.email` ne finit pas par `@users.noreply.github.com` (elle est publiée dans chaque commit et dans le trailer `Approved-By` de chaque fusion), `ok` sinon, et ne dit rien si `gh` manque ou ne répond pas ; la confiance de Claude Code pour le dépôt est aussi vérifiée avec `implementer = "cloud"`, quelle que soit la fenêtre de la machine |
 | `cards list`, `cards order`, `cards lint` | `list`, `order` : lire, ordonner les cartes de la branche cible, celles que lit le run ; `lint` : contrôler celles de la copie de travail, avant commit ; seules les cartes `ready` dont les dépendances sont faites sont lançables |
 | `campaign open <nom> [--phase spec\|impl\|qualification]` | crée `docs/campaigns/<nom>.md` et son dossier `work/` |
@@ -790,7 +790,7 @@ validerait.
 | `gate <id> [--base R] [--head R]` | contrôle d'intégration (§10) |
 | `submit <id>` | contrôle, pousse la branche, ouvre la demande de fusion ; refuse (code 3) une branche dont la demande de fusion est déjà fusionnée |
 | `merge <id> [--keep]` | fusionne une demande de fusion dont la CI est verte (au moins un contrôle, tous réussis ; sans contrôle encore : code 3) et dont la tête est celle contrôlée ; ferme ensuite la copie de travail de la story, sauf `--keep` ; exige alors la CI de la branche par défaut dans sa protection quand elle n'y est pas encore (§2) |
-| `spec lint`, `spec release`, `spec sync <version>`, `spec verify` | §14 |
+| `spec lint`, `spec push`, `spec release`, `spec sync <version>`, `spec verify` | §14 |
 | `qualify open <incr>`, `qualify run <incr>`, `qualify lint <incr>`, `qualify submit <incr>`, `qualify close <incr>` | §15 |
 | `nightly` | suite complète des tests d'IHM (§16) |
 | `note "<texte>" [--story ID]`, `journal add [--category C]`, `journal flush`, `journal report [--limit N]`, `journal setup` | §13 |
@@ -883,9 +883,15 @@ ligne `plugin` de `deliveryctl doctor`).
 `framed`, `closed`), `scope` ; sections `## Purpose`, `## Firm decisions`, `## Scope`,
 `## Exclusions`, `## To investigate`, `## Assumptions`, `## Deferred`, `## Story map`, `## Next`.
 Une décision ferme s'écrit `D<n> : <titre court> — <décision> — « <mots de l'humain> » (<date>)`.
-Quatre GO humains : cadrage (`framed`), revue, clôture (`closed`), publication (tag). En solo, le
-GO est le statut, posé par l'analyste sur message explicite de l'humain ; en équipe, la demande
-de fusion approuvée.
+Quatre GO humains : cadrage (`framed`), revue, clôture (`closed`), publication (tag). Solo ou
+équipe, le GO se dit dans la conversation : l'analyste le consigne, sur message explicite de
+l'humain, par un statut et un commit portant le trailer `Go: frame|review|close|acceptance`.
+Un incrément a une branche `spec/<incr>` (créée depuis la branche par défaut au cadrage) et une
+seule demande de fusion, que `deliveryctl spec push` ouvre ou met à jour à chaque GO ; les
+commits intermédiaires partent avec le GO suivant. Cette demande est la relecture de l'équipe ; sa
+fusion est le GO de publication, que `spec release` accomplit (§14.4) : le tag reste le geste de
+l'humain, par cette commande. L'analyste lance `spec push` après un GO explicite, jamais
+`git push`, un tag, `spec release` ni `spec sync`.
 
 Le brief (`spec/product/brief.md`) est le point de départ de tout cadrage : `/spec-frame` le lit
 en premier. Il est écrit par l'analyste produit dans `/spec-frame <incr> --discover`, à partir des
@@ -903,6 +909,12 @@ Rapport de revue : `refinement/<incr>/reviews/<date>.md` (`-2`, `-3` pour une au
 jour), terminé par `Max severity: blocking | to-decide | note | none` et `Spec ready: yes | no`
 (`yes` seulement sans constat `blocking` ni `to-decide` ouvert). Taille choisie à chaque revue
 (`light`, `standard`, `deep`), `deep` par défaut, sans plafond d'agents.
+
+`spec push` (verbe de l'analyste, non un geste du §12.1) : sur la branche `spec/<incr>` seulement
+(refusé, code 3, sur la branche par défaut ou toute autre), pousse la branche et ouvre sa demande de
+fusion vers la branche par défaut, ou met à jour la demande ouverte (titre `Spec <incr>`, description :
+`## Purpose` de `refinement/<incr>/framing.md`, son `status`, la liste des `Go:` des commits de la
+branche) ; affiche l'URL. Les modifications non commitées ne partent pas (une note le dit).
 
 ### 14.2 Livrable `spec/`
 
@@ -955,16 +967,31 @@ une ligne `lint-exempt: <règle> — <raison>` dans la story, sauf le schéma d'
 Tags `spec-vX.Y.Z`. `spec release` calcule le niveau : critère retiré ou modifié → majeur,
 ajouté → mineur, sinon correctif ; en `pre-release`, tout reste en `0.x`. En `released`, un tag
 inférieur au niveau calculé est refusé sauf trailer humain `Version-Override: <raison>`.
-`spec release` refuse une spec inchangée depuis le dernier tag ou des changements non commités
-sous `spec/`, écrit la version dans `spec.toml` et un brouillon en tête de `spec/CHANGELOG.md`, puis
-affiche les commandes de commit, de tag et de push ; le tag reste un geste humain.
+`spec release` refuse une spec inchangée depuis le dernier tag, des changements non commités sous
+`spec/` ou une branche autre que la branche par défaut et `spec/<incr>`. Il lance `spec lint`,
+calcule la version, écrit `spec.toml` et la tête de `spec/CHANGELOG.md` (l'entrée est affichée),
+puis, en un seul geste humain :
+- sur `spec/<incr>` : commite l'entrée (`Release spec <version>`, trailers `Spec-Release`,
+  `Go: publication`, `Campaign`, `Delivery-Method`), fait `spec push`, attend les contrôles de la
+  demande de fusion (lecture toutes les 20 s, 10 min au plus, une ligne `checks: <état>` par
+  changement d'état), la fusionne par un commit de fusion de la tête contrôlée, récupère la branche
+  par défaut, pose le tag annoté `spec-v<version>` sur le commit de fusion, le pousse et
+  place la copie de travail sur la branche par défaut mise à jour. Contrôles rouges (code 2) ou
+  attente expirée (code 3) : il s'arrête avec l'URL et rien n'est fusionné ; relancé, il reprend (le
+  commit de version déjà présent, repéré par son trailer `Spec-Release`, n'est pas refait et la
+  version n'est pas incrémentée deux fois ; une demande déjà fusionnée ne laisse que le tag) ;
+- sur la branche par défaut (dépôt qui ne la protège pas) : commite, pousse, tague et pousse le
+  tag ; un push refusé dit de travailler sur `spec/<incr>`, le commit restant local.
 
 ### 14.5 Copie dans un dépôt d'implémentation
 
 `spec sync <version>` (geste humain ; source : `--source`, sinon celle de `spec.lock`, sinon `spec_source` de `delivery.toml`, sinon échec) : `git fetch --no-tags <source> refs/tags/spec-v<version>`,
 `git rm -r -q --ignore-unmatch spec`, `git read-tree --prefix=spec/ -u FETCH_HEAD:spec`, puis
 `spec.lock` et `docs/conformance.md`, en un seul commit (trailers `Spec-Version`, `Spec-Commit`,
-`Delivery-Method`), aucun si rien ne change. `docs/conformance.md` donne pour chaque story de spec
+`Delivery-Method`), aucun si rien ne change. Sur la branche par défaut, le commit est fait sur une
+nouvelle branche `spec-sync/<version>`, poussée avec sa demande de fusion (l'URL est affichée : la
+fusionner avant `/impl-frame`) ; la copie de travail revient sur la branche par défaut. Sur une
+autre branche, le commit y reste, sans push. `docs/conformance.md` donne pour chaque story de spec
 sa référence et son statut : `conforming` (le blob du trailer `Spec:` de sa fusion est le blob
 courant), `outdated` (il diffère) ou `not merged` (aucune fusion portant ce trailer, par exemple une
 fusion faite dans la forge).

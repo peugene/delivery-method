@@ -174,7 +174,7 @@ class Forge:
     def find(self, card_id: str) -> dict | None:
         """The open or merged merge request of a story: {url, state, checks}; None if none.
         Raises DeliveryError (EXIT_TOOL) when the forge does not answer."""
-        return self._find_branch(story_branch(card_id))
+        return self.find_branch(story_branch(card_id))
 
     def _view(self, argv: list[str], branch: str) -> dict | None:
         """JSON of a merge request view; None when the forge says the branch has none."""
@@ -190,7 +190,8 @@ class Forge:
         except json.JSONDecodeError:
             fail(EXIT_TOOL, f"forge answer not understood ({' '.join(argv[:3])} {branch})")
 
-    def _find_branch(self, branch: str) -> dict | None:
+    def find_branch(self, branch: str) -> dict | None:
+        """Like `find`, for any branch."""
         if self.kind == "github":
             data = self._view([self._tool(), "pr", "view", branch, "--json",
                                "url,state,statusCheckRollup,mergeStateStatus"], branch)
@@ -213,28 +214,35 @@ class Forge:
         """Push the story branch and open its merge request; returns its URL."""
         return self.open_branch(story_branch(card_id), title, body)
 
-    def open_branch(self, branch: str, title: str, body: str) -> str:
+    def open_branch(self, branch: str, title: str, body: str, refresh: bool = False) -> str:
         """Push a branch and open its merge request, or return the one already open (pushed
-        again). A branch whose merge request is merged is neither pushed nor proposed again."""
+        again; with `refresh`, its title and description are rewritten). A branch whose merge
+        request is merged is neither pushed nor proposed again."""
         target = self.git.target_branch()
-        existing = self._find_branch(branch)
+        existing = self.find_branch(branch)
         if existing and existing["state"] == "merged":
             fail(EXIT_PRECONDITION, f"the merge request of {branch} is already merged: {existing['url']}")
         self.git.push(branch)
-        if existing and existing["state"] in ("open", "opened"):
-            return existing["url"]
         with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False, encoding="utf-8") as fh:
             fh.write(body)
             body_file = fh.name
         try:
+            if existing and existing["state"] in ("open", "opened"):
+                if refresh:
+                    if self.kind == "github":
+                        run([self._tool(), "pr", "edit", branch, "--title", title, "--body-file", body_file],
+                            cwd=self.git.cwd)
+                    else:
+                        run([self._tool(), "mr", "update", branch, "--title", title,
+                             "--description", body], cwd=self.git.cwd)
+                return existing["url"]
             if self.kind == "github":
                 proc = run([self._tool(), "pr", "create", "--base", target, "--head", branch,
                             "--title", title, "--body-file", body_file], cwd=self.git.cwd)
             else:
                 proc = run([self._tool(), "mr", "create", "--source-branch", branch,
                             "--target-branch", target, "--title", title,
-                            "--description", Path(body_file).read_text(encoding="utf-8"), "--yes"],
-                           cwd=self.git.cwd)
+                            "--description", body, "--yes"], cwd=self.git.cwd)
         finally:
             Path(body_file).unlink(missing_ok=True)
         return proc.stdout.strip().splitlines()[-1] if proc.stdout.strip() else ""
@@ -242,15 +250,18 @@ class Forge:
     def merge(self, card_id: str, subject: str, trailers: list[tuple[str, str]], head: str = "") -> str:
         """Merge a story whose merge request is green, by a merge commit of the checked head;
         returns a one-line summary."""
+        return self.merge_branch(story_branch(card_id), subject, trailers, head)
+
+    def merge_branch(self, branch: str, subject: str, trailers: list[tuple[str, str]], head: str = "") -> str:
+        """Merge the merge request of a branch the same way."""
         body = "\n".join(f"{k}: {v}" for k, v in trailers)
-        mr = self.find(card_id)
+        mr = self.find_branch(branch)
         if not mr or mr["state"] not in ("open", "opened"):
-            fail(EXIT_PRECONDITION, f"no open merge request for {story_branch(card_id)}")
+            fail(EXIT_PRECONDITION, f"no open merge request for {branch}")
         if mr["checks"] != "green":
             fail(EXIT_RED if mr["checks"] == "red" else EXIT_PRECONDITION,
                  f"the CI of the merge request is {mr['checks']}, not green"
                  + ("" if mr["checks"] == "red" else " (not yet: try again later)") + f": {mr['url']}")
-        branch = story_branch(card_id)
         if self.kind == "github":
             args = [self._tool(), "pr", "merge", branch, "--merge", "--subject", subject, "--body", body]
             if head:

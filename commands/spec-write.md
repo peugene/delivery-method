@@ -15,7 +15,8 @@ Target: $ARGUMENTS
 
 ## Preconditions
 Fail closed: on the first failure, say why and stop.
-1. `repo_role` is `spec` or `single`; this session runs the `product-analyst` agent.
+1. `repo_role` is `spec` or `single`; this session runs the `product-analyst` agent; the
+   current branch is `spec/<incr>`, else stop and print `git switch spec/<incr>`.
 2. `refinement/<incr>/framing.md` has status `framed` (stories, corrections) or `closed`
    (`--acceptance`). Otherwise name the missing GO and stop: a command never goes past the
    current GO.
@@ -50,7 +51,8 @@ owner, gives the corrections; otherwise, the stories.
    to the owner.
 5. Run `deliveryctl spec lint`; commit; recap what changed, per finding.
 6. On the owner's explicit GO close, once each story meets the ready criteria: stories of the
-   scope `status: ready`, `framing.md` `status: closed`; `deliveryctl spec lint`; commit.
+   scope `status: ready`, `framing.md` `status: closed`; `deliveryctl spec lint`; commit with the
+   trailer `Go: close`; run `deliveryctl spec push` and give the pull request URL.
 
 **Acceptance tests** (`--acceptance`, status `closed`):
 1. For each story of the scope, write its tests in `spec/acceptance/`, from its criteria.
@@ -58,11 +60,11 @@ owner, gives the corrections; otherwise, the stories.
    `spec/acceptance/fixtures/empty-app/`: every test red, on its own step.
 3. A criterion that cannot be observed by role and label: stop; the story needs a correction
    and the owner's GO.
-4. Commit; propose `/delivery-method:spec-review <incr> --acceptance`.
+4. Commit (pushed with the next GO); propose `/delivery-method:spec-review <incr> --acceptance`.
 
 ## Outputs
 - `spec/stories/*.md`, `spec/ui/copy.*.json`, `spec/product/glossary.md`, `framing.md`
-  (assumptions, firm decisions, status), `spec/acceptance/` tests. Commits, never pushed.
+  (assumptions, firm decisions, status), `spec/acceptance/` tests. Commits on `spec/<incr>`; the pull request is updated at each GO.
 
 ## Ends with
 - Open questions or a GO awaited: `Outcome: question — <what the owner must decide>`.

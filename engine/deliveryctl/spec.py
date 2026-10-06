@@ -1,4 +1,4 @@
-"""Specification verbs (CONTRACTS.md §14): lint, release, sync, verify.
+"""Specification verbs (CONTRACTS.md §14): lint, push, release, sync, verify.
 
 Conventions checked by `spec lint`, also stated in templates/spec/story.md:
 - an extension is a top-level list item of `## Extensions`, labelled by its main-flow step and a
@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -23,8 +24,9 @@ from pathlib import Path
 from . import VERSION
 from . import config
 from . import frontmatter as fm
-from .core import (EXIT_ERROR, EXIT_OK, EXIT_PRECONDITION, EXIT_RED, fail, repo_root,
-                   require_human, require_local)
+from .core import (EXIT_ERROR, EXIT_OK, EXIT_PRECONDITION, EXIT_RED, EXIT_TOOL, DeliveryError, fail,
+                   repo_root, require_human, require_local)
+from .forge import Forge
 from .gitops import Git, trailer_values
 
 SPEC = "spec"
@@ -39,6 +41,7 @@ SECTIONS = ("Business rules", "Main flow", "Extensions", "Acceptance criteria", 
 FILLED = ("Business rules", "Main flow", "Acceptance criteria")
 RULES = ("schema", "neutrality", "extension", "coverage", "orphan-tag", "test-tag")
 LEVELS = ("patch", "minor", "major")
+GO_TRAILER = "Go"            # on the commit of each GO the owner gave: frame, review, close, acceptance, publication
 TEST_MODIFIERS = ("", ".only", ".skip", ".fixme", ".fail", ".slow")
 
 FILE_RX = re.compile(r"^(s[0-9]{3,4})-[a-z0-9][a-z0-9-]*\.md$")
@@ -54,6 +57,9 @@ TAG_ID_RX = re.compile(r"@(s[0-9]{3,4})(?![\w-])")
 KEY_SPAN_RX = re.compile(r"`[a-z][a-z0-9_-]*(?:\.[a-z0-9_-]+)+`")
 HTTP_CODE_RX = re.compile(r"(?<!\w)(?:HTTP|code|status)\s*[1-5][0-9]{2}(?!\w)", re.IGNORECASE)
 SEMVER_RX = re.compile(r"^([0-9]+)\.([0-9]+)\.([0-9]+)$")
+SPEC_BRANCH_RX = re.compile(r"^spec/([a-z0-9][a-z0-9-]*)$")
+CHECK_POLL = 20             # seconds between two reads of the checks of a pull request
+CHECK_TIMEOUT = 600         # seconds a release waits for them
 SPEC_TRAILER_RX = re.compile(r"^Spec:\s*(s[0-9]{3,4})@(\S+?)(?:#([0-9a-f]{7,40}))?\s*$", re.MULTILINE)
 
 # A lowercase entry matches any case and a plural in -s; an entry with a capital matches as is.
@@ -549,16 +555,104 @@ def _check_requested(git: Git, requested: str, previous: str | None, level: str,
     return version
 
 
-def release(root: Path, requested: str | None = None) -> int:
+# -- one branch and one pull request per increment ---------------------------------------------
+
+def increment_of(git: Git) -> str:
+    """The increment of the current branch `spec/<incr>`; refuses the default branch and any other."""
+    branch = git.branch()
+    if branch == git.target_branch():
+        fail(EXIT_PRECONDITION, f"{branch} is the default branch: the spec work goes through a pull request "
+                                f"of the branch spec/<incr> (git switch -c spec/<incr>)")
+    found = SPEC_BRANCH_RX.match(branch)
+    if not found:
+        fail(EXIT_PRECONDITION, f"{branch} is not a spec branch: switch to spec/<incr>")
+    return found.group(1)
+
+
+def request_body(root: Path, git: Git, incr: str) -> str:
+    """Description of the pull request of an increment: its purpose, its status, the GOs given so far."""
+    purpose, status = "", "unknown"
+    framing = root / "refinement" / incr / "framing.md"
+    if framing.exists():
+        meta, body = fm.split(framing.read_text(encoding="utf-8"), str(framing))
+        status = str(meta.get("status") or status)
+        purpose = (fm.section_get(body, "Purpose") or "").strip()
+    gos = []
+    for message in git.out("log", "--reverse", "--format=%B%x00", f"{git.target_ref()}..HEAD", check=False).split("\x00"):
+        gos += [go for go in trailer_values(message, GO_TRAILER) if go not in gos]
+    return "\n".join([f"# Spec {incr}", "", "## Purpose", "", purpose or "_not written yet_", "",
+                      f"Status: `{status}`", "", "## GOs given", ""] +
+                     ([f"- {go}" for go in gos] or ["- none yet"]) + [""])
+
+
+def push(root: Path) -> int:
+    cfg = config.load(root)
+    if cfg.repo_role == "impl":
+        fail(EXIT_PRECONDITION, "spec push runs where the spec is written: here spec/ is a synced copy")
+    git = Git(root)
+    incr = increment_of(git)
+    if git.out("status", "--porcelain", "--", SPEC, f"refinement/{incr}"):
+        print("note: uncommitted changes under spec/ or refinement/ are not pushed")
+    print(Forge(cfg, git).open_branch(git.branch(), f"Spec {incr}", request_body(root, git, incr), refresh=True))
+    return EXIT_OK
+
+
+def release_commit(git: Git) -> str | None:
+    """Version of a release commit already on the branch, not yet on the default branch."""
+    for message in git.out("log", "--format=%B%x00", f"{git.target_ref()}..HEAD", check=False).split("\x00"):
+        found = trailer_values(message, "Spec-Release")
+        if found:
+            return found[0]
+    return None
+
+
+def wait_for_checks(forge: Forge, branch: str, poll: int, timeout: int, sleep) -> None:
+    """Wait until the checks of the pull request are green: one line per change of state."""
+    waited, last = 0, None
+    while True:
+        request = forge.find_branch(branch)
+        if not request:
+            fail(EXIT_PRECONDITION, f"no open pull request for {branch}")
+        state = request["checks"]
+        if state != last:
+            print(f"checks: {state}", flush=True)
+            last = state
+        if state == "green":
+            return
+        if state == "red":
+            fail(EXIT_RED, f"the checks of the pull request are red: {request['url']}; fix them, then run it again")
+        if waited >= timeout:
+            fail(EXIT_PRECONDITION, f"the checks are still {state} after {timeout} s: {request['url']}; "
+                                    "run it again once they are done")
+        sleep(poll)
+        waited += poll
+
+
+def merge_commit_of(git: Git, head: str, ref: str) -> str:
+    """The merge commit of `ref` whose second parent is `head`."""
+    for line in git.out("rev-list", "--merges", "--parents", "-n", "200", ref).splitlines():
+        commit, *parents = line.split()
+        if head in parents[1:]:
+            return commit
+    fail(EXIT_PRECONDITION, f"no merge commit of {head[:12]} on {ref}: tag the merge commit by hand")
+
+
+def release(root: Path, requested: str | None = None, poll: int = CHECK_POLL, timeout: int = CHECK_TIMEOUT,
+            sleep=time.sleep) -> int:
     require_human("deliveryctl spec release")
     require_local("spec release")
     cfg = config.load(root)
     if cfg.repo_role == "impl":
         fail(EXIT_PRECONDITION, "spec release runs where the spec is written: here spec/ is a synced copy")
+    git = Git(root)
+    if not git.has_remote():
+        fail(EXIT_PRECONDITION, "spec release pushes: this repository has no remote 'origin'")
+    target, branch = git.target_branch(), git.branch()
+    on_target = branch == target
+    incr = "" if on_target else increment_of(git)
     findings = lint(root)
     if findings:
         return _report(findings)
-    git = Git(root)
     if git.out("status", "--porcelain", "--", SPEC, f":!{SPEC}/CHANGELOG.md", f":!{SPEC}/spec.toml"):
         fail(EXIT_PRECONDITION, "commit spec/ first: the release compares HEAD with the previous tag")
     previous = previous_version(git)
@@ -566,25 +660,65 @@ def release(root: Path, requested: str | None = None) -> int:
         fail(EXIT_PRECONDITION, f"spec/ has not changed since spec-v{previous}")
     changes = diff_criteria(criteria_at(git, f"spec-v{previous}") if previous else {}, criteria_at(git, "HEAD"))
     level = level_of(changes)
-    version = next_version(previous, level, cfg.release_stage)
-    if requested:
-        version = _check_requested(git, requested, previous, level, cfg.release_stage)
+    resumed = release_commit(git)
+    if resumed:                         # a run that stopped after its commit: the version is kept
+        if requested and clean_version(requested) != resumed:
+            fail(EXIT_PRECONDITION, f"the release commit of {resumed} is already on this branch")
+        version = resumed
+    else:
+        version = next_version(previous, level, cfg.release_stage)
+        if requested:
+            version = _check_requested(git, requested, previous, level, cfg.release_stage)
     tag = f"spec-v{version}"
-    if git.ok("rev-parse", "--verify", "--quiet", f"refs/tags/{tag}"):
+    if not resumed and git.ok("rev-parse", "--verify", "--quiet", f"refs/tags/{tag}"):
         fail(EXIT_PRECONDITION, f"tag {tag} already exists")
-    wrote = write_changelog(root, version, changelog_entry(version, level, changes))
+    entry = changelog_entry(version, level, changes)
+    write_changelog(root, version, entry)
     write_version(root, version)
     counts = ", ".join(f"{len(changes[k])} {k}" for k in ("added", "changed", "removed"))
     print("spec: green")
     print(f"previous: {'spec-v' + previous if previous else 'none'}")
     print(f"criteria: {counts} -> {level}")
     print(f"version: {version} ({cfg.release_stage})")
-    print(f"draft: {SPEC}/CHANGELOG.md" + ("" if wrote else " (entry already there)") +
-          f", {SPEC}/spec.toml — review them, then run:")
-    print(f"  git add {SPEC}/CHANGELOG.md {SPEC}/spec.toml")
-    print(f'  git commit -m "Release spec {version}"')
-    print(f'  git tag -a {tag} -m "spec {version}"')
-    print(f"  git push origin {git.branch()} {tag}")
+    print(f"changelog: {SPEC}/CHANGELOG.md")
+    for line in entry.splitlines():
+        print(f"  {line}" if line else "")
+    paths = [f"{SPEC}/CHANGELOG.md"] + ([f"{SPEC}/spec.toml"] if (root / SPEC / "spec.toml").exists() else [])
+    git.run("add", "--", *paths)
+    if not git.ok("diff", "--cached", "--quiet", "--", *paths):
+        sha = git.commit(paths, f"Release spec {version}", trailers=[
+            ("Spec-Release", version), ("Go", "publication"), *([("Campaign", incr)] if incr else []),
+            ("Delivery-Method", VERSION)], only=True)
+        print(f"committed: {sha[:12]} Release spec {version}")
+    head = git.head()
+    if on_target:
+        try:
+            git.run("push", "--quiet", "origin", branch, timeout=180)
+        except DeliveryError as exc:
+            detail = exc.message.splitlines()[-1] if exc.message else ""
+            fail(EXIT_TOOL, f"push of {branch} refused ({detail}): the repository protects it, so work on "
+                            f"spec/<incr> and run this there; the release commit stays local "
+                            f"(undo it with 'git reset --hard origin/{branch}')")
+    else:
+        forge = Forge(cfg, git)
+        request = forge.find_branch(branch)
+        if request and request["state"] == "merged":
+            print(f"pull request: {request['url']} (already merged)")
+        else:
+            url = forge.open_branch(branch, f"Spec {incr}", request_body(root, git, incr), refresh=True)
+            print(f"pull request: {url}")
+            wait_for_checks(forge, branch, poll, timeout, sleep)
+            print(forge.merge_branch(branch, f"Merge {branch} : spec {version}", [("Spec-Release", version)], head=head))
+        git.fetch()
+        head = merge_commit_of(git, head, f"origin/{target}")
+    if not git.ok("rev-parse", "--verify", "--quiet", f"refs/tags/{tag}"):
+        git.run("tag", "-a", tag, "-m", f"spec {version}", head)
+    git.run("push", "--quiet", "origin", tag, timeout=180)
+    print(f"tagged: {tag} on {head[:12]}, pushed")
+    if not on_target:
+        git.run("checkout", "--quiet", target)
+        git.run("merge", "--quiet", "--ff-only", f"origin/{target}")
+        print(f"now on {target}")
     return EXIT_OK
 
 
@@ -635,6 +769,13 @@ def conformance(git: Git, rev: str, version: str, source: str) -> tuple[str, lis
     return text, statuses
 
 
+def _default_branch(git: Git) -> str:
+    try:
+        return git.target_branch()
+    except DeliveryError:
+        return ""
+
+
 def sync(root: Path, version: str | None, source: str | None) -> int:
     require_human("deliveryctl spec sync")
     cfg = config.load(root)
@@ -654,6 +795,10 @@ def sync(root: Path, version: str | None, source: str | None) -> int:
     if git.out("status", "--porcelain", "--untracked-files=no") or git.out("status", "--porcelain", "--", SPEC):
         fail(EXIT_PRECONDITION, "commit or stash local changes first: the sync is a single commit")
     tag = f"spec-v{version}"
+    target = _default_branch(git)
+    branch = f"spec-sync/{version}" if target and git.branch() == target else ""
+    if branch and git.rev(branch):
+        fail(EXIT_PRECONDITION, f"branch {branch} exists: merge its pull request, or delete it, first")
     git.run("fetch", "--no-tags", source, f"refs/tags/{tag}", timeout=180)
     if not git.ok("rev-parse", "--verify", "--quiet", "FETCH_HEAD:spec"):
         fail(EXIT_PRECONDITION, f"{tag} of {source} has no spec/ folder")
@@ -673,11 +818,25 @@ def sync(root: Path, version: str | None, source: str | None) -> int:
     if git.ok("diff", "--cached", "--quiet"):
         print(f"spec: already at {version} ({commit[:12]}); nothing to commit")
         return EXIT_OK
+    if branch:                          # the default branch takes nothing but a merged pull request
+        git.run("checkout", "--quiet", "-b", branch)
     sha = git.commit([], f"Sync spec {version}", trailers=[
         ("Spec-Version", version), ("Spec-Commit", commit), ("Delivery-Method", VERSION)])
     print(f"synced spec {version} ({commit[:12]}) in {sha[:12]}: {len(statuses)} stories, "
           f"{statuses.count('conforming')} conforming, {statuses.count('outdated')} outdated "
-          f"(see {CONFORMANCE}); push is yours")
+          f"(see {CONFORMANCE})" + ("" if branch else "; push is yours"))
+    if not branch:
+        return EXIT_OK
+    body = (f"Spec {version} from {source} at {commit[:12]}, written by `deliveryctl spec sync`: "
+            f"`spec/`, `{LOCK}` and `{CONFORMANCE}` change, nothing else.\n")
+    try:
+        url = Forge(cfg, git).open_branch(branch, f"Sync spec {version}", body)
+    except DeliveryError as exc:
+        git.run("checkout", "--quiet", target)
+        fail(exc.code, f"{exc.message}\nthe sync commit is on {branch}: push it and open its pull request")
+    git.run("checkout", "--quiet", target)
+    print(f"pull request: {url}")
+    print(f"merge it before /impl-frame, then update {target} (git pull)")
     return EXIT_OK
 
 
@@ -701,6 +860,8 @@ def main(args) -> int:
     root = repo_root()
     if args.action == "lint":
         return _report(lint(root))
+    if args.action == "push":
+        return push(root)
     if args.action == "release":
         return release(root, args.version)
     if args.action == "sync":

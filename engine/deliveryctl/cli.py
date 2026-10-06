@@ -299,8 +299,8 @@ def build() -> argparse.ArgumentParser:
     s.add_argument("event", choices=["stop", "session-start", "pre-tool"])
     s.set_defaults(func=cmd_hook)
 
-    s = sub.add_parser("spec", help="specification: lint, release, sync, verify")
-    s.add_argument("action", choices=["lint", "release", "sync", "verify"])
+    s = sub.add_parser("spec", help="specification: lint, push, release, sync, verify")
+    s.add_argument("action", choices=["lint", "push", "release", "sync", "verify"])
     s.add_argument("version", nargs="?")
     s.add_argument("--source")
     s.set_defaults(func=cmd_spec)

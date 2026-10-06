@@ -16,7 +16,8 @@ Target: $ARGUMENTS
 
 ## Preconditions
 Fail closed: on the first failure, say why and stop.
-1. `refinement/<incr>/framing.md` has status `framed` and the stories of its scope exist; with
+1. The current branch is `spec/<incr>`, else stop and print `git switch spec/<incr>`.
+   `refinement/<incr>/framing.md` has status `framed` and the stories of its scope exist; with
    `--acceptance`, status `closed` and the tests exist.
 2. `git status` shows no change under `spec/` or `refinement/<incr>/`: the review reads one
    commit. Otherwise: "commit first".
@@ -57,11 +58,13 @@ Fail closed: on the first failure, say why and stop.
    - refuted findings, one line each with the reason;
    - last two lines: `Max severity: <blocking | to-decide | note | none>` and
      `Spec ready: <yes | no>` (`yes` only without a blocking or to-decide finding).
-7. Commit the report (`Campaign: <incr>`, `Agent: product-analyst`). Correct nothing now; if
-   the owner asks for a correction during the review, rerun the angles it touches.
+7. Commit the report (`Campaign: <incr>`, `Agent: product-analyst`, `Go: review`, or
+   `Go: acceptance` with `--acceptance`), then run `deliveryctl spec push` and give the pull
+   request URL. Correct nothing now; if the owner asks for a correction during the review,
+   rerun the angles it touches.
 
 ## Outputs
-- `refinement/<incr>/reviews/<date>.md`, committed, never pushed.
+- `refinement/<incr>/reviews/<date>.md`, committed on `spec/<incr>` and pushed.
 
 ## Ends with
 The numbered `to-decide` points with their recommendation, the blocking ones, and the next
