@@ -364,7 +364,7 @@ class InitTest(RepoCase):
         self.assertIn("/brainstorm --vision", out)
         self.assertNotIn("/remote-env", out)
         if shutil.which("just"):
-            summary = sh(self.repo, "just", "--summary")
+            summary = sh(["just", "--summary"], self.repo).stdout
             self.assertEqual(sorted(summary.split()), ["acceptance", "check", "serve", "test"])
 
     def test_single_layout_keeps_the_stack_justfile(self):
