@@ -177,6 +177,26 @@ class StoryCycleTest(RepoCase):
             os.environ.pop("FAKE_IMPL")
         self.assertEqual(st.name, "deferred")
 
+    def test_merge_requires_the_ci_on_the_default_branch_once(self):
+        (self.forge_dir / "protection.json").write_text(json.dumps(
+            {"required_status_checks": None, "enforce_admins": True, "restrictions": None,
+             "required_pull_request_reviews": {"required_approving_review_count": 0},
+             "allow_force_pushes": False, "allow_deletions": False}))
+        self.open()
+        self.drive()
+        summary = story.merge(self.cfg, "s001")
+        self.assertIn("merged https://forge.test/pr/1\nprotection: the CI is now required on main before a merge", summary)
+        rule = json.loads((self.forge_dir / "protection.json").read_text())
+        self.assertEqual(rule["required_status_checks"], {"strict": True, "contexts": ["checks"]})
+        self.assertIs(rule["enforce_admins"], True)
+        self.assertEqual(story.Forge(self.cfg, story.Git(self.repo)).require_checks(), "")
+
+    def test_merge_says_nothing_about_protection_the_repository_does_not_have(self):
+        self.open()
+        self.drive()
+        summary = story.merge(self.cfg, "s001")
+        self.assertEqual(summary, "merged https://forge.test/pr/1")
+
     def test_merge_refused_in_role_session(self):
         self.open()
         self.drive()

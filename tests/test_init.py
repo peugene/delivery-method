@@ -21,10 +21,14 @@ def snapshot(root: Path) -> dict:
 class InitTest(RepoCase):
     with_agents = False
 
-    def cli(self, *argv):
+    def cli(self, *argv, ask=False):
+        """Run the engine; `init` is told --yes (nobody answers here) unless the test is about the question."""
+        argv = list(argv)
+        if argv[:1] == ["init"] and not ask and "--dry-run" not in argv:
+            argv.append("--yes")
         out, err = io.StringIO(), io.StringIO()
         with redirect_stdout(out), redirect_stderr(err):
-            code = cli.main(list(argv))
+            code = cli.main(argv)
         return code, out.getvalue() + err.getvalue()
 
     def init(self, *extra):
@@ -39,13 +43,13 @@ class InitTest(RepoCase):
         out = self.init()
         lines = out.split("Prochaines étapes :\n")[1].splitlines()
         self.assertLessEqual(len(lines), 4, out)
-        self.assertRegex(lines[0], r"^  \d+ fichiers posés, voir git status$")
+        self.assertRegex(lines[0], r"^  \d+ fichiers posés, commités et poussés sur main$")
         self.assertIn("spec sync <version>", lines[1])
-        self.assertNotIn("/remote-env", out)
+        self.assertNotIn("/remote-env", "\n".join(lines))
         self.assertNotIn("cloud-setup.sh", out)
         self.assertNotIn("Relisez", out)
 
-    def test_init_lays_everything_and_commits_nothing(self):
+    def test_init_lays_everything_in_one_commit_and_pushes_it(self):
         head = git(self.repo, "rev-parse", "HEAD")
         out = self.init()
         cfg = config.load(self.repo)
@@ -90,7 +94,12 @@ class InitTest(RepoCase):
             self.assertIn(line, ignored)
         self.assertIn("check:", (self.repo / "justfile").read_text())
         self.assertIn("deliveryctl gate", (self.repo / ".github/workflows/delivery.yml").read_text())
-        self.assertEqual(git(self.repo, "rev-parse", "HEAD"), head)
+        self.assertEqual(git(self.repo, "rev-list", "--count", f"{head}..HEAD"), "1")
+        message = git(self.repo, "log", "-1", "--format=%B")
+        self.assertEqual(message.splitlines()[0], f"Équipe le dépôt avec delivery-method {VERSION} (impl)")
+        self.assertEqual(message.strip().splitlines()[-1], f"Delivery-Method: {VERSION}")
+        self.assertEqual(git(self.repo, "status", "--porcelain"), "")
+        self.assertEqual(git(self.origin, "rev-parse", "main"), git(self.repo, "rev-parse", "HEAD"))
         self.assertIn("Prochaines étapes", out)
 
     def test_second_run_changes_nothing(self):
@@ -311,9 +320,12 @@ class InitTest(RepoCase):
         code, out = self.cli("init", "impl", "--forge", "github")
         self.assertEqual(code, core.EXIT_ERROR)
         self.assertIn("usage: deliveryctl init impl <spec repository>", out)
-        code, out = self.cli("init", "spec", "todo-spec", "--forge", "github")
+        code, out = self.cli("init", "spec", "one", "two", "--forge", "github")
         self.assertEqual(code, core.EXIT_ERROR)
-        self.assertIn("takes no spec repository", out)
+        self.assertIn("usage: deliveryctl init spec [name]: unexpected 'two'", out)
+        code, out = self.cli("init", "impl", "todo-spec", "todo-kotlin", "extra", "--forge", "github")
+        self.assertEqual(code, core.EXIT_ERROR)
+        self.assertIn("unexpected 'extra'", out)
         self.assertEqual(snapshot(self.repo), before)
 
     def test_spec_source_is_written_for_impl_and_read_by_spec_sync(self):
@@ -330,6 +342,7 @@ class InitTest(RepoCase):
         self.assertEqual(init.spec_address(self.repo, str(local), "github"), str(local))
         git(self.repo, "remote", "set-url", "origin", "git@forge.example.org:acme/todo-kotlin.git")
         self.assertEqual(init.spec_address(self.repo, "todo-spec", "github"), "git@forge.example.org:acme/todo-spec.git")
+        git(self.repo, "config", f"url.{self.origin}.pushInsteadOf", "git@forge.example.org:acme/todo-kotlin.git")
         code, out = self.cli("init", "impl", "todo-spec", "--forge", "github")
         self.assertEqual(code, 0, out)
         cfg = config.load(self.repo)
@@ -362,7 +375,7 @@ class InitTest(RepoCase):
         self.assertNotIn("<nom du produit>", (self.repo / "spec" / "spec.toml").read_text())
         self.assertIn("claude --agent product-analyst", out)
         self.assertIn("/brainstorm --vision", out)
-        self.assertNotIn("/remote-env", out)
+        self.assertNotIn("/remote-env", out.split("Prochaines étapes")[1])
         if shutil.which("just"):
             summary = sh(["just", "--summary"], self.repo).stdout
             self.assertEqual(sorted(summary.split()), ["acceptance", "check", "serve", "test"])
@@ -384,7 +397,20 @@ class InitTest(RepoCase):
         write(config.machine_path(), 'visibility = "secret"\n')
         with self.assertRaises(core.DeliveryError) as ctx:
             config.machine()
-        self.assertIn("visibility must be one of private, public", ctx.exception.message)
+        self.assertIn("visibility must be one of private, public, internal", ctx.exception.message)
+
+    def test_machine_forge_settings(self):
+        defaults = config.machine()
+        self.assertEqual((defaults["forge"], defaults["gitlab_host"], defaults["gitlab_group"]), ("github", "", ""))
+        write(config.machine_path(), 'forge = "gitlab"\ngitlab_host = "gitlab.example.org"\ngitlab_group = "acme"\n'
+                                     'visibility = "internal"\n')
+        found = config.machine()
+        self.assertEqual((found["forge"], found["gitlab_host"], found["gitlab_group"], found["visibility"]),
+                         ("gitlab", "gitlab.example.org", "acme", "internal"))
+        write(config.machine_path(), 'forge = "bitbucket"\n')
+        with self.assertRaises(core.DeliveryError) as ctx:
+            config.machine()
+        self.assertIn("forge must be one of github, gitlab", ctx.exception.message)
 
     def test_init_writes_the_brief_from_the_template(self):
         code, out = self.cli("init", "spec", "--forge", "github")
@@ -407,12 +433,13 @@ class InitTest(RepoCase):
         self.assertIn('implementer = "local"', (self.repo / "delivery.toml").read_text())
         self.assertEqual(config.load(self.repo).implementer, "local")
 
-    def test_gitlab_ci_and_include_hint(self):
+    def test_gitlab_ci_is_laid_and_included(self):
         code, out = self.cli("init", "single", "--forge", "gitlab", "--language", "en")
         self.assertEqual(code, 0, out)
         self.assertTrue((self.repo / ".gitlab" / "delivery-ci.yml").exists())
         self.assertFalse((self.repo / ".github").exists())
-        self.assertIn("include: [{ local: .gitlab/delivery-ci.yml }]", out)
+        self.assertEqual((self.repo / ".gitlab-ci.yml").read_text(), "include:\n  - local: .gitlab/delivery-ci.yml\n")
+        self.assertNotIn("Ajoutez à .gitlab-ci.yml", out)
         self.assertEqual(config.load(self.repo).content_language, "en")
 
     def test_upgrade_refreshes_the_engine_copy_only(self):
@@ -467,7 +494,6 @@ class InitTest(RepoCase):
         from deliveryctl.gitops import Git
         code, _ = self.cli("init", "impl", "todo-spec", "--forge", "github")
         self.assertEqual(code, 0)
-        self.commit_all("equip")
         git(self.repo, "tag", "v0.1.0")
         code, out = self.cli("doctor")
         self.assertIn("note: tag v0.1.0 has no accepted qualification report", out)
@@ -484,10 +510,10 @@ class InitTest(RepoCase):
     def test_doctor_warns_when_no_ci_runs_on_merge_requests(self):
         self.init()
         code, out = self.cli("doctor")
-        self.assertIn("warn: .github/workflows/delivery.yml not committed", out)
-        self.commit_all("equip")
-        code, out = self.cli("doctor")
         self.assertIn("ok: CI of merge requests", out)
+        git(self.repo, "rm", "--cached", "--quiet", ".github/workflows/delivery.yml")
+        code, out = self.cli("doctor")
+        self.assertIn("warn: .github/workflows/delivery.yml not committed", out)
         (self.repo / ".github" / "workflows" / "delivery.yml").unlink()
         code, out = self.cli("doctor")
         self.assertIn("warn: .github/workflows/delivery.yml is missing", out)

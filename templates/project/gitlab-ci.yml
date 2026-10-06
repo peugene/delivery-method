@@ -1,5 +1,5 @@
 # Contrôles d'une demande de fusion, posés par « deliveryctl init » ; à compléter pour la pile.
-# À inclure depuis .gitlab-ci.yml :
+# Inclus par « deliveryctl init » dans .gitlab-ci.yml :
 #   include:
 #     - local: .gitlab/delivery-ci.yml
 # Branche story/<id> : check, tests d'IHM de la story de spec de la carte, puis contrôle

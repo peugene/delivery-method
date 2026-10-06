@@ -40,6 +40,10 @@ def write(path: Path, text: str) -> Path:
 # A fake 'gh' that plays GitHub against the local bare 'origin': a merge request per branch,
 # its CI read from FAKE_FORGE_DIR/checks (green by default; 'down' in that file makes the forge
 # unreachable), and a merge that really merges the branch into the target branch of origin.
+# It also creates repositories (a bare one under FAKE_FORGE_DIR/remotes, visibility in the file
+# 'visibility'), answers 'api user' (login in the file 'login'), keeps the branch protection in
+# 'protection.json' and the merge settings in 'repo_settings.json'; a file 'protection_403' makes
+# the protection refuse.
 FAKE_FORGE = r'''#!PYTHON
 import json, os, subprocess, sys, tempfile
 from pathlib import Path
@@ -56,8 +60,54 @@ def git(*argv, cwd=None):
     return subprocess.run(["git", *argv], cwd=cwd, check=True, capture_output=True, text=True).stdout.strip()
 if checks == "down":
     sys.exit("HTTP 503: service unavailable")
+def seen(name, default):
+    return (home / name).read_text().strip() if (home / name).exists() else default
 if args[:2] == ["repo", "view"]:
-    print(json.dumps({"visibility": (home / "visibility").read_text().strip() if (home / "visibility").exists() else "PRIVATE"}))
+    print(json.dumps({"visibility": seen("visibility", "PRIVATE"),
+                      "nameWithOwner": seen("repo", "test-owner/" + Path.cwd().name)}))
+elif args[:2] == ["repo", "create"]:
+    path = args[2]
+    bare = home / "remotes" / (path + ".git")
+    bare.parent.mkdir(parents=True, exist_ok=True)
+    git("init", "--quiet", "--bare", str(bare))
+    git("remote", "add", opt("--remote"), "https://github.com/%s.git" % path)
+    (home / "visibility").write_text("PUBLIC" if "--public" in args else "PRIVATE")
+    (home / "created").write_text(path)
+elif args[:2] == ["config", "get"]:
+    print(seen("git_protocol", "https"))
+elif args[:1] == ["api"]:
+    method = opt("-X") or "GET"
+    path = args[1] if method == "GET" else args[args.index("-X") + 2]
+    body = json.loads(sys.stdin.read()) if "--input" in args else None
+    if path == "user":
+        print(json.dumps({"login": seen("login", "test-owner"), "id": 4242}))
+    elif path.endswith("/protection"):
+        stored = home / "protection.json"
+        if method == "PUT":
+            if (home / "protection_403").exists():
+                sys.exit("HTTP 403: Upgrade to GitHub Pro or make this repository public to enable this feature.")
+            stored.write_text(json.dumps(body))
+        elif not stored.exists():
+            sys.exit("HTTP 404: Branch not protected")
+        else:
+            put = json.loads(stored.read_text())
+            out = {"enforce_admins": {"enabled": put["enforce_admins"]},
+                   "allow_force_pushes": {"enabled": put["allow_force_pushes"]},
+                   "allow_deletions": {"enabled": put["allow_deletions"]}}
+            if put["required_status_checks"]:
+                contexts = put["required_status_checks"]["contexts"]
+                out["required_status_checks"] = {**put["required_status_checks"],
+                                                 "checks": [{"context": c} for c in contexts]}
+            if put["required_pull_request_reviews"]:
+                out["required_pull_request_reviews"] = put["required_pull_request_reviews"]
+            if put["restrictions"]:
+                out["restrictions"] = {k: [{"login" if k == "users" else "slug": v} for v in put["restrictions"][k]]
+                                       for k in ("users", "teams", "apps")}
+            print(json.dumps(out))
+    elif method == "PATCH" and path.startswith("repos/"):
+        (home / "repo_settings.json").write_text(json.dumps(body))
+    else:
+        sys.exit(2)
 elif args[:2] == ["pr", "view"]:
     req = requests.get(args[2])
     if not req:
@@ -89,6 +139,91 @@ elif args[:2] == ["pr", "merge"]:
 else:
     sys.exit(2)
 '''
+
+
+# A fake 'glab' in the same spirit, for the tests that play GitLab: projects created as bare
+# repositories under FAKE_FORGE_DIR/remotes (reachable through 'git@gitlab.test:' once the test
+# maps it, see map_remotes), project settings in 'project.json', protected branches in
+# 'protected.json', every call in 'glab_calls' with the GITLAB_HOST it got. 'protect_403' makes
+# the writes of protection and settings refuse.
+FAKE_GLAB = r'''#!PYTHON
+import json, os, subprocess, sys
+from pathlib import Path
+from urllib.parse import unquote
+home = Path(os.environ["FAKE_FORGE_DIR"])
+args = sys.argv[1:]
+with (home / "glab_calls").open("a") as fh:
+    fh.write("[%s] %s\n" % (os.environ.get("GITLAB_HOST", ""), " ".join(args)))
+fields = {args[i + 1].partition("=")[0]: args[i + 1].partition("=")[2] for i, a in enumerate(args) if a in ("-f", "-F")}
+method = args[args.index("-X") + 1] if "-X" in args else ("POST" if fields else "GET")
+rest = [a for i, a in enumerate(args) if i and a not in ("-X", "-f", "-F") and args[i - 1] not in ("-X", "-f", "-F")]
+path = rest[0] if args[0] == "api" and rest else ""
+def load(name, default):
+    return json.loads((home / name).read_text()) if (home / name).exists() else default
+def save(name, data):
+    (home / name).write_text(json.dumps(data))
+def seen(name, default):
+    return (home / name).read_text().strip() if (home / name).exists() else default
+refused = (home / "protect_403").exists()
+if args[:2] == ["config", "get"]:
+    print(seen("git_protocol", "ssh"))
+elif path == "user":
+    print(json.dumps({"username": seen("login", "glab-user")}))
+elif args[:2] == ["repo", "create"]:
+    path = args[2]
+    bare = home / "remotes" / (path + ".git")
+    bare.parent.mkdir(parents=True, exist_ok=True)
+    subprocess.run(["git", "init", "--quiet", "--bare", str(bare)], check=True)
+    subprocess.run(["git", "remote", "add", "origin", "https://gitlab.test/%s.git" % path], check=True)
+    visibility = [a[2:] for a in args if a in ("--private", "--public", "--internal")][0]
+    save("created.json", {"path": path, "visibility": visibility, "host": os.environ.get("GITLAB_HOST", "")})
+elif "/protected_branches" in path:
+    protected = load("protected.json", {})
+    where = unquote(path).split("/protected_branches")
+    name = where[1].strip("/") or fields.get("name", "")
+    if method == "GET":
+        if name not in protected:
+            sys.exit("404 Not Found")
+        print(json.dumps(protected[name]))
+    elif refused:
+        sys.exit("403 Forbidden")
+    elif method == "DELETE":
+        protected.pop(name, None)
+        save("protected.json", protected)
+    else:
+        protected[name] = {"name": name, "allow_force_push": fields["allow_force_push"] == "true",
+                           "push_access_levels": [{"access_level": int(fields["push_access_level"])}],
+                           "merge_access_levels": [{"access_level": int(fields["merge_access_level"])}]}
+        save("protected.json", protected)
+elif path.startswith("projects/"):
+    path = unquote(path[len("projects/"):])
+    project = load("project.json", {"only_allow_merge_if_pipeline_succeeds": False, "merge_method": "merge_commit"})
+    if method == "PUT":
+        if refused:
+            sys.exit("403 Forbidden")
+        for key, value in fields.items():
+            project[key] = value == "true" if value in ("true", "false") else value
+        save("project.json", project)
+    else:
+        print(json.dumps({**project, "visibility": load("created.json", {}).get("visibility", "private"),
+                          "ssh_url_to_repo": "git@gitlab.test:%s.git" % path,
+                          "http_url_to_repo": "https://gitlab.test/%s.git" % path}))
+else:
+    sys.exit(2)
+'''
+
+
+def fake_glab(home: Path) -> None:
+    """Put the fake 'glab' first on PATH, next to the fake 'gh' of `fake_forge`."""
+    tool = write(home / "bin" / "glab", FAKE_GLAB.replace("PYTHON", sys.executable, 1))
+    tool.chmod(0o755)
+
+
+def map_remotes(home: Path, *prefixes: str) -> None:
+    """Make git read the fake forges' addresses (https://github.com/…, git@gitlab.test:…) as the
+    bare repositories their fake tools create."""
+    for prefix in prefixes:
+        sh(["git", "config", "--global", "--add", f"url.{home / 'remotes'}/.insteadOf", prefix], home)
 
 
 def fake_forge(tmp: Path) -> Path:

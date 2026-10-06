@@ -1,6 +1,8 @@
-"""`deliveryctl init [single|spec|impl [SPEC]] [--upgrade] [--dry-run]`: equip the current repository with the
-method, or refresh its copy of it (CONTRACTS.md §2, §12.2). Every change is planned before
-any is written, so a conflict leaves the repository untouched. Never overwrites, never commits;
+"""`deliveryctl init [single|spec|impl [SPEC]] [NAME] [--upgrade] [--dry-run] [--yes]`: equip a
+repository with the method, or refresh its copy of it (CONTRACTS.md §2, §12.2). Every change is
+planned before any is written, so a conflict leaves the repository untouched. After one summary and
+one "ok", it does the forge gestures too: creates the repository when there is none, sets the git
+address of a public one, commits what it laid down, pushes it, and protects the default branch.
 `--upgrade` refreshes what the method owns: the engine copy, the rules, the templates, the copy
 of the agents, skills and commands (recorded in `.delivery/method.json`), the method's settings,
 the marketplace ref and the missing `.gitignore` lines."""
@@ -10,15 +12,20 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
+import os
 import re
 import shutil
+import sys
 import tomllib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
-from . import config, roles
-from .core import EXIT_ERROR, EXIT_OK, EXIT_PRECONDITION, fail, main_root, repo_root, run
+from . import config, create, roles
+from .core import (EXIT_ERROR, EXIT_OK, EXIT_PRECONDITION, EXIT_TOOL, DeliveryError, fail, main_root, repo_root,
+                   run)
+from .forge import Forge
+from .gitops import Git
 
 PLUGIN_KEY = "delivery-method@delivery-method"
 PLUGIN_NAMESPACE = "delivery-method"
@@ -271,7 +278,7 @@ def _set_toml(text: str, key: str, value) -> str:
 
 
 def detect_forge(root: Path) -> str:
-    proc = run(["git", "remote", "get-url", "origin"], cwd=root, check=False)
+    proc = run(["git", "config", "--get", "remote.origin.url"], cwd=root, check=False)    # as written, before any rewrite rule
     url = proc.stdout.strip().lower()
     if proc.returncode != 0 or not url:
         fail(EXIT_PRECONDITION, "no 'origin' remote: add the GitHub or GitLab repository as origin first")
@@ -287,10 +294,10 @@ def agent_prefix(name: str) -> str:
     return prefix or "dm"
 
 
-def spec_address(root: Path, value: str, forge: str) -> str:
+def spec_address(root: Path, value: str, forge: str, origin: str | None = None) -> str:
     """The spec repository of an impl repository as 'git fetch' takes it: a URL or a local path
     stay as written; a short name or an owner/name is read on the forge of this repository, in
-    the address style of its origin."""
+    the address style of its origin (`origin`: the address the repository is about to get)."""
     if "://" in value or re.match(r"^[\w.-]+@[\w.-]+:", value):
         return value
     local = Path(value).expanduser()
@@ -299,7 +306,8 @@ def spec_address(root: Path, value: str, forge: str) -> str:
     if not re.fullmatch(r"[\w.-]+(/[\w.-]+)?", value):
         fail(EXIT_ERROR, f"cannot read '{value}' as a spec repository: give a short name, owner/name, "
                          "a URL or a local path")
-    origin = run(["git", "remote", "get-url", "origin"], cwd=root, check=False).stdout.strip()
+    if origin is None:
+        origin = run(["git", "remote", "get-url", "origin"], cwd=root, check=False).stdout.strip()
     found = re.match(r"^(.*[/:])([^/:]+)/([^/]+?)(\.git)?/?$", origin)
     if not found:
         prefix, owner, suffix = f"https://{forge}.com/", "", ""
@@ -313,7 +321,7 @@ def spec_address(root: Path, value: str, forge: str) -> str:
     return f"{prefix}{owner}/{value}{suffix}"
 
 
-def project_toml(root: Path, plugin: Path, args, forge: str, layout: str) -> str:
+def project_toml(root: Path, plugin: Path, args, forge: str, layout: str, origin: str | None = None) -> str:
     language = args.language or config.machine()["language"]
     if not LANGUAGE_RX.match(language):
         fail(EXIT_ERROR, f"--language takes a language code such as fr or en, got '{language}'")
@@ -325,7 +333,7 @@ def project_toml(root: Path, plugin: Path, args, forge: str, layout: str) -> str
     for key, value in values.items():
         text = _set_toml(text, key, value)
     if layout == "impl":
-        address = spec_address(root, args.spec_repo, forge)
+        address = spec_address(root, args.spec_repo, forge, origin)
         text = re.sub(r"^(repo_role\s*=.*)$", lambda m: m.group(1) + f"\nspec_source = {json.dumps(address)}"
                       + "   # le dépôt de spec que « deliveryctl spec sync » lit", text, count=1, flags=re.MULTILINE)
     config.parse(tomllib.loads(text), root, "delivery.toml (answers of init)")
@@ -510,7 +518,80 @@ def spec_steps(root: Path, plugin: Path) -> list[Step]:
     return steps
 
 
-def install_steps(root: Path, plugin: Path, version: str, args, notes: list[str]) -> tuple[list[Step], str, str]:
+GITLAB_INCLUDE = "- local: .gitlab/delivery-ci.yml"
+INCLUDE_ALIAS_RX = re.compile(r"(^|\s)[&*]\w|!reference|<<:")
+
+
+def with_include(text: str) -> str | None:
+    """`.gitlab-ci.yml` with the include of the method's CI added, editing nothing else; None when
+    its `include:` is not a block-style list (a string, a flow list, anchors) and the owner must
+    add the item."""
+    eol = "\r\n" if "\r\n" in text else "\n"
+    lines = text.splitlines()
+    at = next((i for i, line in enumerate(lines) if re.match(r"^include:\s*(#.*)?$", line)), None)
+    if at is None:
+        if any(re.match(r"^include\s*:", line) for line in lines):
+            return None
+        lines += ([""] if lines and lines[-1].strip() else []) + ["include:", "  " + GITLAB_INCLUDE]
+        return eol.join(lines) + eol
+    last, indent = None, None
+    for i in range(at + 1, len(lines)):
+        line = lines[i]
+        if not line.strip() or line.lstrip().startswith("#"):
+            continue
+        if line[0] not in " \t-":
+            break
+        if indent is None:
+            item = re.match(r"^(\s*)-(\s|$)", line)
+            if not item:
+                return None
+            indent = item.group(1)
+        if INCLUDE_ALIAS_RX.search(line):
+            return None
+        last = i
+    if indent is None or INCLUDE_ALIAS_RX.search(lines[at]):
+        return None
+    lines.insert(last + 1, indent + GITLAB_INCLUDE)
+    return eol.join(lines) + eol
+
+
+def gitlab_include_step(root: Path, notes: list[str]) -> Step:
+    """The include of the method's CI in the project's own `.gitlab-ci.yml`."""
+    path = root / ".gitlab-ci.yml"
+    if not path.exists():
+        return Step(".gitlab-ci.yml", "created", _writer(path, "include:\n  " + GITLAB_INCLUDE + "\n"))
+    text = path.read_text(encoding="utf-8")
+    if ".gitlab/delivery-ci.yml" in text:
+        return Step(".gitlab-ci.yml", "kept")
+    new = with_include(text)
+    if new is None:
+        notes.append(".gitlab-ci.yml is left as it is (its include is not a block-style list): add to it\n"
+                     "      include:\n        " + GITLAB_INCLUDE)
+        return Step(".gitlab-ci.yml", "kept")
+    return Step(".gitlab-ci.yml", "merged", _writer(path, new))
+
+
+def split_names(args) -> None:
+    """The words after the layout: `impl` takes the spec repository, then a name; the others a name."""
+    names = list(args.names or [])
+    args.layout = args.layout or ""
+    args.spec_repo = args.name = None
+    if args.layout == "impl":
+        if not names:
+            fail(EXIT_ERROR, "usage: deliveryctl init impl <spec repository> [name] "
+                             "(the spec repository: a short name, owner/name, a URL or a local path)")
+        args.spec_repo, args.name = names[0], (names[1] if len(names) > 1 else None)
+        extra = names[2:]
+    else:
+        args.name, extra = (names[0] if names else None), names[1:]
+    if extra:
+        fail(EXIT_ERROR, f"usage: deliveryctl init {args.layout or 'single'} "
+                         + ("<spec repository> [name]" if args.layout == "impl" else "[name]")
+                         + f": unexpected '{extra[0]}'")
+
+
+def install_steps(root: Path, plugin: Path, version: str, args, notes: list[str],
+                  target: create.Target | None = None) -> tuple[list[Step], str, str]:
     toml_path = root / config.PROJECT_FILE
     answers = [f"--{k}" for k in ("language", "forge", "check", "acceptance", "serve") if getattr(args, k, None)]
     answers += [v for v in (args.layout, args.spec_repo) if v]
@@ -525,15 +606,14 @@ def install_steps(root: Path, plugin: Path, version: str, args, notes: list[str]
         if layout == "impl" and not args.spec_repo:
             fail(EXIT_ERROR, "usage: deliveryctl init impl <spec repository> "
                              "(a short name, owner/name, a URL or a local path)")
-        if layout != "impl" and args.spec_repo:
-            fail(EXIT_ERROR, f"usage: deliveryctl init {layout} takes no spec repository (only impl does)")
         if not args.layout:
             notes.append("layout = single, spec and code in this repository (init spec or init impl <spec> to choose)")
-        forge = args.forge or detect_forge(root)
-        if not args.forge:
+        forge = target.forge if target else args.forge or detect_forge(root)
+        if not args.forge and not target:
             notes.append(f"forge = {forge}, read from the origin remote (--forge to choose)")
         steps = [Step("delivery.toml", "created",
-                      _writer(toml_path, project_toml(root, plugin, args, forge, layout)))]
+                      _writer(toml_path, project_toml(root, plugin, args, forge, layout,
+                                                      target.origin_url() if target else None)))]
     existing = copy_version(root)
     if existing and existing != version:
         notes.append(f"engine copy {existing}, plugin {version}: 'deliveryctl init --upgrade' refreshes it")
@@ -542,7 +622,8 @@ def install_steps(root: Path, plugin: Path, version: str, args, notes: list[str]
     steps.append(claude_md_step(root, plugin))
     steps.append(settings_step(root, plugin, existing or version, refresh=False))
     steps.append(gitignore_step(root))
-    justfile = next((p.name for p in root.iterdir() if p.name.lower() in ("justfile", ".justfile")), "")
+    justfile = next((p.name for p in root.iterdir() if p.name.lower() in ("justfile", ".justfile")), "") \
+        if root.is_dir() else ""
     template = "justfile-spec" if layout == "spec" else "justfile"
     steps.append(Step(justfile, "kept") if justfile else template_step(root, plugin, "justfile", template))
     if layout in ("spec", "single"):
@@ -551,17 +632,233 @@ def install_steps(root: Path, plugin: Path, version: str, args, notes: list[str]
         steps.append(template_step(root, plugin, ".github/workflows/delivery.yml", "github-ci.yml"))
     elif forge == "gitlab":
         steps.append(template_step(root, plugin, ".gitlab/delivery-ci.yml", "gitlab-ci.yml"))
+        steps.append(gitlab_include_step(root, notes))
     return steps, forge, layout
 
 
-def next_steps(root: Path, steps: list[Step], forge: str, layout: str, upgrade: bool) -> list[str]:
-    """The lines a human needs now, in order: what was laid down, the next command, the CI hint."""
+# -- the plan: what init will do, known before anything is written -------------------------------
+@dataclass
+class Plan:
+    root: Path
+    steps: list[Step]
+    forge: str
+    layout: str
+    branch: str
+    version: str
+    upgrade: bool
+    notes: list[str] = field(default_factory=list)
+    target: create.Target | None = None       # the repository to create; None = origin exists
+    git_repo: bool = True                     # False: `git init` first
+    found: str = ""                           # the origin found: 'owner/name', or its address
+    previous: str = ""                        # upgrade: the version of the engine copy
+    visibility: str = ""                      # of the repository found; '' = the forge did not say
+    address: str = ""                         # the git address to set before the commit
+    protect: bool = False
+
+    @property
+    def changed(self) -> list[Step]:
+        return [s for s in self.steps if s.status != "kept"]
+
+
+def is_repo(root: Path) -> bool:
+    return root.is_dir() and run(["git", "rev-parse", "--git-dir"], cwd=root, check=False).returncode == 0
+
+
+def locate(args) -> tuple[Path, bool]:
+    """The folder init works in, and whether it is already a git repository. A name makes a new
+    folder; without one, the current repository, or the current folder."""
+    if args.name:
+        root = Path.cwd() / args.name
+        if root.exists() and (not root.is_dir() or any(root.iterdir())):
+            line = f"cd {args.name} && deliveryctl init {args.layout or 'single'}" \
+                   + (f" {args.spec_repo}" if args.spec_repo else "")
+            fail(EXIT_PRECONDITION, f"{args.name} exists and is not empty: to equip it, type: {line}")
+        return root, False
+    top = run(["git", "rev-parse", "--show-toplevel"], cwd=Path.cwd(), check=False)
+    if top.returncode != 0:
+        return Path.cwd(), False
+    root = Path(top.stdout.strip())
+    if root.resolve() != main_root().resolve():
+        fail(EXIT_PRECONDITION, "run init in the main checkout, not in a story worktree")
+    return root, True
+
+
+def current_branch(root: Path) -> str:
+    return run(["git", "symbolic-ref", "--quiet", "--short", "HEAD"], cwd=root, check=False).stdout.strip()
+
+
+def machine_email(root: Path) -> str:
+    where = root if root.is_dir() else Path.cwd()
+    return run(["git", "config", "user.email"], cwd=where, check=False).stdout.strip()
+
+
+def install_plan(args, plugin: Path, version: str) -> Plan:
+    split_names(args)
+    notes: list[str] = []
+    root, git_repo = locate(args)
+    machine = config.machine()
+    has_origin = git_repo and bool(run(["git", "remote", "get-url", "origin"], cwd=root, check=False).stdout.strip())
+    target, found, visibility = None, "", ""
+    chosen = args.visibility or machine["visibility"]
+    if has_origin:
+        if args.visibility:
+            notes.append(f"--{args.visibility} ignored: the repository exists, its visibility is read from the forge")
+    else:
+        toml = root / config.PROJECT_FILE
+        forge = config.load(root).forge if toml.exists() else (args.forge or machine["forge"])
+        target = create.resolve(forge, root.name, chosen, machine)
+    steps, forge, layout = install_steps(root, plugin, version, args, notes, target)
+    if target:
+        branch = current_branch(root) if git_repo else "main"
+        branch = branch or "main"
+    else:
+        git = Git(root)
+        branch, default = current_branch(root), git.target_branch()
+        if branch != default:
+            fail(EXIT_PRECONDITION, f"init commits on the default branch ({default}) and this one is {branch or 'detached'}: "
+                                    f"git switch {default}")
+        info = Forge(None, git, forge).repo()
+        found, visibility = info["path"] or run(["git", "remote", "get-url", "origin"], cwd=root).stdout.strip(), \
+            info["visibility"]
+    plan = Plan(root, steps, forge, layout, branch, version, False, notes, target, git_repo, found=found,
+                visibility=visibility)
+    plan.protect = bool(target or plan.changed)
+    if forge == "github" and (target.visibility if target else visibility) == "public":
+        plan.address = public_address(plan, machine_email(root))
+    return plan
+
+
+def public_address(plan: Plan, current: str) -> str:
+    """The noreply address a public GitHub repository publishes in every commit; '' when the
+    configured one already is a noreply address, or the forge does not tell who the owner is."""
+    if current.lower().endswith(create.NOREPLY):
+        return ""
+    try:
+        login, uid = (plan.target.login, plan.target.uid) if plan.target else create.github_user()
+    except DeliveryError as exc:
+        plan.notes.append(f"git address left as it is: {exc.message}")
+        return ""
+    return create.noreply(login, uid) if uid else ""
+
+
+def upgrade_plan(plugin: Path, version: str) -> Plan:
+    root = repo_root()
+    if root.resolve() != main_root().resolve():
+        fail(EXIT_PRECONDITION, "run init in the main checkout, not in a story worktree")
+    if not (root / config.PROJECT_FILE).exists():
+        fail(EXIT_PRECONDITION, "delivery.toml not found: run 'deliveryctl init' first")
+    existing = copy_version(root)
+    if existing and version_key(existing) > version_key(version):
+        fail(EXIT_PRECONDITION, f"the project engine {existing} is newer than the plugin {version}: "
+                                "update the plugin first")
+    steps = engine_steps(root, plugin, version, refresh=True)
+    steps += method_steps(root, plugin, version, refresh=True)
+    steps.append(settings_step(root, plugin, version, refresh=True))
+    steps.append(gitignore_step(root))
+    git = Git(root)
+    cfg = config.load(root)
+    return Plan(root, [s for s in steps if s], cfg.forge, cfg.repo_role, current_branch(root) or git.target_branch(),
+                version, True, [], previous=existing)
+
+
+def summary(plan: Plan) -> list[str]:
+    """What init is about to do, in a few lines (before any write)."""
+    lines = [f"Dossier : {plan.root}"]
+    if plan.upgrade:
+        lines.append(f"Mise à jour : delivery-method {plan.previous or '?'} → {plan.version}")
+    elif plan.target:
+        t = plan.target
+        lines.append(f"Dépôt : créer {t.path} sur {t.where}, {VISIBILITY_FR[t.visibility]}")
+    else:
+        lines.append(f"Dépôt : origin {plan.found}" + (f" ({VISIBILITY_FR[plan.visibility]})" if plan.visibility in VISIBILITY_FR
+                                                      else ", visibilité inconnue"))
+    if not plan.upgrade:
+        lines.append(f"Disposition : {plan.layout}")
+        lines.append("Adresse git : " + (plan.address or "inchangée"))
+    lines.append(f"Commit et push sur {plan.branch}")
+    if plan.protect:
+        required = "CI exigée" if plan.layout == "spec" else "CI exigée après la première fusion"
+        merges = "demande de fusion obligatoire, commits de fusion seuls"
+        lines.append(f"Protection de {plan.branch} : {merges}, {required}")
+    return lines
+
+
+VISIBILITY_FR = {"private": "privé", "public": "public", "internal": "interne"}
+YES = ("o", "oui", "y", "yes")
+
+
+def confirm(args) -> bool | None:
+    """One question; only o, oui, y or yes go on. None: no terminal to ask on, and no --yes."""
+    if args.yes:
+        return True
+    if not sys.stdin or not sys.stdin.isatty():
+        return None
+    try:
+        answer = input("Continuer ? [o/N] ")
+    except EOFError:
+        answer = ""
+    return answer.strip().lower() in YES
+
+
+def commit_paths(root: Path, steps: list[Step]) -> list[str]:
+    """The paths init laid down, as git takes them: those still on disk, or tracked (a removed copy)."""
+    git, paths = Git(root), []
+    for step in steps:
+        path = step.path.rstrip("/")
+        if step.status != "kept" and (step.status != "removed" or git.out("ls-files", "--", path, check=False)):
+            paths.append(path)
+    return paths
+
+
+def apply(plan: Plan) -> tuple[str, list[str]]:
+    """Write the plan, then the forge gestures; returns what became of the commit ('pushed',
+    'local' when the push was refused, 'none' when the files equal the last commit) and the notes."""
+    root, notes = plan.root, []
+    root.mkdir(parents=True, exist_ok=True)
+    if not plan.git_repo:
+        run(["git", "init", "--quiet", "--initial-branch", plan.branch], cwd=root)
+    if plan.target:
+        create.create(root, plan.target)
+    if plan.address:
+        run(["git", "config", "user.email", plan.address], cwd=root)
+    for step in plan.steps:
+        if step.write:
+            step.write()
+    git = Git(root)
+    subject = (f"Met à jour delivery-method vers {plan.version}" if plan.upgrade
+               else f"Équipe le dépôt avec delivery-method {plan.version} ({plan.layout})")
+    paths = commit_paths(root, plan.steps)
+    git.run("add", "--", *paths)
+    if git.ok("diff", "--cached", "--quiet", "--", *paths):
+        return "none", notes
+    git.commit(paths, subject, trailers=[("Delivery-Method", plan.version)], only=True)
+    try:
+        git.push(plan.branch)
+    except DeliveryError as exc:
+        detail = exc.message.splitlines()[-1] if exc.message else ""
+        notes.append(f"push refused ({detail}): the commit stays local; push it with 'git push -u origin {plan.branch}' "
+                     "or, on a protected branch, from a branch and a merge request")
+        return "local", notes
+    git.run("remote", "set-head", "origin", plan.branch, check=False)
+    if plan.protect:
+        try:
+            notes += Forge(config.load(root), git).protect(plan.branch, checks=plan.layout == "spec")
+        except DeliveryError as exc:
+            notes.append(f"protection of {plan.branch} skipped: {exc.message}")
+    return "pushed", notes
+
+
+def next_steps(root: Path, steps: list[Step], forge: str, layout: str, upgrade: bool,
+               branch: str = "", outcome: str = "pushed") -> list[str]:
+    """The lines a human needs now, in order: what was laid down, the next command."""
     changed = [s for s in steps if s.status != "kept"]
     if not changed:
         return ["Rien à changer : le dépôt est déjà équipé. Diagnostic : .delivery/deliveryctl doctor"]
+    done = {"pushed": f"commités et poussés sur {branch}", "local": f"commités sur {branch}, push à refaire",
+            "none": "écrits, identiques au dernier commit"}[outcome]
     if upgrade:
-        return [f"{len(changed)} fichiers mis à jour, voir git diff"]
-    lines = [f"{len(changed)} fichiers posés, voir git status"]
+        return [f"{len(changed)} fichiers mis à jour, {done}"]
+    lines = [f"{len(changed)} fichiers posés, {done}"]
     brief = next((s for s in steps if s.path == "spec/product/brief.md"), None)
     if layout == "impl":
         lines.append("Une fois la spec publiée : .delivery/deliveryctl spec sync <version> (sa source est connue)")
@@ -573,49 +870,56 @@ def next_steps(root: Path, steps: list[Step], forge: str, layout: str, upgrade: 
     if mode == "false" and any(s.path.startswith(".delivery/") for s in changed):
         lines.append("git update-index --chmod=+x .delivery/deliveryctl   (ce système de fichiers "
                      "ne garde pas le bit exécutable)")
-    gitlab_ci = root / ".gitlab-ci.yml"
-    if forge == "gitlab" and ".gitlab/delivery-ci.yml" not in (
-            gitlab_ci.read_text(encoding="utf-8") if gitlab_ci.exists() else ""):
-        lines.append("Ajoutez à .gitlab-ci.yml : include: [{ local: .gitlab/delivery-ci.yml }]")
     return lines
 
 
+def diagnosis(root: Path) -> list[str]:
+    """The `note` and `warn` lines of doctor for the equipped repository; nothing when all is ok."""
+    from . import doctor
+    here = os.getcwd()
+    os.chdir(root)
+    try:
+        return [f"{level}: {message}" for level, message in doctor.collect() if level != "ok"]
+    finally:
+        os.chdir(here)
+
+
 def main(args) -> int:
-    root = repo_root()
-    if root.resolve() != main_root().resolve():
-        fail(EXIT_PRECONDITION, "run init in the main checkout, not in a story worktree")
     plugin = plugin_source()
     version = engine_version(plugin)
-    notes: list[str] = []
-    if args.upgrade:
-        if not (root / config.PROJECT_FILE).exists():
-            fail(EXIT_PRECONDITION, "delivery.toml not found: run 'deliveryctl init' first")
-        existing = copy_version(root)
-        if existing and version_key(existing) > version_key(version):
-            fail(EXIT_PRECONDITION, f"the project engine {existing} is newer than the plugin {version}: "
-                                    "update the plugin first")
-        steps = engine_steps(root, plugin, version, refresh=True)
-        steps += method_steps(root, plugin, version, refresh=True)
-        steps.append(settings_step(root, plugin, version, refresh=True))
-        steps.append(gitignore_step(root))
-        forge = layout = ""
-    else:
-        steps, forge, layout = install_steps(root, plugin, version, args, notes)
-    steps = [s for s in steps if s]
-    if not args.dry_run:
-        for step in steps:
-            if step.write:
-                step.write()
-    print(f"deliveryctl init{' --upgrade' if args.upgrade else ''}: {root} (plugin {version})"
+    plan = upgrade_plan(plugin, version) if args.upgrade else install_plan(args, plugin, version)
+    print(f"deliveryctl init{' --upgrade' if args.upgrade else ''} (plugin {version})"
           + (" — dry run, nothing written" if args.dry_run else ""))
-    for step in steps:
-        print(f"  {step.status:8} {step.path}")
-    for note in notes:
-        print(f"note: {note}")
-    if args.dry_run:
-        print("\nRelancez sans --dry-run pour appliquer.")
-        return EXIT_OK
+    pending = bool(plan.changed or plan.target)
+    if pending:
+        for line in summary(plan):
+            print(line)
+    if args.dry_run or not pending:
+        for step in plan.steps:
+            print(f"  {step.status:8} {step.path}")
+        for note in plan.notes:
+            print(f"note: {note}")
+        if args.dry_run:
+            print("\nRelancez sans --dry-run pour appliquer.")
+            return EXIT_OK
+    else:
+        answer = confirm(args)
+        if answer is None:
+            print("Pas de terminal pour répondre : relancez avec --yes pour continuer. Rien n'a été écrit.")
+            return EXIT_PRECONDITION
+        if not answer:
+            print("Rien n'a été écrit.")
+            return EXIT_OK
+    outcome = "pushed"
+    if pending:
+        outcome, forge_notes = apply(plan)
+        for step in plan.steps:
+            print(f"  {step.status:8} {step.path}")
+        for note in plan.notes + forge_notes:
+            print(f"note: {note}")
+    for line in diagnosis(plan.root):
+        print(line)
     print("\nProchaines étapes :")
-    for line in next_steps(root, steps, forge, layout, args.upgrade):
+    for line in next_steps(plan.root, plan.steps, plan.forge, plan.layout, args.upgrade, plan.branch, outcome):
         print("  " + line)
-    return EXIT_OK
+    return EXIT_TOOL if outcome == "local" else EXIT_OK
