@@ -4,6 +4,59 @@ Chaque version liste ses ajouts, changements et corrections. La rubrique `Contra
 tout changement de [`CONTRACTS.md`](CONTRACTS.md) : tant que le plugin est en `0.x`, un
 changement de contrat monte la version mineure ; après 1.0.0, la version majeure.
 
+## 0.4.0
+
+### Ajouts
+
+- `init` en un seul geste : `mkdir todo-spec && cd todo-spec && deliveryctl init spec`. La
+  disposition est l'argument (`single`, `spec`, `impl <spec>`, avec un nom pour créer le dossier et
+  le dépôt) ; aucune question, un résumé et un seul « o » (`--yes`, `--dry-run`). Sur ce « o », il
+  crée le dépôt sur GitHub ou GitLab (`--private`, `--public`, `--internal`), règle l'adresse
+  privée d'un dépôt GitHub public, pose les fichiers (avec GitLab, l'`include:` de la CI), commite,
+  pousse, protège la branche par défaut, lance `doctor` et donne le prochain geste.
+- Les réglages de machine `language`, `visibility`, `forge`, `gitlab_host` et `gitlab_group`, et la
+  clé `spec_source` de `delivery.toml` (dépôt `impl` : la spec que lit `spec sync`).
+- Un `justfile` qui marche d'emblée dans un dépôt `spec` (`check` lance `spec lint`, `acceptance`
+  et `serve` jouent la suite et l'application vide).
+- `spec push` : une branche `spec/<incr>` et une seule demande de fusion par incrément de spec,
+  ouverte ou mise à jour à chaque GO (commit au trailer `Go:`).
+- `spec release` en un seul geste : commit de la version, push, attente des contrôles, fusion de la
+  demande, tag `spec-vX.Y.Z` et push du tag ; relancé après un arrêt, il reprend.
+- `/impl-frame` propose les quatre recettes du `justfile` et les lignes d'installation de la CI.
+- Le raccourci de shell du README marche hors d'un dépôt équipé : il lance le plugin installé le
+  plus récent, et `init` passe toujours par lui.
+
+### Changements
+
+- **Rupture.** `init --role` est remplacé par la disposition en argument positionnel
+  (`init spec`, `init impl <spec>`) ; `single` reste le défaut.
+- **Rupture.** La règle de push des commandes de spec change : `/spec-frame`, `/spec-write` et
+  `/spec-review` travaillent sur `spec/<incr>` (elles s'arrêtent sur toute autre branche, en
+  donnant la commande pour y passer) et poussent par `spec push` à chaque GO, au lieu de ne jamais
+  pousser. L'analyste ne lance toujours ni `git push`, ni tag, ni `spec release`, ni `spec sync`.
+- Les cinq questions de `/delivery-method:init` et la relecture avant commit disparaissent : `init`
+  déduit tout, commite et pousse lui-même ; la commande Claude montre le résumé, demande « ok ? »
+  et passe `--yes`.
+- `spec sync` ouvre une demande de fusion (branche `spec-sync/<version>`) sur la branche par défaut ;
+  `init --upgrade` fait de même sur une branche protégée (`delivery-method/upgrade-<version>`).
+- Les contrôles de CI deviennent obligatoires dans la protection après la première fusion à CI
+  verte de `merge` ; dans un dépôt `spec`, dès la création.
+- Documentation remise d'accord avec le plugin : équipement, phase de spécification, `spec_source`,
+  réglages de machine, verbes et options (README, `CONTRACTS.md` §12.2, guide) ; plus de mention des
+  anciennes questions ni de « `init` ne commite rien ».
+
+### Contracts
+
+- §2 : l'équipement par `init` (résumé, « ok », création, adresse, commit, push, protection,
+  `doctor`), la protection de la branche par défaut, le `justfile` d'un dépôt `spec`.
+- §3 : `spec_source`, la création du dépôt à l'équipement.
+- §4 : les réglages de machine `language`, `visibility`, `forge`, `gitlab_host`, `gitlab_group`.
+- §12.2 : `init` (disposition, nom, `--private|--public|--internal`, `--yes`), `merge`, `spec push`,
+  `spec release`, `spec sync`.
+- §14.1 : la branche `spec/<incr>`, `spec push`, le trailer `Go:`.
+- §14.4 : `spec release` en un geste.
+- §14.5 : `spec sync` par demande de fusion, sa source.
+
 ## 0.3.0
 
 ### Ajouts

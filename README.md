@@ -47,7 +47,7 @@ implémentations peuvent suivre la même spec. Moins adapté : un prototype jeta
 | Python 3.11 ou plus | moteur `deliveryctl`, sans dépendance à installer |
 | just | recettes `check`, `acceptance`, `serve` (paquet de la distribution, ou `pipx install rust-just`) |
 | Node.js, version LTS | suite d'acceptation Playwright |
-| gh ou glab, authentifié | demandes de fusion sur GitHub ou GitLab |
+| gh ou glab, authentifié | création du dépôt, protection de branche et demandes de fusion sur GitHub ou GitLab |
 | herdr, facultatif | fenêtres de suivi des stories ; sans lui, mode terminal |
 | psql et Docker, facultatifs | journal d'expérience en PostgreSQL |
 
@@ -68,51 +68,91 @@ Installez le plugin pour l'utilisateur, jamais avec `--scope project` : il ne se
 dépôt (`/delivery-method:init`), et `init` copie ensuite la méthode dans le dépôt lui-même.
 Pour un essai sans installation : `claude --plugin-dir /chemin/vers/delivery-method`.
 
-**2. Équiper le dépôt.** Dans une session Claude ouverte à la racine de la copie principale,
-tapez `/delivery-method:init`. La commande pose cinq questions (contenu du dépôt ; langue du
-contenu ; forge `github` ou `gitlab` ; commande `check` ; commandes `acceptance` et
-`serve`), recommande une réponse pour chacune, lance `deliveryctl init` et affiche le bilan.
-`init` n'écrase rien et ne commite rien. Il pose `delivery.toml` (réglages du projet),
-`.delivery/` (copie du moteur, règles communes, gabarits, manifeste `method.json`),
-`.claude/agents/`, `.claude/skills/` et `.claude/commands/` (copie des agents, skills et commandes de
-la méthode, sans espace de noms : `/spec-frame`, `/impl-frame`, `/run-campaign`…), un `justfile` d'amorce dont les
-recettes échouent tant qu'elles ne sont pas écrites, la CI de la forge
-(`.github/workflows/delivery.yml` ou `.gitlab/delivery-ci.yml`) et, pour un dépôt `spec` ou
-`single` qui n'en a pas encore, un squelette `spec/` (`spec.toml`, contrat du harnais, libellés,
-harnais Playwright et application vide, `CHANGELOG.md`, brief, glossaire) ; il complète par ajout
-`CLAUDE.md` (import `@.delivery/rules.md`, section `## Project conventions`), `.gitignore` et
-`.claude/settings.json` (plugin désactivé dans le projet, y compris si une installation à la portée
-projet l'avait activé, car sa copie ferait doublon avec celle du projet ; hooks `Stop`,
-`SessionStart` et `PreToolUse` ; messagerie entre sessions refusée ; confirmation pour les gestes humains). Écrivez
-les recettes du `justfile` pour votre pile, relisez, puis commitez : toute session Claude Code qui
-clone le dépôt, y compris une session cloud qui n'installe aucun plugin, y trouve la méthode
-entière. Ne modifiez pas à la main les fichiers copiés sous `.claude/` : `--upgrade` refuse
-d'écraser une copie modifiée (les fichiers que vous y ajoutez vous-même ne sont jamais touchés).
-Dans un dépôt GitHub public, l'adresse `git config user.email` est publiée dans chaque commit et
-dans le trailer `Approved-By` de chaque fusion : avant le premier commit, réglez l'adresse privée
-de GitHub (`git config user.email <id>+<login>@users.noreply.github.com`) ; `deliveryctl doctor` le signale.
-
-**3. Raccourci dans le shell.** Dans un projet, le moteur s'exécute toujours depuis sa copie,
-`.delivery/deliveryctl`. Pour votre shell, ajoutez à `~/.bashrc` ou `~/.zshrc` :
+**2. Équiper le dépôt.** Une seule commande, dans un dossier vide ou dans un dépôt existant :
 
 ```sh
-[ -n "$CLAUDECODE" ] || deliveryctl() { "$(git rev-parse --show-toplevel)/.delivery/deliveryctl" "$@"; }
+mkdir todo-spec && cd todo-spec && deliveryctl init spec
 ```
 
-La garde sur `CLAUDECODE` laisse les sessions Claude hors de cette fonction : Claude Code rejoue
-les fonctions de votre fichier de démarrage dans son outil Bash, où elle masquerait la copie du
-projet. Dans ces sessions, `deliveryctl` est déjà dans le `PATH` : le hook `SessionStart` du projet y met
-`.delivery/`, et c'est donc la copie du projet. Vérifiez enfin avec
+La disposition est l'argument : `single` (par défaut), `spec`, ou `impl <spec>` avec le dépôt de
+spec (nom court, `propriétaire/nom`, URL ou chemin local, écrit dans `spec_source`) ; un nom
+supplémentaire crée le dossier et le dépôt (`deliveryctl init impl todo-spec todo-kotlin`). Dans
+une session Claude, `/delivery-method:init spec` fait de même. `init` ne pose aucune question : il
+déduit le reste (langue et visibilité des réglages de machine, forge de `origin`, commandes du
+`justfile`), affiche un résumé de huit lignes au plus (dossier, dépôt à créer ou `origin` trouvé,
+disposition, adresse git, branche du commit, protection, puis les fichiers) et attend un seul
+« o » (`--dry-run` montre ce résumé sans rien écrire, `--yes` passe la question).
+
+Sur ce « o », `init` fait, dans l'ordre :
+
+1. crée le dossier et le dépôt git, puis le dépôt sur GitHub ou GitLab quand il n'y en a pas
+   (`--private`, `--public` ou `--internal`, sinon le réglage `visibility`, privé par défaut) ;
+2. pour un dépôt GitHub public, règle l'adresse privée de GitHub
+   (`<id>+<login>@users.noreply.github.com`) avant le premier commit : sans cela, l'adresse
+   `git config user.email` serait publiée dans chaque commit et dans le trailer `Approved-By` de
+   chaque fusion ;
+3. pose `delivery.toml` (réglages du projet), `.delivery/` (copie du moteur, règles communes,
+   gabarits, manifeste `method.json`), `.claude/agents/`, `.claude/skills/` et `.claude/commands/`
+   (copie des agents, skills et commandes de la méthode, sans espace de noms : `/spec-frame`,
+   `/impl-frame`, `/run-campaign`…), un `justfile`, la CI de la forge
+   (`.github/workflows/delivery.yml`, ou `.gitlab/delivery-ci.yml` avec son `include:` dans
+   `.gitlab-ci.yml`) et, pour un dépôt `spec` ou `single` qui n'en a pas encore, un squelette
+   `spec/` (`spec.toml`, contrat du harnais, libellés, harnais Playwright et application vide,
+   `CHANGELOG.md`, brief, glossaire) ; il complète par ajout `CLAUDE.md` (import
+   `@.delivery/rules.md`, section `## Project conventions`), `.gitignore` et
+   `.claude/settings.json` (plugin désactivé dans le projet, car sa copie ferait doublon avec celle
+   du projet ; hooks `Stop`, `SessionStart` et `PreToolUse` ; messagerie entre sessions refusée ;
+   confirmation pour les gestes humains). Il n'écrase aucun fichier ;
+4. commite ce qu'il a posé, rien d'autre, pousse, puis protège la branche par défaut (demande de
+   fusion obligatoire, commits de fusion seuls ; dans un dépôt `spec`, la CI exigée d'emblée). Une
+   forge qui refuse un réglage de protection donne une note qui le nomme, sans faire échouer
+   `init` ;
+5. lance `doctor` et affiche la suite : le prochain geste.
+
+Le `justfile` d'un dépôt `spec` marche d'emblée (`check` lance `spec lint`, `acceptance` et `serve`
+jouent la suite et l'application vide) ; pour `single` et `impl`, ses recettes échouent tant que
+la pile ne les définit pas : `/impl-frame` les propose (voir « Implémentation »). Toute session
+Claude Code qui clone le dépôt, y compris une session cloud qui n'installe aucun plugin, y trouve
+la méthode entière. Ne modifiez pas à la main les fichiers copiés sous `.claude/` : `--upgrade`
+refuse d'écraser une copie modifiée (les fichiers que vous y ajoutez vous-même ne sont jamais
+touchés).
+
+**3. Raccourci dans le shell.** Dans un projet, le moteur s'exécute toujours depuis sa copie,
+`.delivery/deliveryctl` ; hors d'un dépôt équipé, il faut le lanceur du plugin pour que
+`deliveryctl init` soit le premier geste. Pour votre shell, ajoutez à `~/.bashrc` ou `~/.zshrc` :
+
+```sh
+[ -n "$CLAUDECODE" ] || deliveryctl() {
+  local root launcher
+  root=$(git rev-parse --show-toplevel 2>/dev/null)
+  if [ "$1" != init ] && [ -x "$root/.delivery/deliveryctl" ]; then
+    "$root/.delivery/deliveryctl" "$@"
+  else
+    launcher=$(printf '%s\n' ~/.claude/plugins/cache/delivery-method/delivery-method/*/bin/deliveryctl | sort -V | tail -n 1)
+    "$launcher" "$@"
+  fi
+}
+```
+
+Dans un dépôt équipé, la fonction lance la copie du projet ; ailleurs (dépôt sans
+`.delivery/deliveryctl`, ou aucun dépôt), le lanceur de la version installée la plus récente du
+plugin. `init` passe toujours par ce lanceur, y compris dans un dépôt équipé : c'est le moteur du
+plugin qui équipe et qui met à jour la copie du projet. La garde sur `CLAUDECODE` laisse les sessions Claude hors de cette fonction : Claude Code
+rejoue les fonctions de votre fichier de démarrage dans son outil Bash, où elle masquerait la
+copie du projet. Dans ces sessions, `deliveryctl` est déjà dans le `PATH` : le hook `SessionStart`
+du projet y met `.delivery/`, et c'est donc la copie du projet. Vérifiez enfin avec
 `deliveryctl doctor`, qui ne modifie rien : chaque ligne vaut `ok`, `note` ou `warn`.
 
-**Mettre à jour.** Mettez à jour le plugin (`/plugin` dans Claude Code), puis
-relancez `/delivery-method:init` : sur un dépôt équipé, il lance `deliveryctl init --upgrade` depuis
-le lanceur du plugin (`DELIVERY_USE_PLUGIN_ENGINE=1 deliveryctl init --upgrade`, qui exécute le
-moteur du plugin et non la copie du projet, encore ancienne). La mise à jour rafraîchit
+**Mettre à jour.** Mettez à jour le plugin (`/plugin` dans Claude Code), puis lancez
+`deliveryctl init --upgrade` (ou `/delivery-method:init --upgrade`) : `init` s'exécute par le
+moteur du plugin, non par la copie du projet, encore ancienne. La mise à jour rafraîchit
 `.delivery/`, la copie sous `.claude/` (en retirant les fichiers que la nouvelle version n'a plus),
-les hooks et la version épinglée dans `.claude/settings.json`, et désactive le plugin dans le projet.
-Si un fichier copié a été modifié à la main, elle refuse, en les listant, avant d'écrire quoi que
-ce soit. Relisez le diff, commitez.
+les hooks et la version épinglée dans `.claude/settings.json`, et désactive le plugin dans le
+projet ; elle suit le même chemin que l'équipement (résumé, un « o », commit, push, sans création
+ni protection). Si un fichier copié a été modifié à la main, elle refuse, en les listant, avant
+d'écrire quoi que ce soit. Sur une branche par défaut protégée, le push est refusé : `init` déplace
+le commit sur la branche `delivery-method/upgrade-<version>`, remet la branche par défaut sur sa
+tête distante et ouvre la demande de fusion, que vous fusionnez.
 
 **Publier une version du plugin** (mainteneurs). `init` épingle la marketplace sur l'étiquette
 `delivery-method--vX.Y.Z` : sans elle, un coéquipier ne peut pas installer le plugin. Montez la
@@ -125,8 +165,9 @@ même version dans `.claude-plugin/plugin.json`, `.claude-plugin/marketplace.jso
 Pour un parcours complet et illustré, une spec et deux implémentations d'une liste de tâches,
 avec le schéma de chaque phase et ses commandes : [`docs/guide.md`](docs/guide.md).
 
-Dans un dépôt équipé, les commandes `/spec-frame`, `/impl-frame`… se tapent dans une session Claude, les commandes
-`deliveryctl …` dans le shell. Avant un `/clear`, `/handoff` range dans les
+Une fois le dépôt équipé (`mkdir todo-spec && cd todo-spec && deliveryctl init spec`, voir
+« Installation »), les commandes `/spec-frame`, `/impl-frame`… se tapent dans une session Claude,
+les commandes `deliveryctl …` dans le shell. Avant un `/clear`, `/handoff` range dans les
 fichiers ce qui a été décidé et donne la ligne de reprise.
 
 Pour réfléchir à une idée avant d'en faire du travail, à n'importe quelle phase :
@@ -153,11 +194,15 @@ et cadre le premier bloc. Ensuite, pour un cadrage ciblé : `/brainstorm <idée>
 
 Une spécification se construit par incréments (`01-core`, `02-partage`…), mûris dans
 `refinement/<incr>/framing.md` puis écrits dans `spec/`. Quatre GO humains jalonnent un
-incrément : cadrage, revue, clôture, publication. En équipe, un GO est l'approbation de la
-demande de fusion qui porte le changement.
+incrément : cadrage, revue, clôture, publication. Chaque GO se dit dans la conversation ;
+l'analyste le consigne par un statut et un commit portant le trailer `Go: …`, puis lance
+`deliveryctl spec push`. Un incrément a une branche `spec/<incr>`, créée au cadrage, et une seule
+demande de fusion, ouverte au premier GO et mise à jour à chacun : c'est la relecture de
+l'équipe, et sa fusion est la publication.
 
-1. Une fois par dépôt, dans le squelette `spec/` posé par `init`, renseignez `name` et `locales`
-   dans `spec/spec.toml`, puis installez la suite d'acceptation ;
+1. Une fois par dépôt, dans le squelette `spec/` posé par `init`, renseignez `locales` dans
+   `spec/spec.toml` (`name` y est déjà le nom du dossier), puis installez la suite d'acceptation
+   (`just acceptance` le fait aussi à la première exécution) ;
    `.delivery/templates/spec/acceptance/tests/example.spec.ts` montre la forme d'un test :
    ```sh
    (cd spec/acceptance && npm install && npx playwright install chromium)
@@ -165,7 +210,7 @@ demande de fusion qui porte le changement.
 2. `claude --agent product-analyst`, puis `/spec-frame 01-core`.
    L'analyste lit l'existant, donne son avis, pose des questions numérotées avec sa
    recommandation, et consigne vos décisions mot pour mot. Le **GO de cadrage** se donne
-   explicitement.
+   explicitement ; l'analyste le commite sur `spec/01-core` et pousse (`spec push`).
 3. `/spec-write 01-core` : stories, contrat d'IHM, libellés ;
    `deliveryctl spec lint` doit être vert.
 4. `/spec-review 01-core` : taille et angles annoncés, votre **GO de revue**,
@@ -176,20 +221,26 @@ demande de fusion qui porte le changement.
 6. `/spec-write 01-core --acceptance`, puis
    `/spec-review 01-core --acceptance` : les tests, tous rouges contre
    l'application vide.
-7. **Publication** : `deliveryctl spec release` calcule la version (critère retiré ou modifié :
-   majeure ; ajouté : mineure ; sinon corrective ; `0.x` tant que `release_stage` vaut
-   `pre-release`), écrit l'entrée de `spec/CHANGELOG.md` et affiche les commandes de commit, de
-   tag `spec-vX.Y.Z` et de push, que vous lancez.
+7. **Publication** : `deliveryctl spec release` (geste humain, un seul) lance `spec lint`, calcule
+   la version (critère retiré ou modifié : majeure ; ajouté : mineure ; sinon corrective ; `0.x`
+   tant que `release_stage` vaut `pre-release`), écrit l'entrée de `spec/CHANGELOG.md`, la commite
+   sur `spec/<incr>` (trailer `Go: publication`), pousse, attend les contrôles de la demande de
+   fusion, la fusionne, tague `spec-vX.Y.Z` le commit de fusion et pousse le tag. Contrôles rouges
+   ou attente expirée : il s'arrête avec l'URL, rien n'est fusionné ; relancé, il reprend.
 
 ### Implémentation (dépôt `impl` ou `single`)
 
-1. Dépôt `impl` : `deliveryctl spec sync 0.1.0 --source <url du dépôt de spec>` copie une version
-   publiée (un commit : `spec/`, `spec.lock`, `docs/conformance.md`) ; `deliveryctl spec verify`
-   contrôle ensuite, sans réseau, que `spec/` n'a pas bougé.
+1. Dépôt `impl` : `deliveryctl spec sync 0.1.0` copie une version publiée (un commit : `spec/`,
+   `spec.lock`, `docs/conformance.md`), depuis le dépôt de spec que `init impl <spec>` a écrit dans
+   `spec_source` (ou `--source <url>`). Sur la branche par défaut, le commit part sur la branche
+   `spec-sync/0.1.0` avec sa demande de fusion : fusionnez-la avant `/impl-frame`.
+   `deliveryctl spec verify` contrôle ensuite, sans réseau, que `spec/` n'a pas bougé.
 2. Cadrage : `claude --agent technical-lead`, puis
    `/impl-frame <campagne>` : `docs/architecture.md`, un ADR par choix
-   structurant, les cartes de `backlog/` en `draft`, et les `## Project conventions` proposées
-   pour `CLAUDE.md`, que vous collez et commitez.
+   structurant, les cartes de `backlog/` en `draft`, les `## Project conventions` proposées pour
+   `CLAUDE.md`, les quatre recettes du `justfile` (`check`, `test`, `acceptance`, `serve`) et les
+   lignes d'installation de la pile pour la CI : vous les collez et commitez. Elles passent au vert
+   une fois la carte du squelette fusionnée.
 3. **GO des cartes** : passez les cartes validées en `status: ready`, commitez, et amenez ce
    commit sur la branche cible. Le run ne lit que les cartes de la branche cible.
 4. `deliveryctl run --campaign <campagne>` : le `technical-lead` démarre en session de rôle et
@@ -200,7 +251,9 @@ demande de fusion qui porte le changement.
    renforcés selon les risques de la carte), les corrections bornées, puis `deliveryctl submit`
    (contrôle d'intégration, push de `story/<id>`, demande de fusion).
 5. Notifié de chaque demande de fusion à relire, vous la relisez et fusionnez par
-   `deliveryctl merge <id>`, qui pose un commit de fusion porteur des trailers de traçabilité.
+   `deliveryctl merge <id>`, qui pose un commit de fusion porteur des trailers de traçabilité ;
+   après la première fusion dont la CI était verte, il exige aussi cette CI dans la protection de
+   la branche (une ligne affichée, une seule fois).
    En `integration = "ai"`, le moteur fusionne lui-même quand la CI est verte : au moins un
    contrôle, tous réussis ; tant qu'aucun contrôle n'a rendu son résultat, il attend.
 6. Quand plus rien n'est lançable, le lead réécrit la section `## Run` de
@@ -267,11 +320,11 @@ Dans un dépôt équipé, les commandes sont celles de la copie du projet, sans 
 
 | Commande | Session | Effet |
 |---|---|---|
-| `/delivery-method:init [--upgrade]` | humaine, racine du dépôt | équipe le dépôt, ou met à jour sa copie de la méthode (moteur, agents, skills, commandes) |
+| `/delivery-method:init [single\|spec\|impl <spec>] [nom] [--public\|--private\|--internal] [--upgrade]` | humaine, racine du dépôt ou dossier à créer | équipe le dépôt en un geste (création sur la forge, commit, push, protection), ou met à jour sa copie de la méthode (moteur, agents, skills, commandes) |
 | `/spec-frame <incr> [--discover] [--market <domaine>]` | `product-analyst` | cadrage d'un incrément jusqu'au GO de cadrage ; part du brief, que `--discover` écrit s'il est vide |
 | `/spec-write <incr> [<story>] [--acceptance]` | `product-analyst` | stories, corrections jusqu'au GO de clôture ; `--acceptance` : les tests |
 | `/spec-review <incr> [deep\|standard\|light] [--acceptance]` | `product-analyst` | relecture contradictoire, rapport daté |
-| `/impl-frame <campagne> [sujet]` | `technical-lead` | architecture, ADR, cartes en brouillon |
+| `/impl-frame <campagne> [sujet]` | `technical-lead` | architecture, ADR, cartes en brouillon, recettes du `justfile` et lignes de CI |
 | `/run-campaign <campagne>` | `technical-lead`, de rôle | le run ; lancée par `deliveryctl run`, jamais à la main |
 | `/qualify <incr>` | `qualification-lead` | recette d'un incrément |
 | `/handoff [<incr>\|<campagne>]` | tout lead, humaine | passation avant `/clear` |
@@ -321,7 +374,7 @@ d'une story arrêtée.
 
 | Verbe | Effet |
 |---|---|
-| `init [single\|spec\|impl [SPEC]] [--language L] [--forge F] [--check C] [--acceptance A] [--serve S] [--upgrade] [--dry-run]` **H** | pose ou met à jour moteur, règles, copie des agents, skills et commandes sous `.claude/`, réglages, CI ; n'écrase rien, ne commite rien |
+| `init [single\|spec\|impl [SPEC]] [NAME] [--language L] [--forge F] [--check C] [--acceptance A] [--serve S] [--private\|--public\|--internal] [--upgrade] [--dry-run] [--yes]` **H** | équipe le dépôt après un résumé et un seul « o » : crée le dépôt sur la forge s'il manque, pose moteur, règles, copie des agents, skills et commandes sous `.claude/`, réglages, CI, commite, pousse, protège la branche par défaut, lance `doctor` ; n'écrase rien ; `--upgrade` met à jour la copie ; `--dry-run` n'écrit rien ; `--yes` passe le « o » |
 | `doctor` | diagnostic en lecture seule (dont la copie de la méthode, la confiance de Claude Code et, en dépôt GitHub public, l'adresse de commit) |
 | `cards list`, `cards order` | lire, ordonner les cartes de la branche cible, celles que lit le run |
 | `cards lint` | contrôler les cartes de la copie de travail, avant de les commiter |
@@ -334,10 +387,11 @@ d'une story arrêtée.
 | `story wait <id> [--timeout S] [--until checkpoint\|merged]` | attend un arrêt (`checkpoint`, par défaut), ou la fusion |
 | `story close <id>` | supprime la copie de travail d'une story fusionnée, ou arrêtée (**H**) |
 | `verify <id>`, `gate <id> [--base R] [--head R]`, `submit <id>` | vérification et verdict commité ; contrôle d'intégration ; push et demande de fusion (refusé si elle est déjà fusionnée) |
-| `merge <id> [--keep]` **H** | fusionne une demande de fusion à CI verte (au moins un contrôle, tous réussis ; sinon code 3, ou 2 si elle est rouge) dont la tête est celle contrôlée ; ferme ensuite la copie de travail, sauf `--keep` |
+| `merge <id> [--keep]` **H** | fusionne une demande de fusion à CI verte (au moins un contrôle, tous réussis ; sinon code 3, ou 2 si elle est rouge) dont la tête est celle contrôlée ; ferme ensuite la copie de travail, sauf `--keep` ; exige alors la CI dans la protection de la branche, si elle n'y est pas encore |
 | `spec lint`, `spec verify` | contrôle de `spec/` ; conformité de `spec/` à `spec.lock` |
-| `spec release [<version>]` **H** | calcule la version, prépare le CHANGELOG, affiche commit, tag et push |
-| `spec sync <version> [--source URL]` **H** | copie une version publiée de la spec, en un commit |
+| `spec push` | sur `spec/<incr>` : pousse la branche, ouvre ou met à jour la demande de fusion de l'incrément (verbe de l'analyste, après un GO) |
+| `spec release [<version>]` **H** | publication en un geste : version, CHANGELOG, commit, push, contrôles, fusion de la demande, tag et push du tag |
+| `spec sync <version> [--source URL]` **H** | copie une version publiée de la spec, en un commit ; sur la branche par défaut, branche `spec-sync/<version>` et demande de fusion |
 | `qualify open`, `qualify run`, `qualify lint <incr>` | ouvrir une recette, lancer son exécution, contrôler plan et rapport |
 | `qualify submit <incr>` **H** | pousse la recette et ouvre sa demande de fusion |
 | `qualify close <incr>` | supprime la copie de travail de la recette (la branche reste) |
@@ -365,6 +419,7 @@ fichier posé par `init` décrivent chaque clé. Une clé absente prend son déf
 | `release_stage` | `pre-release` | `released` après la première livraison à un tiers : la compatibilité compte |
 | `external_contracts` | `[]` | détenteurs externes d'un état ou d'une API |
 | `forge` | `github` | `github` ou `gitlab` |
+| `spec_source` | absent | dépôt `impl` seulement : le dépôt de spec que lit `spec sync` (URL ou chemin) ; écrit par `init impl <spec>` |
 | `integration` | `human` | `human`, ou `ai` : le moteur fusionne quand la relecture dit oui et que la CI est verte |
 | `implementer` | `cloud` avec `github`, `local` avec `gitlab` | où tourne le `story-implementer` (voir « Exécutant dans le cloud ») |
 | `max_in_flight` | `3` | plafond des stories en cours en même temps (au moins `1`) ; le lead choisit séquentiel ou parallèle sous ce plafond ; une story arrêtée ne compte pas |
@@ -401,7 +456,15 @@ notify_cmd = "~/bin/notifier"         # exécutable appelé avec deux arguments 
 notify_story_end = false              # true : une notification à chaque story fusionnée
 journal_dsn = ""                      # postgresql://… ; vide : le journal reste local
 plugin_dir = ""                       # racine du plugin, si le moteur ne la trouve pas seul
+language = "fr"                       # content_language que init écrit dans delivery.toml d'un nouveau projet
+visibility = "private"                # private | public | internal : visibilité d'un dépôt créé par init
+forge = "github"                      # github | gitlab : forge où init crée un dépôt
+gitlab_host = ""                      # hôte GitLab de la création ; vide : l'hôte par défaut de glab
+gitlab_group = ""                     # groupe GitLab de la création ; vide : votre espace
 ```
+
+`init` ne pose aucune question : une clé absente prend son défaut. `internal` n'existe que sur
+GitLab.
 
 `notify_cmd` est le chemin d'un exécutable (absolu, ou commençant par `~`) : un petit script qui
 reçoit le titre et le message et les porte au canal de votre choix. `notify-send` convient sur un
@@ -535,12 +598,20 @@ L'état des stories ne dépend pas de herdr : rien n'est perdu.
 de la story, puis `deliveryctl gate <id> --head <sha de tête>` (ordre seul dans le premier
 commit, vérification et relecture valides pour l'arbre de code de la tête, aucun fichier protégé
 touché). Sur toute autre branche : `check` seul. Complétez l'installation de votre pile (JDK,
-Node, navigateurs Playwright…) à l'endroit marqué. Sur GitLab, ajoutez à `.gitlab-ci.yml` :
-`include: [{local: .gitlab/delivery-ci.yml}]`. Sans CI qui tourne sur les demandes de fusion, le
+Node, navigateurs Playwright…) à l'endroit marqué (`/impl-frame` en propose les lignes). Sur
+GitLab, `init` ajoute l'`include:` de `.gitlab/delivery-ci.yml` à `.gitlab-ci.yml` ; si ce fichier
+a une forme qu'il ne réécrit pas (une chaîne, une liste en ligne, des ancres), une note donne les
+deux lignes à ajouter. Sans CI qui tourne sur les demandes de fusion, le
 moteur n'en fusionne aucune (une demande sans contrôle n'est pas verte) : `deliveryctl doctor`
 signale une CI absente ou non commitée.
 
-Protégez la branche cible :
+`init` protège la branche par défaut (GitHub par `gh api`, GitLab par `glab api`) : demande de
+fusion obligatoire, 0 approbation, pas de force push, commits de fusion seuls. Dans un dépôt
+`spec`, la CI est exigée d'emblée ; dans un dépôt `single` ou `impl`, elle ne l'est pas, car son
+`just check` reste rouge tant que le squelette du produit manque : `deliveryctl merge` l'exige
+après la première fusion dont la CI était verte. Une forge qui refuse un réglage (forfait sans
+protection pour un dépôt privé, droits manquants) le fait dire par une note de `init`. Pour
+vérifier ou compléter à la main, la branche cible doit avoir :
 
 - pas de push direct : tout passe par une demande de fusion, y compris vos commits de GO et le
   travail des leads ;
@@ -562,7 +633,9 @@ Premier réflexe : `deliveryctl doctor`, puis `deliveryctl story status`.
 | `unknown key` à chaque commande | corrigez la clé citée de `delivery.toml` ou de `machine.toml` |
 | `origin/HEAD is not set` | `git remote set-head origin --auto` |
 | `.delivery/deliveryctl` non exécutable dans git | `git update-index --chmod=+x .delivery/deliveryctl`, puis commit |
-| `init` refuse une valeur de `.claude/settings.json` | corrigez à la main la valeur citée, relancez ; rien n'a été écrit |
+| `init` refuse une valeur de `.claude/settings.json`, un dossier non vide, une autre branche que la branche par défaut | corrigez ce que le message cite (il donne la commande), relancez ; rien n'a été écrit |
+| `init` : un push refusé, une commande de forge en échec (code 5) | les fichiers sont écrits et commités : le message dit ce qui reste ; relancez `deliveryctl init` quand la forge répond |
+| `deliveryctl: command not found` avant le premier `init` | le raccourci de shell (voir « Installation ») ou `<racine du plugin>/bin/deliveryctl init …` |
 | aucune notification | `notify_cmd` vide ou non exécutable : les messages vont sur la sortie d'erreur du moteur ; si la commande échoue, la sortie d'erreur montre `[notification failed: …]` |
 | `forge unreachable: retry` dans `story status` | la forge ou le dépôt distant ne répond pas (réseau, `gh auth status`, `glab auth status`) ; le moteur réessaie au balayage suivant |
 | une story reste `submitted` en `integration = "ai"` | la CI de la demande de fusion n'est pas verte : aucun contrôle (CI absente, voir `deliveryctl doctor`) ou un contrôle en cours ; rouge, vous êtes notifié |

@@ -1,6 +1,6 @@
 {
   "name": "delivery-method",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Méthode de livraison en trois phases pour Claude Code : spécification, implémentation story par story en sessions jetables, recette. Moteur deliveryctl, rôles, commandes, gabarits.",
   "author": {
     "name": "peugene",

@@ -42,19 +42,35 @@ portez au cadrage suivant.
 
 ## 0. Équiper les trois dépôts
 
-Les deux premières lignes se font une fois par machine, les deux suivantes une fois par dépôt :
+Les trois premières lignes se font une fois par machine ; ensuite, équiper un dépôt est un seul
+geste, `deliveryctl init`, qui ne pose aucune question :
 
 | Où | Commande | Effet |
 |---|---|---|
 | shell | `claude plugin marketplace add peugene/delivery-method` | déclare la marketplace |
-| shell | `claude plugin install delivery-method@delivery-method` | installe le plugin pour l'utilisateur (une fois par machine) |
-| session Claude | `/delivery-method:init` | cinq questions, puis `deliveryctl init` : `delivery.toml`, `.delivery/`, la copie des agents, skills et commandes sous `.claude/` (commandes sans espace de noms : `/spec-frame`…), `CLAUDE.md`, `.claude/settings.json`, `.gitignore`, `justfile`, CI ; un squelette `spec/` pour `todo-spec` |
-| shell | `deliveryctl doctor` | diagnostic en lecture seule (le raccourci de shell est dans le README) |
+| shell | `claude plugin install delivery-method@delivery-method` | installe le plugin pour l'utilisateur |
+| shell | la fonction `deliveryctl` du README (« Raccourci dans le shell ») | fait marcher `deliveryctl` hors d'un dépôt équipé, donc `init` comme premier geste |
+| shell | `mkdir todo-spec && cd todo-spec && deliveryctl init spec` | équipe `todo-spec` (disposition `spec`) |
+| shell | `deliveryctl init impl todo-spec todo-kotlin` | équipe `todo-kotlin` : crée le dossier et le dépôt, disposition `impl`, dépôt de spec `todo-spec` (écrit en `spec_source`) |
+| shell | `deliveryctl init impl todo-spec todo-supabase` | de même pour `todo-supabase` |
 
-Réponses types : `todo-spec` → rôle `spec` ; `todo-kotlin` → rôle `impl`, `check = "just check"`
-(Gradle : lint, build, tests), `acceptance = "just acceptance {grep}"`, `serve = "just serve {port}"`,
-`test = "just test {selector}"` ; `todo-supabase` → rôle `impl`, mêmes recettes écrites pour npm et
-Supabase en local. Relisez les fichiers posés, écrivez les recettes du `justfile`, commitez.
+`init` déduit tout ce qu'il peut : la langue et la visibilité viennent des réglages de machine
+(`language`, `visibility`, privé par défaut ; `--public`, `--private` ou `--internal` les
+remplacent), la forge de `origin` ou du réglage `forge`, les commandes du `justfile`. Il affiche
+un résumé de huit lignes au plus (dossier, dépôt à créer sur GitHub ou GitLab, disposition,
+adresse git, branche du commit, protection) et attend un seul « o » ; `--dry-run` montre ce
+résumé sans rien écrire. Sur ce « o », il crée le dépôt sur la forge, règle l'adresse privée de
+GitHub pour un dépôt public, pose `delivery.toml`, `.delivery/`, la copie des agents, skills et
+commandes sous `.claude/` (commandes sans espace de noms : `/spec-frame`…), `CLAUDE.md`,
+`.claude/settings.json`, `.gitignore`, `justfile` et la CI (un squelette `spec/` pour
+`todo-spec`), commite, pousse, protège la branche par défaut et lance `doctor`. Dans une session
+Claude, `/delivery-method:init spec` fait de même. Il n'y a rien à relire avant de commiter : tout
+l'est déjà.
+
+Le `justfile` de `todo-spec` marche d'emblée (`just check` lance `spec lint`). Ceux de
+`todo-kotlin` et de `todo-supabase` échouent tant que la pile ne les définit pas : `/impl-frame`
+en propose les quatre recettes (Gradle pour l'un, npm et Supabase en local pour l'autre) et les
+lignes d'installation de la CI.
 
 ## Explorer une idée, à n'importe quelle phase
 
@@ -137,13 +153,16 @@ Deux exemples sur le banc :
 ## 1. Phase spécification — dans `todo-spec`
 
 Régime : **on discute, rien ne se tranche en silence.** L'analyste produit recommande ; vous
-décidez. Quatre GO humains jalonnent un incrément.
+décidez. Quatre GO humains jalonnent un incrément. Un incrément vit sur sa branche `spec/<incr>`
+et dans une seule demande de fusion : chaque GO se dit dans la conversation, l'analyste le
+consigne dans un commit (trailer `Go:`) et lance `deliveryctl spec push`, qui ouvre la demande ou
+la met à jour. Cette demande est la relecture de l'équipe ; `spec release` la fusionne.
 
 ```mermaid
 flowchart TD
     Z["brief : spec/product/brief.md"] --> A["/spec-frame 01-core"]
     A --> B{GO de cadrage}
-    B -- "framing.md : framed" --> C["/spec-write 01-core"]
+    B -- "framing.md : framed<br/>branche spec/01-core, spec push" --> C["/spec-write 01-core"]
     C --> L["deliveryctl spec lint"]
     L --> D["/spec-review 01-core"]
     D --> E{GO de revue}
@@ -153,7 +172,7 @@ flowchart TD
     I --> J["/spec-review 01-core --acceptance"]
     J --> K["deliveryctl spec release"]
     K --> M{GO de publication}
-    M -- "vous tapez les commandes affichées" --> N["tag spec-v0.1.0"]
+    M -- "un seul geste : commit, push, contrôles,<br/>fusion de la demande, tag" --> N["tag spec-v0.1.0"]
 ```
 
 Exemple : l'incrément `01-core` couvre `s001 : Se connecter`, `s002 : Créer une liste` et
@@ -170,7 +189,9 @@ Exemple : l'incrément `01-core` couvre `s001 : Se connecter`, `s002 : Créer un
    modifié sont commités ensemble. Voir « Explorer une idée ».
    L'analyste lit l'existant, pose des questions numérotées avec sa recommandation (« une liste
    sans tâche peut-elle être supprimée ? a) oui b) non, recommandation : a »), et écrit vos réponses
-   mot pour mot dans `refinement/01-core/framing.md`. Vous donnez le GO de cadrage en le disant.
+   mot pour mot dans `refinement/01-core/framing.md`. Vous donnez le GO de cadrage en le disant :
+   l'analyste crée la branche `spec/01-core`, commite et lance `deliveryctl spec push`, qui ouvre
+   la demande de fusion de l'incrément. Chaque GO suivant la met à jour.
 2. `/spec-write 01-core` écrit `spec/stories/s002-create-list.md` (règles, parcours,
    extensions, critères `AC1 @main — Given … When … Then …`, contrat d'IHM, libellés dans
    `spec/ui/copy.fr.json`). `deliveryctl spec lint` refuse une fuite technique (« table », « REST »,
@@ -181,8 +202,11 @@ Exemple : l'incrément `01-core` couvre `s001 : Se connecter`, `s002 : Créer un
 4. Après le GO de clôture, `--acceptance` écrit les tests Playwright : un test par critère, étiqueté
    `@s002` et `@s002-ac1`, qui passe par l'interface et le harnais (`reset`, `users`, `login-as`).
    Ils sont tous rouges contre l'application vide : c'est attendu.
-5. `deliveryctl spec release` calcule la version (`0.1.0` pour la première), écrit le
-   `spec/CHANGELOG.md` et affiche les commandes de commit, de tag `spec-v0.1.0` et de push.
+5. `deliveryctl spec release` est le GO de publication, en un seul geste : il lance `spec lint`,
+   calcule la version (`0.1.0` pour la première), écrit le `spec/CHANGELOG.md`, commite l'entrée
+   sur `spec/01-core`, pousse, attend les contrôles de la demande de fusion, la fusionne, tague
+   `spec-v0.1.0` le commit de fusion et pousse le tag. Des contrôles rouges ou une attente trop
+   longue l'arrêtent avec l'URL, sans rien fusionner ; relancé, il reprend.
 
 `/spec-frame` et `/spec-write` se tapent dans la session de l'analyste,
 `claude --agent product-analyst` : ailleurs, elles s'arrêtent. `/spec-review` s'y tape aussi,
@@ -198,7 +222,8 @@ d'ordinaire ; `/handoff`, dans la session humaine de n'importe quel lead.
 | Shell | Rôle |
 |---|---|
 | `deliveryctl spec lint` | schéma, neutralité (stories et brief), un test par critère, aucune étiquette orpheline |
-| `deliveryctl spec release [version]` | version calculée, CHANGELOG, commandes de tag affichées (geste humain) |
+| `deliveryctl spec push` | sur `spec/<incr>` : pousse la branche, ouvre ou met à jour la demande de fusion de l'incrément (lancé par l'analyste après un GO) |
+| `deliveryctl spec release [version]` | publication en un geste : version, CHANGELOG, commit, push, contrôles, fusion, tag (geste humain) |
 
 ## 2. Phase implémentation — dans `todo-kotlin`, puis `todo-supabase`
 
@@ -210,14 +235,19 @@ de fusion.
 ### 2.1 Copier la spec et cadrer
 
 ```sh
-deliveryctl spec sync 0.1.0 --source git@github.com:<vous>/todo-spec.git
+deliveryctl spec sync 0.1.0
 deliveryctl spec verify
 ```
 
+`spec sync` lit le dépôt de spec dans `spec_source`, que `init impl todo-spec …` a écrit (sinon
+`--source <url>`). Sur la branche par défaut, il commite la copie sur la branche
+`spec-sync/0.1.0`, la pousse et ouvre sa demande de fusion : vous la fusionnez avant `/impl-frame`.
+
 Puis `claude --agent technical-lead` et `/impl-frame kotlin-01`.
 Le lead propose l'architecture (`docs/architecture.md`), un ADR par choix structurant (Ktor,
-Thymeleaf et HTMX, migrations Flyway), les conventions du projet, et une carte par story en
-`draft` :
+Thymeleaf et HTMX, migrations Flyway), les conventions du projet, les quatre recettes du
+`justfile` (`check`, `test`, `acceptance`, `serve`), les lignes d'installation de la pile pour la
+CI, et une carte par story en `draft` :
 
 ```markdown
 ---
@@ -279,13 +309,13 @@ contradictoire de l'angle « que voit un compte non invité ? ».
 
 | Session Claude | Rôle |
 |---|---|
-| `/impl-frame <campagne> [sujet]` | cadrage d'architecture, cartes en brouillon |
+| `/impl-frame <campagne> [sujet]` | cadrage d'architecture, cartes en brouillon, recettes du `justfile`, lignes de CI |
 | `/run-campaign <campagne>` | procédure du lead en run (lancée par `deliveryctl run`) |
 | `/handoff <campagne>` | passation avant un `/clear` |
 
 | Shell | Rôle |
 |---|---|
-| `deliveryctl spec sync <version> --source <url>` | copie d'une version publiée de la spec (geste humain) |
+| `deliveryctl spec sync <version> [--source <url>]` | copie d'une version publiée de la spec ; sur la branche par défaut, branche `spec-sync/<version>` et demande de fusion (geste humain) |
 | `deliveryctl spec verify` | `spec/` identique à la version verrouillée |
 | `deliveryctl cards list \| order \| lint` | cartes de la branche cible, ordre lançable, contrôle |
 | `deliveryctl run [--campaign <nom>]` | lance le technical-lead (geste humain) |
@@ -294,7 +324,7 @@ contradictoire de l'angle « que voit un compte non invité ? ».
 | `deliveryctl verify <id>` | vérification par le moteur |
 | `deliveryctl gate <id> [--head <rev>]` | contrôle d'intégration (aussi en CI) |
 | `deliveryctl submit <id>` | push et demande de fusion |
-| `deliveryctl merge <id>` | fusion (geste humain) |
+| `deliveryctl merge <id>` | fusion (geste humain) ; après la première fusion à CI verte, exige la CI dans la protection de la branche |
 
 ## 3. Phase recette — dans chaque implémentation
 
@@ -360,7 +390,8 @@ flowchart LR
 ## 5. Faire évoluer la spec
 
 `todo-spec` publie `spec-v0.2.0` avec `s004 : Partager une liste` et `s005 : Synchroniser en
-direct`. Dans chaque implémentation, `deliveryctl spec sync 0.2.0` met à jour `spec/`, et
+direct`. Dans chaque implémentation, `deliveryctl spec sync 0.2.0` met à jour `spec/` (sur une
+branche `spec-sync/0.2.0` et sa demande de fusion, que vous fusionnez), et
 `docs/conformance.md` dit, story par story, si l'implémentation est `conforming`, `outdated` (la
 story de spec a changé depuis sa fusion) ou `not merged`. Une synchronisation ne met jamais la
 branche cible au rouge : la conformité baisse, et elle se lit.
