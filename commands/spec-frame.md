@@ -21,6 +21,9 @@ Fail closed: on the first failure, say why and stop.
 3. `<incr>` is a short kebab-case name (`01-core`). Otherwise ask for one.
 4. If `framing.md` has status `framed` or `closed`: say so and stop. Framing reopens only on the
    owner's explicit message; then set `status: discussing` and say what reopens.
+5. Branch: on the default branch, before writing, switch to `spec/<incr>` (`git switch -c
+   spec/<incr>`, or `git switch spec/<incr>` when it exists); on any other branch, stop and
+   print `git switch spec/<incr>`. A cloud session keeps its own `claude/` branch.
 
 ## Steps
 1. Absent `framing.md`: create it from `.delivery/templates/spec/framing.md` (missing: the
@@ -58,16 +61,15 @@ Fail closed: on the first failure, say why and stop.
    decisions, scope, exclusions, assumptions to accept, story map.
 7. On the owner's explicit GO frame: accepted assumptions become firm decisions, the others
    return as questions; set `status: framed` and `scope: [<story ids>]`; commit `framing.md`
-   and, when it changed, `spec/product/brief.md`, with trailers `Campaign: <incr>` and
-   `Agent: product-analyst`. When the project works by merge requests,
-   the approval of the one carrying this commit is the GO; pushing it is the owner's gesture.
-   In a cloud session the session's own `claude/` branch is pushed for the pull request.
+   and, when it changed, `spec/product/brief.md`, with trailers `Campaign: <incr>`,
+   `Agent: product-analyst` and `Go: frame`. Then run `deliveryctl spec push` and give the pull
+   request URL (a cloud session's `claude/` branch is pushed for its pull request instead).
 
 ## Outputs
 - `refinement/<incr>/framing.md`, 80 lines targeted, in the project language; section names
   and keys in English.
 - `spec/product/brief.md` when it is written or updated, 40 lines targeted, same languages.
-- Commits of these two files only, never pushed.
+- Commits of these two files only, on `spec/<incr>`, pushed at the GO.
 
 ## Ends with
 - Waiting for the owner: the recap and the numbered questions, then

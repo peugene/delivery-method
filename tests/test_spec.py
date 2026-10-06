@@ -1,6 +1,7 @@
 """Spec verbs: lint findings and exemptions, version levels, release, sync and verify."""
 
 import io
+import json
 import os
 import shutil
 import tempfile
@@ -195,6 +196,14 @@ def run_main(action, version=None, source=None):
     return code, out.getvalue()
 
 
+def run_release(version=None, **options):
+    """spec release with the polling of the checks under the test's control."""
+    out = io.StringIO()
+    with redirect_stdout(out):
+        code = spec.release(spec.repo_root(), version, **options)
+    return code, out.getvalue()
+
+
 class ReleaseTest(RepoCase):
     def setUp(self):
         super().setUp()
@@ -213,11 +222,16 @@ class ReleaseTest(RepoCase):
     def test_first_release_then_pre_release_minor_is_patch(self):
         code, out = run_main("release")
         self.assertEqual(code, 0, out)
-        self.assertIn('git tag -a spec-v0.1.0 -m "spec 0.1.0"', out)
+        self.assertIn("  ## 0.1.0", out)                       # the entry is shown, not left to review
+        self.assertNotIn("review them", out)
         self.assertIn("## 0.1.0", (self.repo / "spec/CHANGELOG.md").read_text())
         self.assertIn('version = "0.1.0"', (self.repo / "spec/spec.toml").read_text())
-        self.commit_all("release")
-        git(self.repo, "tag", "-a", "spec-v0.1.0", "-m", "spec 0.1.0")
+        self.assertEqual(git(self.repo, "log", "-1", "--format=%s"), "Release spec 0.1.0")
+        self.assertIn("Spec-Release: 0.1.0", git(self.repo, "log", "-1", "--format=%B"))
+        self.assertEqual(git(self.repo, "cat-file", "-t", "spec-v0.1.0"), "tag")
+        self.assertEqual(git(self.repo, "rev-parse", "spec-v0.1.0^{commit}"), git(self.repo, "rev-parse", "HEAD"))
+        self.assertEqual(git(self.origin, "rev-parse", "main"), git(self.repo, "rev-parse", "HEAD"))
+        self.assertEqual(git(self.origin, "rev-parse", "spec-v0.1.0^{commit}"), git(self.repo, "rev-parse", "HEAD"))
         with self.assertRaises(core.DeliveryError) as ctx:
             run_main("release")
         self.assertIn("has not changed since spec-v0.1.0", ctx.exception.message)
@@ -229,6 +243,7 @@ class ReleaseTest(RepoCase):
         code, out = run_main("release")
         self.assertEqual(code, 0, out)
         self.assertIn("criteria: 1 added, 0 changed, 0 removed -> minor", out)
+        self.assertIn("tagged: spec-v0.1.1", out)
         changelog = (self.repo / "spec/CHANGELOG.md").read_text()
         self.assertLess(changelog.index("## 0.1.1"), changelog.index("## 0.1.0"))
         self.assertIn("- s001-ac3 @main — Given a, When b, Then c", changelog)
@@ -255,8 +270,6 @@ class ReleaseTest(RepoCase):
         self.assertIn("versions stay 0.x", ctx.exception.message)
         code, out = run_main("release", "0.2.0")
         self.assertEqual(code, 0, out)
-        self.commit_all("release")
-        git(self.repo, "tag", "-a", "spec-v0.2.0", "-m", "spec 0.2.0")
         write(self.repo / "spec/stories/s001-create-list.md",
               STORY.replace("## UI contract", "- AC3 @main — Given a, When b, Then c\n## UI contract"))
         write(self.repo / "spec/acceptance/tests/more.spec.ts",
@@ -278,6 +291,171 @@ class ReleaseTest(RepoCase):
         self.assertEqual(code, core.EXIT_RED)
         self.assertFalse((self.repo / "spec/CHANGELOG.md").exists())
 
+    def test_release_on_the_default_branch_says_to_work_on_a_spec_branch_when_the_push_is_refused(self):
+        hook = self.origin / "hooks" / "pre-receive"
+        write(hook, "#!/bin/sh\nwhile read old new ref; do\n  [ \"$ref\" = refs/heads/main ] && "
+                    "{ echo 'protected branch' >&2; exit 1; }\ndone\nexit 0\n").chmod(0o755)
+        with self.assertRaises(core.DeliveryError) as ctx:
+            run_main("release")
+        self.assertEqual(ctx.exception.code, core.EXIT_TOOL)
+        self.assertIn("work on spec/<incr>", ctx.exception.message)
+        self.assertEqual(git(self.repo, "tag", "--list"), "")
+        self.assertEqual(git(self.repo, "log", "-1", "--format=%s"), "Release spec 0.1.0")
+        write(hook, "#!/bin/sh\nexit 0\n")                    # the repository stops protecting main: run again
+        code, out = run_main("release")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(git(self.repo, "rev-list", "--count", "--grep", "^Release spec", "HEAD"), "1")
+        self.assertEqual(git(self.origin, "rev-parse", "spec-v0.1.0^{commit}"), git(self.repo, "rev-parse", "HEAD"))
+
+    def test_release_refuses_a_branch_that_is_not_a_spec_branch(self):
+        git(self.repo, "switch", "--quiet", "-c", "feature")
+        with self.assertRaises(core.DeliveryError) as ctx:
+            run_main("release")
+        self.assertIn("not a spec branch", ctx.exception.message)
+        self.assertFalse((self.repo / "spec/CHANGELOG.md").exists())
+
+
+class BranchReleaseTest(RepoCase):
+    """One branch spec/<incr> and its pull request, merged and tagged by `spec release`."""
+
+    def setUp(self):
+        super().setUp()
+        write(self.repo / "delivery.toml", 'repo_role = "spec"\nforge = "github"\n')
+        make_spec(self.repo)
+        write(self.repo / "refinement/01/framing.md",
+              "---\nid: 01\nstatus: closed\nscope: [s001]\n---\n## Purpose\nPeople keep lists.\n## Scope\n- s001\n")
+        self.commit_all("spec")
+        git(self.repo, "push", "--quiet", "origin", "main")
+        git(self.repo, "switch", "--quiet", "-c", "spec/01")
+        git(self.repo, "commit", "--quiet", "--allow-empty", "-m", "Close the increment", "--trailer", "Go: close")
+
+    def checks(self, state):
+        write(self.forge_dir / "checks-spec_01", state)
+
+    def requests(self):
+        return json.loads((self.forge_dir / "requests.json").read_text())
+
+    def test_green_at_once_commits_pushes_merges_and_tags_the_merge_commit(self):
+        sleeps = []
+        code, out = run_release(sleep=sleeps.append)
+        self.assertEqual(code, 0, out)
+        self.assertEqual(sleeps, [])
+        self.assertEqual(out.count("checks: "), 1)
+        self.assertIn("pull request: https://forge.test/pr/1", out)
+        self.assertEqual(self.requests()["spec/01"]["state"], "MERGED")
+        merge = git(self.origin, "rev-parse", "main")
+        self.assertEqual(len(git(self.origin, "rev-list", "--parents", "-n", "1", merge).split()), 3)
+        self.assertEqual(git(self.repo, "cat-file", "-t", "spec-v0.1.0"), "tag")
+        self.assertEqual(git(self.repo, "rev-parse", "spec-v0.1.0^{commit}"), merge)
+        self.assertEqual(git(self.origin, "rev-parse", "spec-v0.1.0^{commit}"), merge)
+        self.assertEqual(git(self.repo, "branch", "--show-current"), "main")
+        self.assertEqual(git(self.repo, "rev-parse", "HEAD"), merge)
+        self.assertIn("## 0.1.0", (self.repo / "spec/CHANGELOG.md").read_text())
+        self.assertIn("Go: publication", git(self.repo, "log", "--format=%B", "spec/01", "-1"))
+        self.assertIn("now on main", out)
+
+    def test_red_checks_stop_with_the_url_then_a_pending_wait_expires_then_a_rerun_resumes(self):
+        self.checks("red")
+        with self.assertRaises(core.DeliveryError) as ctx:
+            run_release(sleep=lambda _: None)
+        self.assertEqual(ctx.exception.code, core.EXIT_RED)
+        self.assertIn("https://forge.test/pr/1", ctx.exception.message)
+        self.assertEqual(self.requests()["spec/01"]["state"], "OPEN")
+        self.assertEqual(git(self.repo, "tag", "--list"), "")
+        self.assertEqual(git(self.repo, "branch", "--show-current"), "spec/01")
+        self.assertEqual(git(self.origin, "rev-parse", "spec/01"), git(self.repo, "rev-parse", "HEAD"))
+        release_commit = git(self.repo, "rev-parse", "HEAD")
+
+        self.checks("pending")
+        slept, out = [], io.StringIO()
+        with redirect_stdout(out), self.assertRaises(core.DeliveryError) as ctx:
+            spec.release(self.repo, poll=20, timeout=40, sleep=slept.append)
+        self.assertEqual(ctx.exception.code, core.EXIT_PRECONDITION)
+        self.assertIn("still pending after 40 s", ctx.exception.message)
+        self.assertEqual(slept, [20, 20])
+        self.assertEqual(out.getvalue().count("checks: pending"), 1)       # one line per change of state
+        self.assertEqual(self.requests()["spec/01"]["state"], "OPEN")
+        self.assertEqual(git(self.repo, "rev-parse", "HEAD"), release_commit)      # nothing committed again
+
+        slept = []
+        def finish(seconds):
+            slept.append(seconds)
+            self.checks("green")
+        code, out = run_release(sleep=finish)
+        self.assertEqual(code, 0, out)
+        self.assertEqual(slept, [20])
+        self.assertIn("checks: pending\nchecks: green", out)
+        self.assertEqual(git(self.repo, "rev-list", "--count", "--grep", "^Release spec", "main"), "1")
+        self.assertEqual(git(self.repo, "tag", "--list"), "spec-v0.1.0")      # not bumped twice
+        self.assertEqual(self.requests()["spec/01"]["state"], "MERGED")
+
+    def test_a_run_that_stopped_after_the_merge_only_tags(self):
+        code, out = run_release()
+        self.assertEqual(code, 0, out)
+        git(self.repo, "tag", "-d", "spec-v0.1.0")
+        git(self.origin, "tag", "-d", "spec-v0.1.0")
+        git(self.repo, "switch", "--quiet", "spec/01")
+        code, out = run_release()
+        self.assertEqual(code, 0, out)
+        self.assertIn("(already merged)", out)
+        self.assertEqual(git(self.origin, "rev-parse", "spec-v0.1.0^{commit}"), git(self.origin, "rev-parse", "main"))
+
+
+class PushTest(RepoCase):
+    def setUp(self):
+        super().setUp()
+        write(self.repo / "delivery.toml", 'repo_role = "spec"\nforge = "github"\n')
+        write(self.repo / "refinement/01/framing.md",
+              "---\nid: 01\nstatus: framed\nscope: []\n---\n## Purpose\nPeople keep lists.\n## Scope\n- s001\n")
+        self.commit_all("spec")
+        git(self.repo, "push", "--quiet", "origin", "main")
+
+    def push(self):
+        code, out = run_main("push")
+        self.assertEqual(code, 0, out)
+        return out.strip().splitlines()[-1]
+
+    def requests(self):
+        return json.loads((self.forge_dir / "requests.json").read_text())
+
+    def test_opens_one_pull_request_then_updates_it(self):
+        git(self.repo, "switch", "--quiet", "-c", "spec/01")
+        git(self.repo, "commit", "--quiet", "--allow-empty", "-m", "Frame 01", "--trailer", "Go: frame")
+        self.assertEqual(self.push(), "https://forge.test/pr/1")
+        request = self.requests()["spec/01"]
+        self.assertEqual((request["title"], request["base"]), ("Spec 01", "main"))
+        self.assertIn("People keep lists.", request["body"])
+        self.assertIn("Status: `framed`", request["body"])
+        self.assertIn("- frame", request["body"])
+        self.assertNotIn("- review", request["body"])
+        self.assertEqual(git(self.origin, "rev-parse", "spec/01"), git(self.repo, "rev-parse", "HEAD"))
+
+        git(self.repo, "commit", "--quiet", "--allow-empty", "-m", "Review 01", "--trailer", "Go: review")
+        self.assertEqual(self.push(), "https://forge.test/pr/1")
+        self.assertEqual(len(self.requests()), 1)
+        self.assertIn("- frame\n- review", self.requests()["spec/01"]["body"])
+        self.assertEqual(git(self.origin, "rev-parse", "spec/01"), git(self.repo, "rev-parse", "HEAD"))
+        calls = (self.forge_dir / "calls").read_text().splitlines()
+        self.assertEqual(len([c for c in calls if c.startswith("pr create")]), 1)
+
+    def test_refuses_the_default_branch_and_a_branch_not_named_after_an_increment(self):
+        with self.assertRaises(core.DeliveryError) as ctx:
+            run_main("push")
+        self.assertIn("default branch", ctx.exception.message)
+        git(self.repo, "switch", "--quiet", "-c", "work")
+        with self.assertRaises(core.DeliveryError) as ctx:
+            run_main("push")
+        self.assertIn("not a spec branch", ctx.exception.message)
+        self.assertEqual(git(self.origin, "branch", "--list", "work"), "")
+        self.assertNotIn("pr create", (self.forge_dir / "calls").read_text() if (self.forge_dir / "calls").exists() else "")
+
+    def test_is_not_an_owner_gesture(self):
+        from deliveryctl import init
+        self.assertNotIn("spec push", init.GESTURES)
+        os.environ["DELIVERY_ROLE"] = "product-analyst"
+        git(self.repo, "switch", "--quiet", "-c", "spec/01")
+        self.assertEqual(self.push(), "https://forge.test/pr/1")
+
 
 class SyncTest(RepoCase):
     def setUp(self):
@@ -296,7 +474,29 @@ class SyncTest(RepoCase):
     def blob(self, rev="spec-v0.1.0"):
         return git(self.spec_repo, "rev-parse", f"{rev}:spec/stories/s001-create-list.md")
 
+    def test_sync_on_the_default_branch_goes_through_a_pull_request(self):
+        git(self.repo, "push", "--quiet", "origin", "main")
+        before = git(self.repo, "rev-parse", "HEAD")
+        code, out = run_main("sync", "0.1.0", str(self.spec_repo))
+        self.assertEqual(code, 0, out)
+        self.assertIn("pull request: https://forge.test/pr/1", out)
+        self.assertIn("before /impl-frame", out)
+        self.assertNotIn("push is yours", out)
+        self.assertEqual(git(self.repo, "branch", "--show-current"), "main")
+        self.assertEqual(git(self.repo, "rev-parse", "HEAD"), before)
+        self.assertFalse((self.repo / "spec").exists())
+        self.assertEqual(git(self.repo, "rev-parse", "spec-sync/0.1.0~1"), before)
+        self.assertEqual(git(self.repo, "log", "-1", "--format=%s", "spec-sync/0.1.0"), "Sync spec 0.1.0")
+        self.assertEqual(git(self.origin, "rev-parse", "spec-sync/0.1.0"), git(self.repo, "rev-parse", "spec-sync/0.1.0"))
+        self.assertEqual(git(self.origin, "rev-parse", "main"), before)
+        request = json.loads((self.forge_dir / "requests.json").read_text())["spec-sync/0.1.0"]
+        self.assertEqual((request["title"], request["base"]), ("Sync spec 0.1.0", "main"))
+        with self.assertRaises(core.DeliveryError) as ctx:              # the branch is still waiting for its merge
+            run_main("sync", "0.1.0", str(self.spec_repo))
+        self.assertIn("spec-sync/0.1.0 exists", ctx.exception.message)
+
     def test_sync_then_verify(self):
+        git(self.repo, "switch", "--quiet", "-c", "work")              # another branch: the commit stays there
         git(self.repo, "commit", "--quiet", "--allow-empty", "-m", "Merge story/s001 : Créer une liste",
             "-m", f"Story: s001\nSpec: s001@0.1.0#{self.blob()[:7]}")
         before = git(self.repo, "rev-parse", "HEAD")

@@ -39,7 +39,7 @@ def write(path: Path, text: str) -> Path:
 
 # A fake 'gh' that plays GitHub against the local bare 'origin': a merge request per branch,
 # its CI read from FAKE_FORGE_DIR/checks (green by default; 'down' in that file makes the forge
-# unreachable), and a merge that really merges the branch into the target branch of origin.
+# unreachable; a file 'checks-<branch, / as _>' answers for that branch alone), and a merge that really merges the branch into the target branch of origin.
 # It also creates repositories (a bare one under FAKE_FORGE_DIR/remotes, visibility in the file
 # 'visibility'), answers 'api user' (login in the file 'login'), keeps the branch protection in
 # 'protection.json' and the merge settings in 'repo_settings.json'; a file 'protection_403' makes
@@ -52,8 +52,10 @@ store = home / "requests.json"
 requests = json.loads(store.read_text()) if store.exists() else {}
 with (home / "calls").open("a") as fh:
     fh.write(" ".join(sys.argv[1:]) + "\n")
-checks = (home / "checks").read_text().strip() if (home / "checks").exists() else "green"
 args = sys.argv[1:]
+checks = (home / "checks").read_text().strip() if (home / "checks").exists() else "green"
+if args[:2] == ["pr", "view"] and (home / ("checks-" + args[2].replace("/", "_"))).exists():
+    checks = (home / ("checks-" + args[2].replace("/", "_"))).read_text().strip()
 def opt(name):
     return args[args.index(name) + 1] if name in args else ""
 def git(*argv, cwd=None):
@@ -119,9 +121,13 @@ elif args[:2] == ["pr", "view"]:
 elif args[:2] == ["pr", "create"]:
     head = opt("--head")
     url = "https://forge.test/pr/%d" % (len(requests) + 1)
-    requests[head] = {"url": url, "state": "OPEN", "base": opt("--base"), "title": opt("--title")}
+    requests[head] = {"url": url, "state": "OPEN", "base": opt("--base"), "title": opt("--title"),
+                      "body": Path(opt("--body-file")).read_text()}
     store.write_text(json.dumps(requests))
     print(url)
+elif args[:2] == ["pr", "edit"]:
+    requests[args[2]].update(title=opt("--title"), body=Path(opt("--body-file")).read_text())
+    store.write_text(json.dumps(requests))
 elif args[:2] == ["pr", "merge"]:
     branch = args[2]
     req = requests[branch]

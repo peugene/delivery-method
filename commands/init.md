@@ -53,8 +53,10 @@ Fail closed: on the first failure, say why and stop.
    agents, skills and commands in `.claude/`, the method's hooks and the marketplace ref, disables
    the plugin in the project settings, commits that refresh and pushes it. It refuses, with the
    list, a copied file edited by hand.
-3. Show the output. On a protected default branch the push is refused: the engine says so and
-   leaves the commit local; tell the owner to move it to a branch and a merge request.
+3. Show the output. On a protected default branch the push is refused: the engine moves the
+   refresh commit to the branch `delivery-method/upgrade-<version>`, puts the default branch
+   back on its remote head and opens a merge request; give its URL, the owner merges it. When
+   even that push is refused, the commit stays local: say so.
 
 ## Outputs
 - Files written by the engine only: `delivery.toml`, `.delivery/`, `CLAUDE.md`,
