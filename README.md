@@ -321,7 +321,7 @@ d'une story arrêtée.
 
 | Verbe | Effet |
 |---|---|
-| `init [--role R] [--language L] [--forge F] [--check C] [--acceptance A] [--serve S] [--upgrade] [--dry-run]` **H** | pose ou met à jour moteur, règles, copie des agents, skills et commandes sous `.claude/`, réglages, CI ; n'écrase rien, ne commite rien |
+| `init [single\|spec\|impl [SPEC]] [--language L] [--forge F] [--check C] [--acceptance A] [--serve S] [--upgrade] [--dry-run]` **H** | pose ou met à jour moteur, règles, copie des agents, skills et commandes sous `.claude/`, réglages, CI ; n'écrase rien, ne commite rien |
 | `doctor` | diagnostic en lecture seule (dont la copie de la méthode, la confiance de Claude Code et, en dépôt GitHub public, l'adresse de commit) |
 | `cards list`, `cards order` | lire, ordonner les cartes de la branche cible, celles que lit le run |
 | `cards lint` | contrôler les cartes de la copie de travail, avant de les commiter |

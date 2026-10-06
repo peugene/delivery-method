@@ -644,7 +644,8 @@ def sync(root: Path, version: str | None, source: str | None) -> int:
         fail(EXIT_ERROR, "usage: deliveryctl spec sync <version> [--source URL]")
     version = clean_version(version)
     lock_path = root / LOCK
-    source = source or read_lock(lock_path.read_text(encoding="utf-8") if lock_path.exists() else None).get("source")
+    source = (source or read_lock(lock_path.read_text(encoding="utf-8") if lock_path.exists() else None).get("source")
+              or cfg.spec_source)
     if not source:
         fail(EXIT_ERROR, "no source: pass --source <spec repository> (it is then kept in spec.lock)")
     if Path(source).exists():
