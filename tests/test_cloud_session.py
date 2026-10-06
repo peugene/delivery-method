@@ -36,7 +36,7 @@ class CloudSessionTest(RepoCase):
 
     def equip(self):
         os.environ.pop("CLAUDE_CODE_REMOTE")
-        code, out = self.cli("init", "impl", "todo-spec", "--forge", "github")
+        code, out = self.cli("init", "impl", "todo-spec", "--forge", "github", "--yes")
         self.assertEqual(code, 0, out)
         os.environ["CLAUDE_CODE_REMOTE"] = "true"
 
