@@ -16,7 +16,7 @@ from deliveryctl import cli, config, core, hooks, window
 REFUSED = [
     ["run"], ["merge", "s001"], ["submit", "s001"], ["story", "open", "s001"], ["story", "next", "s001"],
     ["story", "wait", "s001"], ["qualify", "run", "i1"], ["qualify", "submit", "i1"], ["nightly"],
-    ["spec", "release", "1.0.0"], ["init", "--role", "impl", "--forge", "github"], ["note", "hello"],
+    ["spec", "release", "1.0.0"], ["init", "impl", "todo-spec", "--forge", "github"], ["note", "hello"],
     ["journal", "report"],
 ]
 
@@ -36,7 +36,7 @@ class CloudSessionTest(RepoCase):
 
     def equip(self):
         os.environ.pop("CLAUDE_CODE_REMOTE")
-        code, out = self.cli("init", "--role", "impl", "--forge", "github")
+        code, out = self.cli("init", "impl", "todo-spec", "--forge", "github")
         self.assertEqual(code, 0, out)
         os.environ["CLAUDE_CODE_REMOTE"] = "true"
 

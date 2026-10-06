@@ -1,4 +1,4 @@
-"""`deliveryctl init [--role R] [--upgrade] [--dry-run]`: equip the current repository with the
+"""`deliveryctl init [single|spec|impl [SPEC]] [--upgrade] [--dry-run]`: equip the current repository with the
 method, or refresh its copy of it (CONTRACTS.md §2, §12.2). Every change is planned before
 any is written, so a conflict leaves the repository untouched. Never overwrites, never commits;
 `--upgrade` refreshes what the method owns: the engine copy, the rules, the templates, the copy
@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Callable
 
 from . import config, roles
-from .core import EXIT_ERROR, EXIT_OK, EXIT_PRECONDITION, DeliveryError, fail, main_root, repo_root, run
+from .core import EXIT_ERROR, EXIT_OK, EXIT_PRECONDITION, fail, main_root, repo_root, run
 
 PLUGIN_KEY = "delivery-method@delivery-method"
 PLUGIN_NAMESPACE = "delivery-method"
@@ -287,17 +287,47 @@ def agent_prefix(name: str) -> str:
     return prefix or "dm"
 
 
-def project_toml(root: Path, plugin: Path, args, forge: str) -> str:
-    language = args.language or "fr"
+def spec_address(root: Path, value: str, forge: str) -> str:
+    """The spec repository of an impl repository as 'git fetch' takes it: a URL or a local path
+    stay as written; a short name or an owner/name is read on the forge of this repository, in
+    the address style of its origin."""
+    if "://" in value or re.match(r"^[\w.-]+@[\w.-]+:", value):
+        return value
+    local = Path(value).expanduser()
+    if value.startswith((".", "/", "~")) or local.exists():
+        return str(local.resolve())
+    if not re.fullmatch(r"[\w.-]+(/[\w.-]+)?", value):
+        fail(EXIT_ERROR, f"cannot read '{value}' as a spec repository: give a short name, owner/name, "
+                         "a URL or a local path")
+    origin = run(["git", "remote", "get-url", "origin"], cwd=root, check=False).stdout.strip()
+    found = re.match(r"^(.*[/:])([^/:]+)/([^/]+?)(\.git)?/?$", origin)
+    if not found:
+        prefix, owner, suffix = f"https://{forge}.com/", "", ""
+    else:
+        prefix, owner, suffix = found.group(1), found.group(2), found.group(4) or ""
+    if "/" in value:
+        return f"{prefix}{value}{suffix}"
+    if not owner:
+        fail(EXIT_PRECONDITION, f"no 'origin' remote to read the owner of '{value}' from: "
+                                "give owner/name, a URL or a local path")
+    return f"{prefix}{owner}/{value}{suffix}"
+
+
+def project_toml(root: Path, plugin: Path, args, forge: str, layout: str) -> str:
+    language = args.language or config.machine()["language"]
     if not LANGUAGE_RX.match(language):
         fail(EXIT_ERROR, f"--language takes a language code such as fr or en, got '{language}'")
     text = (plugin / "templates" / "project" / "delivery.toml").read_text(encoding="utf-8")
-    values = {"repo_role": args.role, "content_language": language, "forge": forge,
+    values = {"repo_role": layout, "content_language": language, "forge": forge,
               "implementer": "cloud" if forge == "github" else "local",
               "agent_prefix": agent_prefix(root.name), "check": args.check or "just check",
               "acceptance": args.acceptance or "just acceptance {grep}", "serve": args.serve or "just serve {port}"}
     for key, value in values.items():
         text = _set_toml(text, key, value)
+    if layout == "impl":
+        address = spec_address(root, args.spec_repo, forge)
+        text = re.sub(r"^(repo_role\s*=.*)$", lambda m: m.group(1) + f"\nspec_source = {json.dumps(address)}"
+                      + "   # le dépôt de spec que « deliveryctl spec sync » lit", text, count=1, flags=re.MULTILINE)
     config.parse(tomllib.loads(text), root, "delivery.toml (answers of init)")
     return text
 
@@ -470,30 +500,40 @@ def spec_steps(root: Path, plugin: Path) -> list[Step]:
     steps = []
     for rel in SPEC_SKELETON:
         dest = "spec/" + (rel if rel != "harness-contract.md" else "acceptance/harness-contract.md")
-        steps.append(file_step(root, dest, (source / rel).read_text(encoding="utf-8")))
+        text = (source / rel).read_text(encoding="utf-8")
+        if rel == "spec.toml":
+            text = _set_toml(text, "name", root.name)
+        steps.append(file_step(root, dest, text))
     steps.append(file_step(root, "spec/CHANGELOG.md", "# Changelog de la spécification\n"))
     steps.append(file_step(root, "spec/product/brief.md", (source / "brief.md").read_text(encoding="utf-8")))
     steps.append(file_step(root, "spec/product/glossary.md", "# Glossaire\n"))
     return steps
 
 
-def install_steps(root: Path, plugin: Path, version: str, args, notes: list[str]) -> tuple[list[Step], str]:
+def install_steps(root: Path, plugin: Path, version: str, args, notes: list[str]) -> tuple[list[Step], str, str]:
     toml_path = root / config.PROJECT_FILE
-    answers = [f"--{k}" for k in ("role", "language", "forge", "check", "acceptance", "serve")
-               if getattr(args, k, None)]
+    answers = [f"--{k}" for k in ("language", "forge", "check", "acceptance", "serve") if getattr(args, k, None)]
+    answers += [v for v in (args.layout, args.spec_repo) if v]
     if toml_path.exists():
-        forge = config.load(root).forge
+        cfg = config.load(root)
+        forge, layout = cfg.forge, cfg.repo_role
         if answers:
             notes.append(f"delivery.toml exists: {', '.join(answers)} ignored (edit the file)")
         steps = [Step("delivery.toml", "kept")]
     else:
-        if not args.role:
-            fail(EXIT_PRECONDITION, "delivery.toml not found: say what this repository holds "
-                                    "with --role single|spec|impl")
+        layout = args.layout or "single"
+        if layout == "impl" and not args.spec_repo:
+            fail(EXIT_ERROR, "usage: deliveryctl init impl <spec repository> "
+                             "(a short name, owner/name, a URL or a local path)")
+        if layout != "impl" and args.spec_repo:
+            fail(EXIT_ERROR, f"usage: deliveryctl init {layout} takes no spec repository (only impl does)")
+        if not args.layout:
+            notes.append("layout = single, spec and code in this repository (init spec or init impl <spec> to choose)")
         forge = args.forge or detect_forge(root)
         if not args.forge:
             notes.append(f"forge = {forge}, read from the origin remote (--forge to choose)")
-        steps = [Step("delivery.toml", "created", _writer(toml_path, project_toml(root, plugin, args, forge)))]
+        steps = [Step("delivery.toml", "created",
+                      _writer(toml_path, project_toml(root, plugin, args, forge, layout)))]
     existing = copy_version(root)
     if existing and existing != version:
         notes.append(f"engine copy {existing}, plugin {version}: 'deliveryctl init --upgrade' refreshes it")
@@ -503,57 +543,40 @@ def install_steps(root: Path, plugin: Path, version: str, args, notes: list[str]
     steps.append(settings_step(root, plugin, existing or version, refresh=False))
     steps.append(gitignore_step(root))
     justfile = next((p.name for p in root.iterdir() if p.name.lower() in ("justfile", ".justfile")), "")
-    steps.append(Step(justfile, "kept") if justfile else template_step(root, plugin, "justfile", "justfile"))
-    repo_role = config.load(root).repo_role if toml_path.exists() else args.role
-    if repo_role in ("spec", "single"):
+    template = "justfile-spec" if layout == "spec" else "justfile"
+    steps.append(Step(justfile, "kept") if justfile else template_step(root, plugin, "justfile", template))
+    if layout in ("spec", "single"):
         steps += spec_steps(root, plugin)
     if forge == "github":
         steps.append(template_step(root, plugin, ".github/workflows/delivery.yml", "github-ci.yml"))
     elif forge == "gitlab":
         steps.append(template_step(root, plugin, ".gitlab/delivery-ci.yml", "gitlab-ci.yml"))
-    return steps, forge
+    return steps, forge, layout
 
 
-def _implementer(root: Path) -> str:
-    try:
-        return config.load(root).implementer
-    except DeliveryError:
-        return ""
-
-
-def next_steps(root: Path, steps: list[Step], forge: str, upgrade: bool) -> list[str]:
-    changed = [s.path for s in steps if s.status != "kept"]
+def next_steps(root: Path, steps: list[Step], forge: str, layout: str, upgrade: bool) -> list[str]:
+    """The lines a human needs now, in order: what was laid down, the next command, the CI hint."""
+    changed = [s for s in steps if s.status != "kept"]
     if not changed:
         return ["Rien à changer : le dépôt est déjà équipé. Diagnostic : .delivery/deliveryctl doctor"]
-    paths = sorted({".delivery" if p.startswith(".delivery/") else
-                    ".claude/" + p.split("/")[1] if p.startswith(".claude/") and p != ".claude/settings.json" else
-                    p.rstrip("/") for p in changed})
-    lines = ["Relisez le diff de .delivery/, de .claude/ et de .claude/settings.json, puis commitez-le."] if upgrade else \
-        ["Relisez les fichiers posés, puis commitez-les (init ne commite rien) :"]
-    lines.append("  git add " + " ".join(paths))
+    if upgrade:
+        return [f"{len(changed)} fichiers mis à jour, voir git diff"]
+    lines = [f"{len(changed)} fichiers posés, voir git status"]
+    brief = next((s for s in steps if s.path == "spec/product/brief.md"), None)
+    if layout == "impl":
+        lines.append("Une fois la spec publiée : .delivery/deliveryctl spec sync <version> (sa source est connue)")
+    elif brief and brief.status == "created":
+        lines.append("Ensuite : claude --agent product-analyst, puis /brainstorm --vision <votre idée>")
+    else:
+        lines.append("Ensuite : claude --agent product-analyst, puis /spec-frame <incrément>")
     mode = run(["git", "config", "--get", "core.fileMode"], cwd=root, check=False).stdout.strip()
-    if mode == "false" and ".delivery" in paths:
-        lines.append("  git update-index --chmod=+x .delivery/deliveryctl   (ce système de fichiers "
+    if mode == "false" and any(s.path.startswith(".delivery/") for s in changed):
+        lines.append("git update-index --chmod=+x .delivery/deliveryctl   (ce système de fichiers "
                      "ne garde pas le bit exécutable)")
-    if "justfile" in changed:
-        lines.append("Remplacez les recettes d'amorce du justfile (check, acceptance, serve) par celles "
-                     "de votre pile : elles échouent tant qu'elles ne sont pas définies.")
     gitlab_ci = root / ".gitlab-ci.yml"
     if forge == "gitlab" and ".gitlab/delivery-ci.yml" not in (
             gitlab_ci.read_text(encoding="utf-8") if gitlab_ci.exists() else ""):
-        lines += ["Ajoutez à .gitlab-ci.yml :", "  include:", "    - local: .gitlab/delivery-ci.yml"]
-    if not config.machine_path().exists():
-        lines.append(f"Réglages de la machine (notifications, journal) : {config.machine_path()} "
-                     "(CONTRACTS.md §4).")
-    if _implementer(root) == "cloud":
-        lines.append("L'implémenteur tourne dans le cloud : choisissez l'environnement cloud avec /remote-env "
-                     "dans Claude Code, et collez .delivery/templates/project/cloud-setup.sh dans son script "
-                     "d'installation (README, section « Claude Cloud »).")
-    lines.append("Les agents, skills et commandes de la méthode sont copiés dans .claude/ : une session "
-                 "Claude Code du dépôt (locale ou dans le cloud) les trouve sans plugin ; "
-                 "les commandes s'appellent /spec-frame, /impl-frame, … ; ne les modifiez pas à la main : "
-                 "--upgrade refuse d'écraser une copie modifiée.")
-    lines.append("Diagnostic : .delivery/deliveryctl doctor")
+        lines.append("Ajoutez à .gitlab-ci.yml : include: [{ local: .gitlab/delivery-ci.yml }]")
     return lines
 
 
@@ -566,7 +589,7 @@ def main(args) -> int:
     notes: list[str] = []
     if args.upgrade:
         if not (root / config.PROJECT_FILE).exists():
-            fail(EXIT_PRECONDITION, "delivery.toml not found: run 'deliveryctl init --role R' first")
+            fail(EXIT_PRECONDITION, "delivery.toml not found: run 'deliveryctl init' first")
         existing = copy_version(root)
         if existing and version_key(existing) > version_key(version):
             fail(EXIT_PRECONDITION, f"the project engine {existing} is newer than the plugin {version}: "
@@ -575,9 +598,9 @@ def main(args) -> int:
         steps += method_steps(root, plugin, version, refresh=True)
         steps.append(settings_step(root, plugin, version, refresh=True))
         steps.append(gitignore_step(root))
-        forge = ""
+        forge = layout = ""
     else:
-        steps, forge = install_steps(root, plugin, version, args, notes)
+        steps, forge, layout = install_steps(root, plugin, version, args, notes)
     steps = [s for s in steps if s]
     if not args.dry_run:
         for step in steps:
@@ -593,6 +616,6 @@ def main(args) -> int:
         print("\nRelancez sans --dry-run pour appliquer.")
         return EXIT_OK
     print("\nProchaines étapes :")
-    for line in next_steps(root, steps, forge, args.upgrade):
+    for line in next_steps(root, steps, forge, layout, args.upgrade):
         print("  " + line)
     return EXIT_OK

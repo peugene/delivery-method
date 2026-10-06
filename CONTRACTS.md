@@ -55,7 +55,8 @@ synchronise une version de spec, pousse, et change la méthode.
 | `docs/campaigns/<nom>.md` | oui | lead | état d'une campagne (§12.3) |
 | `docs/campaigns/work/` | non | lead | brouillons d'une campagne, dont les ordres de travail |
 | `docs/architecture.md`, `docs/adr/` | oui | `technical-lead` | cadrage d'architecture |
-| `spec/`, `spec.lock` | oui | `init` (squelette de `spec/`, dépôt `spec` ou `single`, si `spec/` est absent), puis analyste ; `spec sync` (dépôt d'impl) | spécification (§14) |
+| `justfile` | oui | `init` (absent seulement), puis humain | recettes `check`, `test`, `acceptance`, `serve` du §3 ; pour `spec`, le gabarit `justfile-spec` dont les quatre recettes marchent d'emblée (`check` lance `spec lint`, `acceptance` installe la suite si `node_modules` manque et la lance contre `just serve` sur `DELIVERY_PORT`, 3999 par défaut, `serve` lance l'application vide de la suite) ; pour `single` et `impl`, un gabarit dont les recettes échouent tant que la pile ne les définit pas |
+| `spec/`, `spec.lock` | oui | `init` (squelette de `spec/`, dépôt `spec` ou `single`, si `spec/` est absent ; `spec.toml` y porte `name` = le nom du dossier du dépôt), puis analyste ; `spec sync` (dépôt d'impl) | spécification (§14) |
 | `refinement/<incr>/` | oui | `product-analyst` | maturation d'un incrément (§14.1) |
 | `qualification/` | oui, sauf `work/` | `qualification-lead`, `qualification-runner` | recette (§15) : `plan.md`, `order.md` (ordre du runner, commité par le lead avant `qualify run`), `reports/`, `kit/` (matériel de recette : scripts, données, mise en place et retrait) |
 | dossier temporaire de session (`/tmp`) | non | tous | jetable uniquement ; jamais une preuve |
@@ -159,7 +160,13 @@ clés absentes prennent : `content_language = "en"`, `release_stage = "pre-relea
 `external_contracts = []`, `forge = "github"`, `integration = "human"`, `implementer` (selon la
 forge, voir plus bas), `max_in_flight = 3` (au moins 1), `agent_prefix` (les initiales des mots du
 nom du dépôt, quatre au plus ; `dm` à défaut), `port_prefix = 31` (de 10 à 64), `[commands]` vide,
-`[permissions] extra_allow = []`, `[levers]` vide (défauts ci-dessus).
+`[permissions] extra_allow = []`, `[levers]` vide (défauts ci-dessus), `spec_source` absent.
+
+**`spec_source`** (`repo_role = "impl"` seulement ; toute autre disposition le refuse) : le dépôt de
+spec, tel que `git fetch` le lit (URL ou chemin). `init impl <spec>` l'écrit : une URL ou un chemin
+local restent tels quels, un nom court (`todo-spec`) se lit chez le même propriétaire que `origin`,
+sur la même forge et dans le même style d'adresse, `propriétaire/nom` de même sur la forge de
+`origin`. `spec sync` l'utilise quand `--source` manque et que `spec.lock` n'en porte pas (§14.5).
 
 Une clé inconnue fait échouer toute commande. La branche cible se déduit de `origin/HEAD` ; à
 défaut, de la branche cible fournie par la CI (`GITHUB_BASE_REF`,
@@ -185,7 +192,11 @@ notify_cmd = ""                # commande appelée avec deux arguments (titre, m
 notify_story_end = false       # true : un toast à chaque story fusionnée, en plus du §13
 journal_dsn = ""               # postgresql://… ; vide = la file locale est le journal
 plugin_dir = ""                # racine du plugin, si le moteur ne la trouve pas seul
+language = "fr"                # langue de contenu (content_language) que `init` écrit dans delivery.toml d'un nouveau projet
+visibility = "private"         # private | public ; visibilité d'un dépôt que la méthode crée sur la forge
 ```
+
+Aucune question n'est posée : une clé absente prend son défaut.
 
 `DELIVERY_WINDOW` dans l'environnement remplace `window` pour une commande.
 
@@ -704,7 +715,7 @@ validerait.
 
 | Verbe | Effet |
 |---|---|
-| `init [--role R] [--language L] [--forge F] [--check C] [--acceptance A] [--serve S] [--upgrade] [--dry-run]` | pose ou met à jour moteur, règles, copie des agents, skills et commandes sous `.claude/` (manifeste `.delivery/method.json`), réglages, CI, et pour un dépôt `spec` ou `single` sans `spec/`, un squelette de `spec/` ; n'écrase rien, ne commite rien |
+| `init [single\|spec\|impl [SPEC]] [--language L] [--forge F] [--check C] [--acceptance A] [--serve S] [--upgrade] [--dry-run]` | pose ou met à jour moteur, règles, copie des agents, skills et commandes sous `.claude/` (manifeste `.delivery/method.json`), réglages, CI, et pour un dépôt `spec` ou `single` sans `spec/`, un squelette de `spec/` ; ne pose aucune question : la disposition est l'argument (`single` par défaut ; `impl` exige le dépôt de spec : nom court, `propriétaire/nom`, URL ou chemin local, écrit en `spec_source`), la langue vient des réglages de machine (§4), la forge de `origin`, les commandes sont celles du `justfile`. Affiche au plus quatre lignes de suite : fichiers posés, commande suivante, aide `include:` GitLab ; n'écrase rien, ne commite rien |
 | `doctor` | diagnostic en lecture seule (dans une session cloud, il le dit et saute réglages de machine, herdr, commande de notification, plugin et connexion `claude`, ne vérifie pas `gh auth status` (une note : le forge passe par le proxy GitHub de la session, les gestes de forge se font depuis l'ordinateur du propriétaire) et n'avertit pas d'un `origin/HEAD` absent, au plus une note), dont la copie de la méthode (manifeste, version, fichiers modifiés ou absents, plugin désactivé, hooks) et, avec `implementer = "cloud"`, la connexion `claude.ai` et `origin` sur github.com ; pour un `origin` sur github.com dont `gh repo view` dit le dépôt public, il avertit si l'adresse `git config user.email` ne finit pas par `@users.noreply.github.com` (elle est publiée dans chaque commit et dans le trailer `Approved-By` de chaque fusion), `ok` sinon, et ne dit rien si `gh` manque ou ne répond pas ; la confiance de Claude Code pour le dépôt est aussi vérifiée avec `implementer = "cloud"`, quelle que soit la fenêtre de la machine |
 | `cards list`, `cards order`, `cards lint` | `list`, `order` : lire, ordonner les cartes de la branche cible, celles que lit le run ; `lint` : contrôler celles de la copie de travail, avant commit ; seules les cartes `ready` dont les dépendances sont faites sont lançables |
 | `campaign open <nom> [--phase spec\|impl\|qualification]` | crée `docs/campaigns/<nom>.md` et son dossier `work/` |
@@ -890,7 +901,7 @@ affiche les commandes de commit, de tag et de push ; le tag reste un geste humai
 
 ### 14.5 Copie dans un dépôt d'implémentation
 
-`spec sync <version>` (geste humain) : `git fetch --no-tags <source> refs/tags/spec-v<version>`,
+`spec sync <version>` (geste humain ; source : `--source`, sinon celle de `spec.lock`, sinon `spec_source` de `delivery.toml`, sinon échec) : `git fetch --no-tags <source> refs/tags/spec-v<version>`,
 `git rm -r -q --ignore-unmatch spec`, `git read-tree --prefix=spec/ -u FETCH_HEAD:spec`, puis
 `spec.lock` et `docs/conformance.md`, en un seul commit (trailers `Spec-Version`, `Spec-Commit`,
 `Delivery-Method`), aucun si rien ne change. `docs/conformance.md` donne pour chaque story de spec

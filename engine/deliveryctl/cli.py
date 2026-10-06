@@ -314,7 +314,10 @@ def build() -> argparse.ArgumentParser:
     s.set_defaults(func=cmd_nightly)
 
     s = sub.add_parser("init", help="install or upgrade the method in this repository (human)")
-    s.add_argument("--role", choices=["single", "spec", "impl"])
+    s.add_argument("layout", nargs="?", choices=["single", "spec", "impl"],
+                   help="what the repository holds (default single); impl takes the spec repository next")
+    s.add_argument("spec_repo", nargs="?", metavar="SPEC",
+                   help="impl: the spec repository (short name, owner/name, URL or local path)")
     s.add_argument("--language")
     s.add_argument("--forge", choices=["github", "gitlab"])
     s.add_argument("--check")

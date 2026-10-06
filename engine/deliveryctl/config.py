@@ -38,6 +38,7 @@ TOP_SCHEMA = {
     "external_contracts": (list, None, []),
     "forge": (str, ("github", "gitlab"), "github"),
     "integration": (str, ("human", "ai"), "human"),
+    "spec_source": (str, None, ""),                    # impl only: the spec repository 'spec sync' reads
     "implementer": (str, ("cloud", "local"), ""),      # '' = by forge: cloud with github, local with gitlab
     "max_in_flight": (int, None, 3),
     "agent_prefix": (str, None, ""),
@@ -55,8 +56,10 @@ MACHINE_DEFAULTS = {
     "notify_story_end": False,
     "journal_dsn": "",
     "plugin_dir": "",
+    "language": "fr",
+    "visibility": "private",
 }
-MACHINE_VALUES = {"window": ("auto", "herdr", "terminal")}
+MACHINE_VALUES = {"window": ("auto", "herdr", "terminal"), "visibility": ("private", "public")}
 
 
 @dataclass
@@ -75,6 +78,7 @@ class Config:
     extra_allow: list
     levers: dict = field(default_factory=dict)
     implementer: str = "local"
+    spec_source: str = ""
 
     def lever(self, name: str):
         return self.levers[name]
@@ -145,6 +149,8 @@ def parse(data: dict, root: Path, source: str = PROJECT_FILE) -> Config:
         for check in checks:
             if check not in REINFORCED_CHECKS:
                 fail(EXIT_ERROR, f"{source}: levers.reinforced_risks.{risk}: unknown check '{check}'")
+    if values["spec_source"] and values["repo_role"] != "impl":
+        fail(EXIT_ERROR, f'{source}: spec_source belongs to repo_role = "impl" (the spec repository to sync from)')
     if not values["implementer"]:
         values["implementer"] = "cloud" if values["forge"] == "github" else "local"
     elif values["implementer"] == "cloud" and values["forge"] != "github":
@@ -167,6 +173,7 @@ def parse(data: dict, root: Path, source: str = PROJECT_FILE) -> Config:
         extra_allow=extra,
         levers=levers,
         implementer=values["implementer"],
+        spec_source=values["spec_source"],
     )
 
 
