@@ -829,6 +829,10 @@ def apply(plan: Plan) -> tuple[str, list[str]]:
                else f"Équipe le dépôt avec delivery-method {plan.version} ({plan.layout})")
     paths = commit_paths(root, plan.steps)
     git.run("add", "--", *paths)
+    if ".delivery/deliveryctl" in paths:
+        # a file system that does not keep the executable bit (core.fileMode false) would commit
+        # the launcher as a plain file, and a clone could not run it
+        git.run("update-index", "--chmod=+x", "--", ".delivery/deliveryctl")
     if git.ok("diff", "--cached", "--quiet", "--", *paths):
         return "none", notes
     git.commit(paths, subject, trailers=[("Delivery-Method", plan.version)], only=True)
@@ -866,10 +870,6 @@ def next_steps(root: Path, steps: list[Step], forge: str, layout: str, upgrade: 
         lines.append("Ensuite : claude --agent product-analyst, puis /brainstorm --vision <votre idée>")
     else:
         lines.append("Ensuite : claude --agent product-analyst, puis /spec-frame <incrément>")
-    mode = run(["git", "config", "--get", "core.fileMode"], cwd=root, check=False).stdout.strip()
-    if mode == "false" and any(s.path.startswith(".delivery/") for s in changed):
-        lines.append("git update-index --chmod=+x .delivery/deliveryctl   (ce système de fichiers "
-                     "ne garde pas le bit exécutable)")
     return lines
 
 

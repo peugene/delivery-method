@@ -91,6 +91,17 @@ class CreateOnGithubTest(ForgeInitCase):
         self.assertIn("Dépôt : créer test-owner/labo sur GitHub, privé", out)
         self.assertLessEqual(len(out.split("Prochaines étapes")[0].split("  created")[0].splitlines()), 9)
 
+    def test_the_launcher_is_committed_executable_where_the_file_system_drops_the_bit(self):
+        root = self.work / "labo"
+        root.mkdir()
+        git(root, "init", "--quiet", "--initial-branch", "main")
+        git(root, "config", "core.fileMode", "false")
+        os.chdir(root)
+        code, out = self.cli("init", "single")
+        self.assertEqual(code, 0, out)
+        self.assertTrue(git(root, "ls-files", "--stage", ".delivery/deliveryctl").startswith("100755 "))
+        self.assertNotIn("update-index", out)
+
     def test_the_visibility_comes_from_the_machine_then_from_the_option(self):
         self.machine(visibility="public")
         code, out = self.cli("init", "spec", "un")
