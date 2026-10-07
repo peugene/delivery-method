@@ -297,12 +297,13 @@ def agent_prefix(name: str) -> str:
 def spec_address(root: Path, value: str, forge: str, origin: str | None = None) -> str:
     """The spec repository of an impl repository as 'git fetch' takes it: a URL or a local path
     stay as written; a short name or an owner/name is read on the forge of this repository, in
-    the address style of its origin (`origin`: the address the repository is about to get)."""
+    the address style of its origin (`origin`: the address the repository is about to get).
+    A local path is written as one (./, ../, /, ~): a bare name is the forge's even when a folder
+    of that name sits next to it, since delivery.toml is shared and a local path is not."""
     if "://" in value or re.match(r"^[\w.-]+@[\w.-]+:", value):
         return value
-    local = Path(value).expanduser()
-    if value.startswith((".", "/", "~")) or local.exists():
-        return str(local.resolve())
+    if value.startswith((".", "/", "~")):
+        return str(Path(value).expanduser().resolve())
     if not re.fullmatch(r"[\w.-]+(/[\w.-]+)?", value):
         fail(EXIT_ERROR, f"cannot read '{value}' as a spec repository: give a short name, owner/name, "
                          "a URL or a local path")

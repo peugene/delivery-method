@@ -274,9 +274,10 @@ def _origin_host(url: str) -> str:
 
 
 def check_cloud(ctx):
-    """With implementer = cloud, the story-implementer runs as a Claude Code cloud session."""
+    """With implementer = cloud, the story-implementer runs as a Claude Code cloud session; a
+    spec repository implements no story, so nothing of it applies there."""
     cfg = ctx.cfg
-    if is_cloud() or not cfg or cfg.implementer != "cloud":
+    if is_cloud() or not cfg or cfg.implementer != "cloud" or cfg.repo_role == "spec":
         return
     if shutil.which("claude"):
         try:

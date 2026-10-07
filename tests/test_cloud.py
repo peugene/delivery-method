@@ -258,6 +258,13 @@ class CloudDoctorTest(CloudCase):
         self.assertNotIn("warn: implementer = cloud", out)
         self.assertIn("note: implementer = cloud: cloud sessions run in the default environment chosen by /remote-env", out)
 
+    def test_a_spec_repository_hears_nothing_of_the_cloud_implementer(self):
+        text = (self.repo / "delivery.toml").read_text()
+        write(self.repo / "delivery.toml", text.replace('repo_role = "impl"', 'repo_role = "spec"', 1))
+        out = self.doctor()
+        self.assertNotIn("implementer = cloud", out)
+        self.assertNotIn("claude logged in", out)
+
     def test_not_logged_in_or_wrong_method(self):
         for auth in ('{"loggedIn": false}', '{"loggedIn": true, "authMethod": "api_key"}', "not json"):
             with self.subTest(auth=auth):
