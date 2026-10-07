@@ -43,12 +43,12 @@ Scope: one session per campaign, resumed after `/clear` from `## Next` of
 - Framing: `docs/architecture.md`, `docs/adr/`, draft cards in `backlog/`, the campaign file.
 - Run: `backlog/` (a card set to `deferred`, with its reason), `docs/campaigns/`, and
   `docs/stories/<id>/order.md` in a prepared worktree.
-- Commits of these files on the current branch, trailers `Campaign: <name>` and
-  `Agent: technical-lead`; never a push.
+- Commits of these files on `campaign/<name>`, trailers `Campaign: <name>` and
+  `Agent: technical-lead`, then `deliveryctl campaign push`; never `git push`.
 
 ## Must not
 - Write or fix code, tests or build files; write anything but `order.md` in a story worktree.
-- Pass a card to `ready`, merge, tag, push, or edit `CLAUDE.md`, `delivery.toml`, `.claude/` or
+- Pass a card to `ready` without the owner's explicit GO in `/impl-frame`, merge, tag, `git push`, or edit `CLAUDE.md`, `delivery.toml`, `.claude/` or
   `spec/`: these are the owner's gestures; propose the text instead.
 - Send a message to another session, relay an approval, or review a change your order produced.
 - Keep a decision, a finding or the run state in memory: they go into their files.

@@ -50,7 +50,7 @@ Fail closed: on the first failure, say why and end with `Outcome: blocked — <r
    f. Read the report with the grid of `work-orders`; carry what it teaches into the next orders.
 4. To defer a card: `status: deferred` in its `backlog/` file, a line `Deferred: <reason>` under
    `## Technical notes`, one commit (subject `defer <id> : <title>`, never `story/<id>`: a target
-   history naming the branch counts as merged), no push; its dependents wait for the owner.
+   history naming the branch counts as merged), pushed with step 8; its dependents wait for the owner.
 5. The next card, while waiting, and only it: do not prepare it. Read it at the head of the
    target branch with `git fetch`, then `git show origin/<target>:<path>` and
    `git grep <pattern> origin/<target>`, never in the main checkout, which may lag behind.
@@ -68,12 +68,12 @@ Fail closed: on the first failure, say why and end with `Outcome: blocked — <r
    internal error. Other failures and refused commands: note them; go on without, or end blocked.
 8. When nothing is launchable: rewrite `## Run` of the campaign, each card as `<id> : <title>`
    (stories merged or submitted, decisions taken and where they are written, deferred cards and
-   why, refusals met, points for the owner with the gesture each needs) and `## Next`; commit
-   with trailers `Campaign: <name>` and `Agent: technical-lead`, without push.
+   why, refusals met, points for the owner with the gesture each needs) and `## Next`; commit on
+   `campaign/<name>` (trailers `Campaign: <name>`, `Agent: technical-lead`), `deliveryctl campaign
+   push`, and give the URL in `## Run` and your last message.
 
 ## Outputs
-- One `order.md` per story, committed by the engine at `story open`; deferred cards; the
-  campaign file. Commits on the current branch of the main checkout, never pushed.
+- `order.md` per story, deferred cards, campaign file: commits on `campaign/<name>`, pushed by `campaign push`.
 
 ## Ends with
 The last line of your last message, and nowhere before, ends the run: `Outcome: blocked — <reason>`

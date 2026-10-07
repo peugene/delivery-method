@@ -1,3 +1,3 @@
 """deliveryctl: the engine of the delivery-method plugin (standard library only)."""
 
-VERSION = "0.4.0"
+VERSION = "0.4.1"
