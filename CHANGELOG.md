@@ -4,6 +4,28 @@ Chaque version liste ses ajouts, changements et corrections. La rubrique `Contra
 tout changement de [`CONTRACTS.md`](CONTRACTS.md) : tant que le plugin est en `0.x`, un
 changement de contrat monte la version mineure ; après 1.0.0, la version majeure.
 
+## 0.4.1
+
+### Changements
+
+- Une branche `campaign/<nom>` et une seule demande de fusion par campagne d'implémentation : la
+  branche par défaut étant protégée, le lead n'y commite plus. `deliveryctl campaign open` met la
+  copie principale sur la branche (créée depuis la tête de la cible, rejointe, ou repartie de la
+  tête de la cible une fois sa demande de fusion fusionnée) et s'arrête sur une autre branche ou
+  devant des changements qui seraient perdus. `deliveryctl run` fait de même avant de lancer le lead.
+- `campaign push` (nouveau) : pousse la branche et ouvre la demande de fusion (titre
+  `Campagne <nom>`, description : objectif, cartes et statuts, GO) ou met à jour celle qui est
+  ouverte ; autorisé au `technical-lead`.
+- `/impl-frame` pousse la demande de fusion après le cadrage, puis, sur votre GO explicite, passe
+  les cartes en `ready` (trailer `Go: cards`) et la pousse ; vous la fusionnez avant le run.
+  `/run-campaign` la pousse en fin de run.
+
+### Contracts
+
+- §12.3 : la branche de campagne, `campaign open`, `campaign push`, la fusion par le decision owner ;
+  §12.2 (verbes) et §12.4 : `run` met la copie principale sur la branche ; le GO des cartes passe
+  par la demande de fusion de la campagne.
+
 ## 0.4.0
 
 ### Ajouts

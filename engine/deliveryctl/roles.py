@@ -163,7 +163,8 @@ def permissions(cfg: Config, role: str, worktree: Path, scope: str) -> dict:
         allow += _write(worktrees, ["*/docs/stories/*/order.md"])
         allow += _bash(GIT_WRITE + ["git fetch", "deliveryctl story prepare", "deliveryctl story open",
                                     "deliveryctl story wait", "deliveryctl story next",
-                                    "deliveryctl story close", "deliveryctl campaign open"])
+                                    "deliveryctl story close", "deliveryctl campaign open",
+                                    "deliveryctl campaign push"])
         # shell reads in the prepared worktrees (anchoring); writes stay limited to order.md
         extra["additionalDirectories"] = [str(worktrees)]
     env = {"DELIVERY_ROLE": role, "DELIVERY_STORY": scope}

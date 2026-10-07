@@ -4,7 +4,7 @@ phase: <phase>
 opened: <date>
 ---
 <!-- État d'une campagne, 40 lignes visées, dans la langue du projet. Réécrit, pas complété. -->
-<!-- Le lead le commite sur la branche courante, sans pousser. Brouillons et notes : docs/campaigns/work/<name>/ (ignoré par git). -->
+<!-- Le lead le commite sur campaign/<name> et le pousse par `deliveryctl campaign push`. Brouillons et notes : docs/campaigns/work/<name>/ (ignoré par git). -->
 ## Objective
 <L'objectif de la campagne et son critère de fin : incrément tagué, lot de cartes fusionné, recette rendue.>
 

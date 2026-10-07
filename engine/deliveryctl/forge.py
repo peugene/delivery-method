@@ -214,12 +214,16 @@ class Forge:
         """Push the story branch and open its merge request; returns its URL."""
         return self.open_branch(story_branch(card_id), title, body)
 
-    def open_branch(self, branch: str, title: str, body: str, refresh: bool = False) -> str:
+    def open_branch(self, branch: str, title: str, body: str, refresh: bool = False,
+                    again: bool = False) -> str:
         """Push a branch and open its merge request, or return the one already open (pushed
         again; with `refresh`, its title and description are rewritten). A branch whose merge
-        request is merged is neither pushed nor proposed again."""
+        request is merged is neither pushed nor proposed again, unless `again`: the branch was
+        started anew from the target and carries new work."""
         target = self.git.target_branch()
         existing = self.find_branch(branch)
+        if existing and existing["state"] == "merged" and again:
+            existing = None
         if existing and existing["state"] == "merged":
             fail(EXIT_PRECONDITION, f"the merge request of {branch} is already merged: {existing['url']}")
         self.git.push(branch)

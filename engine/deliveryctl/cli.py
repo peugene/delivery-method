@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 
 from . import VERSION
-from .core import EXIT_ERROR, EXIT_OK, EXIT_RED, DeliveryError, eprint, main_root, require_human, require_local
+from .core import EXIT_ERROR, EXIT_OK, EXIT_PRECONDITION, EXIT_RED, DeliveryError, eprint, fail, main_root, require_human, require_local
 
 
 def _cfg():
@@ -157,6 +157,10 @@ def cmd_run(args) -> int:
 
 def cmd_campaign(args) -> int:
     from . import campaign
+    if args.action == "push":
+        return campaign.push(_cfg(), args.name)
+    if not args.name:
+        fail(EXIT_PRECONDITION, "campaign open needs the name of the campaign")
     print(campaign.open_campaign(_cfg(), args.name, args.phase))
     return EXIT_OK
 
@@ -277,9 +281,9 @@ def build() -> argparse.ArgumentParser:
     s.add_argument("--campaign")
     s.set_defaults(func=cmd_run)
 
-    s = sub.add_parser("campaign", help="open the campaign file of a lead")
-    s.add_argument("action", choices=["open"])
-    s.add_argument("name")
+    s = sub.add_parser("campaign", help="open the campaign of a lead (file and branch), push its pull request")
+    s.add_argument("action", choices=["open", "push"])
+    s.add_argument("name", nargs="?")
     s.add_argument("--phase", choices=["spec", "impl", "qualification"], default="impl")
     s.set_defaults(func=cmd_campaign)
 

@@ -300,8 +300,9 @@ pas encore se nomme par son identifiant seul.
   avec son seuil, puis une ligne `Not tested by this card:`. Il est figé une fois la carte prête.
 - Dépendances connues, sans cycle.
 
-**GO** : un lead écrit ses cartes en `draft` ; le passage en `ready` est un commit du decision
-owner, et il compte quand il est sur la branche cible. Le run ne lit que les cartes de la
+**GO** : un lead écrit ses cartes en `draft` ; le passage en `ready` est le geste du decision
+owner : le lead le commite, trailer `Go: cards`, sur son seul message explicite, et il compte quand
+la demande de fusion de la campagne (§12.3) est fusionnée sur la branche cible. Le run ne lit que les cartes de la
 branche cible. Une anomalie naît en `to-triage` et n'est pas exécutable avant le tri (§15.4).
 
 **Carte faite** : la branche cible contient un commit de fusion dont le sujet nomme
@@ -741,7 +742,7 @@ journal et des brainstormings archivés (`docs/maybe/`, outils de lecture et she
 |---|---|
 | `story-implementer` | écriture et commits dans la copie de sa story, sauf `verification.md` et `review.md` |
 | `story-reviewer` | écriture dans la copie de sa story (morsure restaurée), sauf `verification.md` ; commit de `review.md` |
-| `technical-lead` (run) | écriture dans `backlog/`, `docs/campaigns/`, et dans `docs/stories/*/order.md` d'une copie préparée ; commits sans push ; `deliveryctl story prepare\|open\|status\|wait\|next\|close` ; lecture par le shell des copies de stories (`<parent>/<dépôt>-wt`) |
+| `technical-lead` (run) | écriture dans `backlog/`, `docs/campaigns/`, et dans `docs/stories/*/order.md` d'une copie préparée ; commits sur `campaign/<nom>`, jamais `git push` ; `deliveryctl campaign open\|push`, `deliveryctl story prepare\|open\|status\|wait\|next\|close` ; lecture par le shell des copies de stories (`<parent>/<dépôt>-wt`) |
 | `qualification-runner` | écriture et commits dans `qualification/`, cartes d'anomalie dans `backlog/` ; conteneurs locaux ; `curl` ; exécution des scripts de `qualification/kit/` (`bash`, `sh`, `./`) |
 
 Un refus injustifié se note dans le compte rendu ; l'humain complète `extra_allow`.
@@ -754,8 +755,9 @@ Un refus injustifié se note dans le compte rendu ; l'humain complète `extra_al
 d'une story arrêtée, `spec release`, `spec sync`, `qualify submit`, `nightly`, `note`, `journal report`. Refusés
 quand `DELIVERY_ROLE` est défini ; en `ask` dans les réglages du projet, sauf `story close` : une
 règle ne distingue pas une story arrêtée d'une story fusionnée, que le lead ferme en run, et le
-moteur refuse à un rôle la fermeture d'une story arrêtée. Commits humains : passer
-une carte en `ready`, taguer, pousser une branche de lead, passer en `released`, éditer
+moteur refuse à un rôle la fermeture d'une story arrêtée. Gestes humains : le GO des cartes
+(`ready`, que le lead commite sur votre message explicite), fusionner la demande de fusion de la
+campagne, taguer, passer en `released`, éditer
 `external_contracts`, modifier les conventions du projet ou les permissions.
 
 Dans une session cloud (`CLAUDE_CODE_REMOTE=true`), les gestes qui lancent des sessions Claude,
@@ -764,7 +766,7 @@ code 4, avec une ligne qui dit de les lancer depuis son ordinateur : `run`, `mer
 `story open`, `story next`, `story wait`, `qualify run`, `qualify submit`, `nightly`,
 `spec release`, `init`, `note`, `journal report`. Les verbes qui lisent ou contrôlent et ceux qui
 ne touchent que la copie de travail restent permis : `cards`, `story prepare|status|close`,
-`verify`, `gate`, `campaign open`, `journal add|flush|setup`, `hook`, `spec lint|sync|verify`,
+`verify`, `gate`, `campaign open`, `campaign push`, `journal add|flush|setup`, `hook`, `spec lint|sync|verify`,
 `qualify open|lint|close`, `doctor`, `kit`. Une session cloud livre par une demande de fusion de
 sa branche `claude/<nom>` ; le geste refusé se lance après la fusion de cette demande. La liste de ces
 gestes est unique dans le moteur : le hook `PreToolUse` du projet (`deliveryctl hook pre-tool`) la
@@ -779,8 +781,9 @@ validerait.
 | `init [single\|spec\|impl [SPEC]] [NAME] [--language L] [--forge F] [--check C] [--acceptance A] [--serve S] [--private\|--public\|--internal] [--upgrade] [--dry-run] [--yes]` | équipe le dépôt, ou le crée sur la forge, après un résumé et un seul « ok » (§2, « L'équipement par `init` ») : pose ou met à jour moteur, règles, copie des agents, skills et commandes sous `.claude/` (manifeste `.delivery/method.json`), réglages, CI (avec GitLab, son `include:` dans `.gitlab-ci.yml`), et pour un dépôt `spec` ou `single` sans `spec/`, un squelette de `spec/` ; puis règle l'adresse git d'un dépôt GitHub public, commite ce qu'il a posé (un commit, ses chemins seuls), pousse, protège la branche par défaut (avec `--upgrade`, un push refusé de la branche par défaut déplace le commit sur la branche `delivery-method/upgrade-<version>`, remet la branche par défaut sur sa tête distante et ouvre la demande de fusion que le propriétaire fusionne), lance `doctor` et affiche la suite. Il ne pose aucune autre question : la disposition est l'argument (`single` par défaut ; `impl` exige le dépôt de spec : nom court ou `propriétaire/nom`, lus sur la forge même si un dossier du même nom est à côté, URL, ou chemin local écrit comme tel (`./`, `../`, `/`, `~`), écrit en `spec_source`), un nom crée le dossier et le dépôt, la langue vient des réglages de machine (§4), la forge de `origin` (ou `--forge`, ou le réglage `forge`, pour un dépôt à créer), les commandes sont celles du `justfile`. `--dry-run` montre le résumé et n'écrit rien ; `--yes` passe la question (la commande Claude et les scripts la passent après leur propre confirmation) ; sans terminal ni `--yes`, rien n'est écrit (code 3). N'écrase aucun fichier |
 | `doctor` | diagnostic en lecture seule (dans une session cloud, il le dit et saute réglages de machine, herdr, commande de notification, plugin et connexion `claude`, ne vérifie pas `gh auth status` (une note : le forge passe par le proxy GitHub de la session, les gestes de forge se font depuis l'ordinateur du propriétaire) et n'avertit pas d'un `origin/HEAD` absent, au plus une note), dont la copie de la méthode (manifeste, version, fichiers modifiés ou absents, plugin désactivé, hooks) et, avec `implementer = "cloud"` hors d'un dépôt `spec` (qui n'implémente aucune story), la connexion `claude.ai` et `origin` sur github.com ; pour un `origin` sur github.com dont `gh repo view` dit le dépôt public, il avertit si l'adresse `git config user.email` ne finit pas par `@users.noreply.github.com` (elle est publiée dans chaque commit et dans le trailer `Approved-By` de chaque fusion), `ok` sinon, et ne dit rien si `gh` manque ou ne répond pas ; la confiance de Claude Code pour le dépôt est aussi vérifiée avec `implementer = "cloud"`, quelle que soit la fenêtre de la machine |
 | `cards list`, `cards order`, `cards lint` | `list`, `order` : lire, ordonner les cartes de la branche cible, celles que lit le run ; `lint` : contrôler celles de la copie de travail, avant commit ; seules les cartes `ready` dont les dépendances sont faites sont lançables |
-| `campaign open <nom> [--phase spec\|impl\|qualification]` | crée `docs/campaigns/<nom>.md` et son dossier `work/` |
-| `run [--campaign N]` | lance le `technical-lead` en mode run |
+| `campaign open <nom> [--phase spec\|impl\|qualification]` | crée `docs/campaigns/<nom>.md` et son dossier `work/`, et met la copie principale sur `campaign/<nom>` (§12.3) |
+| `campaign push [<nom>]` | pousse `campaign/<nom>` et ouvre sa demande de fusion, ou met à jour celle qui est ouverte ; refusé sur la branche par défaut et sur toute autre branche |
+| `run [--campaign N]` | met la copie principale sur `campaign/<nom>` (§12.3), puis lance le `technical-lead` en mode run |
 | `story prepare <id>` | copie de travail depuis la tête de la cible, squelette d'ordre ; rien n'est commité |
 | `story open <id> [--order <brouillon>] [--no-start]` | contrôle l'ordre, le commite, calcule le port, lance l'exécutant (sauf `--no-start`) ; refuse si une dépendance n'est pas faite ou n'est pas contenue dans `base:` ; avertit au-delà de `max_order_lines` |
 | `story status [<id>] [--watch]` | état, prochaine étape du moteur, prochain geste humain |
@@ -819,13 +822,25 @@ Les formules auxquelles réagit le lead en run restent en anglais, mot pour mot 
 `docs/campaigns/<nom>.md`, 40 lignes visées : `## Objective`, `## Questions`, `## Run` (réécrite
 en fin de run, chaque carte nommée `<id> : <titre court>` : stories faites, décisions prises en
 route, cartes différées, points pour le decision owner), `## Next` (prochain pas, fichiers à lire
-en premier, réécrit à chaque passation). Le lead commite sur la branche courante de la copie
-principale, sans pousser ; ce qu'il produit arrive sur la branche cible par un geste humain
-(commit, ou demande de fusion approuvée).
+en premier, réécrit à chaque passation).
+
+Le lead travaille sur la branche `campaign/<nom>` de la copie principale : la branche par défaut
+est protégée, rien n'y arrive sans demande de fusion. `deliveryctl campaign open <nom>` met la
+copie principale sur cette branche : créée depuis la tête de la cible quand on part de la branche
+par défaut, simplement rejointe quand elle existe et que sa demande de fusion n'est pas fusionnée,
+repartie de la tête de la cible quand elle l'est. Depuis une autre branche, il s'arrête avec la
+ligne à taper ; des changements non commités qui seraient perdus l'arrêtent aussi. `deliveryctl
+campaign push [<nom>]`, depuis `campaign/<nom>`, pousse la branche et ouvre sa demande de fusion
+ou met à jour celle qui est ouverte (titre `Campagne <nom>`, description : `## Objective` du
+fichier de campagne, les cartes avec leur statut, les GO lus dans les trailers `Go:`) ; il est
+refusé sur la branche par défaut et sur toute autre branche. Le lead le lance après chaque commit
+de cadrage, après le GO des cartes et en fin de run ; le decision owner fusionne la demande de
+fusion, ce qui amène sur la cible le cadrage, les cartes `ready` et l'état de la campagne.
 
 ### 12.4 Run
 
-L'humain lance `deliveryctl run`. Le `technical-lead`, en session de rôle, enchaîne les cartes
+L'humain lance `deliveryctl run [--campaign <nom>]`, qui met d'abord la copie principale sur
+`campaign/<nom>` (§12.3) ; les cartes restent lues à la tête de la cible. Le `technical-lead`, en session de rôle, enchaîne les cartes
 lançables dans l'ordre des dépendances ; pour chacune : ancrage dans le code réel à la tête de la
 cible, ordre écrit, `story open`, puis `story wait`. Pendant l'attente, il ancre d'avance la
 carte suivante, et seulement elle, à la tête de la cible et sans préparer sa copie :

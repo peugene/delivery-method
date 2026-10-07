@@ -20,8 +20,9 @@ Fail closed: on the first failure, say why and stop.
    Otherwise print `claude --agent delivery-method:technical-lead` and stop.
 2. `delivery.toml` has `repo_role` `impl` or `single`, and the spec to build is in `spec/`
    (in `impl`, `deliveryctl spec verify` is green).
-3. The campaign is named: `docs/campaigns/<name>.md` exists, else run
-   `deliveryctl campaign open <name> --phase impl`. When it exists, read its `## Next` first.
+3. The campaign is named: run `deliveryctl campaign open <name> --phase impl`; it creates
+   `docs/campaigns/<name>.md` if needed and puts the checkout on `campaign/<name>` (on another
+   branch it stops, with the line to type). Read its `## Next` first.
 
 ## Steps
 1. Read before you speak: `delivery.toml`, `CLAUDE.md`, `spec/` (brief, glossary, stories,
@@ -55,21 +56,25 @@ Fail closed: on the first failure, say why and stop.
      (the application of the working copy, in test mode, on that port);
    - the install lines of the stack for the CI file of the forge (`.github/workflows/delivery.yml`
      or `.gitlab/delivery-ci.yml`), at the place the template marks.
-   Say that the recipes and the CI lines turn green once the skeleton task card is merged. The
-   owner edits `CLAUDE.md`, the `justfile`, the CI file and `delivery.toml`, and commits them.
+   Say that the recipes and CI lines turn green once the skeleton task card is merged. The owner
+   edits `CLAUDE.md`, the `justfile`, the CI file and `delivery.toml`, and commits them.
 6. Commit the architecture, the ADRs, the cards and the campaign file, trailers
-   `Campaign: <name>` and `Agent: technical-lead`, without push. Rewrite `## Next`.
+   `Campaign: <name>` and `Agent: technical-lead`, then `deliveryctl campaign push` and give
+   the URL it prints. Rewrite `## Next`.
+7. On the owner's explicit GO of the validated cards, and only then: set them `status: ready`,
+   commit with the trailer `Go: cards`, `deliveryctl campaign push`. The owner merges the pull
+   request, then starts the run.
 
 ## Outputs
-- `docs/architecture.md`, `docs/adr/`, draft cards in `backlog/`, the campaign file; content in
-  the project language, section names in English.
+- `docs/architecture.md`, `docs/adr/`, draft cards in `backlog/`, the campaign file, committed on
+  `campaign/<name>` and pushed with its pull request; project language, section names in English.
 - The conventions text, the four `justfile` recipes, the CI install lines and any `extra_allow`
   rule, in the conversation only.
 
 ## Ends with
 A summary: files written, draft cards in dependency order as `<id> : <title>`, questions still
-open, and the owner's next gestures: commit the conventions, pass the cards to `ready` by a
-commit on the target branch, then `deliveryctl run --campaign <name>`. In a cloud session
+open, and the owner's next gestures: commit the conventions, give the GO of the cards, merge the
+campaign pull request, then `deliveryctl run --campaign <name>`. In a cloud session
 (`CLAUDE_CODE_REMOTE=true`), `deliveryctl run` is refused: the owner merges this session's pull
 request, then runs it from their computer. Last line:
 `Outcome: done — <summary>`, or `Outcome: question — <what the owner must decide>`.

@@ -109,6 +109,14 @@ class RolesTest(RepoCase):
         self.assertNotIn("Bash(* --force*)", perms["permissions"]["deny"])
         self.assertFalse(denied(perms, "docker rm --force db"))
 
+    def test_lead_opens_and_pushes_its_campaign_but_never_pushes_by_git(self):
+        lead = self.perms("technical-lead")
+        for command in ("deliveryctl campaign open c1 --phase impl", "deliveryctl campaign push",
+                        "deliveryctl campaign push c1"):
+            self.assertIn(f"Bash({command.split(' c1')[0]} *)" if " c1" in command else f"Bash({command})",
+                          lead["permissions"]["allow"], command)
+        self.assertTrue(denied(lead, "git push origin campaign/c1"))
+
     def test_lead_reads_the_worktrees(self):
         lead = self.perms("technical-lead")["permissions"]
         self.assertEqual(lead["additionalDirectories"], [str(self.tmp / "todo-wt")])

@@ -264,7 +264,13 @@ spec: s002
 ## Oracle
 ```
 
-**Votre GO** : passer les cartes validées en `status: ready` et commiter sur la branche cible.
+Le lead travaille sur la branche `campaign/<campagne>` : `/impl-frame` la crée, commite le
+cadrage, puis `deliveryctl campaign push` ouvre la demande de fusion de la campagne et en donne
+l'adresse.
+
+**Votre GO** : dites-le au lead ; il passe les cartes validées en `status: ready`, commite avec le
+trailer `Go: cards` et pousse la demande de fusion de la campagne. Vous la fusionnez : le run ne
+lit que les cartes de la branche cible. Puis `deliveryctl run --campaign <campagne>`.
 Côté `todo-supabase`, le cadrage produit une autre architecture (Next.js, Supabase, règles
 d'accès en base) mais les mêmes stories de spec.
 
@@ -299,7 +305,7 @@ Une story s'arrête sur un point qui vous revient, et vous recevez un toast :
 | `⚠ … — plan à relire` (carte `show_plan: true`) | lire `plan.md`, puis `deliveryctl story next s004 --go` |
 | `⚠ … — borne atteinte` | lire `verification.md` ou `review.md` |
 | `🚨 … — bloqué` | regarder la session : aucune avancée depuis 20 minutes |
-| `⭐ todo-kotlin — run terminé` | lire la section `## Run` de `docs/campaigns/kotlin-01.md` |
+| `⭐ todo-kotlin — run terminé` | lire la section `## Run` de `docs/campaigns/kotlin-01.md`, fusionner la demande de fusion de la campagne |
 
 `s004 : Partager une liste` porte le risque `authz` : le relecteur fait une morsure (il casse
 volontairement le contrôle d'accès, vérifie qu'un test échoue, puis restaure) et une relecture
@@ -318,7 +324,8 @@ contradictoire de l'angle « que voit un compte non invité ? ».
 | `deliveryctl spec sync <version> [--source <url>]` | copie d'une version publiée de la spec ; sur la branche par défaut, branche `spec-sync/<version>` et demande de fusion (geste humain) |
 | `deliveryctl spec verify` | `spec/` identique à la version verrouillée |
 | `deliveryctl cards list \| order \| lint` | cartes de la branche cible, ordre lançable, contrôle |
-| `deliveryctl run [--campaign <nom>]` | lance le technical-lead (geste humain) |
+| `deliveryctl campaign open <nom>` \| `push` | branche `campaign/<nom>` du lead, puis sa demande de fusion que vous fusionnez (le lead s'en sert) |
+| `deliveryctl run [--campaign <nom>]` | met la copie principale sur `campaign/<nom>`, puis lance le technical-lead (geste humain) |
 | `deliveryctl story status [<id>] [--watch]` | état, prochaine étape, votre prochain geste |
 | `deliveryctl story prepare \| open \| next \| wait \| close <id>` | cycle d'une story (le lead s'en sert en run) |
 | `deliveryctl verify <id>` | vérification par le moteur |

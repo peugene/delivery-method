@@ -240,9 +240,12 @@ l'équipe, et sa fusion est la publication.
    structurant, les cartes de `backlog/` en `draft`, les `## Project conventions` proposées pour
    `CLAUDE.md`, les quatre recettes du `justfile` (`check`, `test`, `acceptance`, `serve`) et les
    lignes d'installation de la pile pour la CI : vous les collez et commitez. Elles passent au vert
-   une fois la carte du squelette fusionnée.
-3. **GO des cartes** : passez les cartes validées en `status: ready`, commitez, et amenez ce
-   commit sur la branche cible. Le run ne lit que les cartes de la branche cible.
+   une fois la carte du squelette fusionnée. Le lead travaille sur la branche `campaign/<campagne>`
+   (`deliveryctl campaign open`) et `deliveryctl campaign push` ouvre la demande de fusion de la
+   campagne.
+3. **GO des cartes** : dites-le au lead, qui passe les cartes validées en `status: ready`, commite
+   (trailer `Go: cards`) et pousse. Fusionnez la demande de fusion de la campagne : le run ne lit
+   que les cartes de la branche cible.
 4. `deliveryctl run --campaign <campagne>` : le `technical-lead` démarre en session de rôle et
    enchaîne les cartes lançables dans l'ordre des dépendances. Pour chacune, il ancre les faits
    dans le code réel, écrit l'ordre de travail et ouvre la story ; le moteur enchaîne alors
@@ -258,7 +261,8 @@ l'équipe, et sa fusion est la publication.
    contrôle, tous réussis ; tant qu'aucun contrôle n'a rendu son résultat, il attend.
 6. Quand plus rien n'est lançable, le lead réécrit la section `## Run` de
    `docs/campaigns/<campagne>.md` (stories faites, décisions prises en route, cartes différées,
-   points pour vous) et vous êtes notifié.
+   points pour vous), le pousse par `deliveryctl campaign push` et vous êtes notifié ; vous
+   fusionnez la demande de fusion de la campagne.
 
 `deliveryctl story status [--watch]` donne l'état de chaque story
 (`s004 : Partager une liste — to-review`), la prochaine étape du moteur et votre prochain geste.
@@ -378,8 +382,9 @@ d'une story arrêtée.
 | `doctor` | diagnostic en lecture seule (dont la copie de la méthode, la confiance de Claude Code et, en dépôt GitHub public, l'adresse de commit) |
 | `cards list`, `cards order` | lire, ordonner les cartes de la branche cible, celles que lit le run |
 | `cards lint` | contrôler les cartes de la copie de travail, avant de les commiter |
-| `campaign open <nom> [--phase spec\|impl\|qualification]` | crée `docs/campaigns/<nom>.md` et son dossier de travail |
-| `run [--campaign N]` **H** | lance le `technical-lead` en mode run |
+| `campaign open <nom> [--phase spec\|impl\|qualification]` | crée `docs/campaigns/<nom>.md` et son dossier de travail, met la copie principale sur `campaign/<nom>` |
+| `campaign push [<nom>]` | pousse `campaign/<nom>` et ouvre sa demande de fusion, ou met à jour celle qui est ouverte |
+| `run [--campaign N]` **H** | met la copie principale sur `campaign/<nom>`, puis lance le `technical-lead` en mode run |
 | `story prepare <id>` | copie de travail et squelette d'ordre ; rien n'est commité |
 | `story open <id> [--order <brouillon>] [--no-start]` | contrôle et commite l'ordre, lance l'exécutant (sauf `--no-start`) |
 | `story status [<id>] [--watch]` | état, prochaine étape du moteur, prochain geste humain |
