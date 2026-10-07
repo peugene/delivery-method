@@ -438,6 +438,18 @@ class PushTest(RepoCase):
         calls = (self.forge_dir / "calls").read_text().splitlines()
         self.assertEqual(len([c for c in calls if c.startswith("pr create")]), 1)
 
+    def test_a_refused_description_update_is_a_note_and_the_branch_is_pushed(self):
+        git(self.repo, "switch", "--quiet", "-c", "spec/01")
+        git(self.repo, "commit", "--quiet", "--allow-empty", "-m", "Frame 01", "--trailer", "Go: frame")
+        self.push()
+        (self.forge_dir / "edit_refused").write_text("")
+        git(self.repo, "commit", "--quiet", "--allow-empty", "-m", "Review 01", "--trailer", "Go: review")
+        code, out = run_main("push")
+        self.assertEqual(code, 0, out)
+        self.assertIn("note: ", out)
+        self.assertNotIn("- review", self.requests()["spec/01"]["body"])
+        self.assertEqual(git(self.origin, "rev-parse", "spec/01"), git(self.repo, "rev-parse", "HEAD"))
+
     def test_refuses_the_default_branch_and_a_branch_not_named_after_an_increment(self):
         with self.assertRaises(core.DeliveryError) as ctx:
             run_main("push")

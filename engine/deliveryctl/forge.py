@@ -229,12 +229,7 @@ class Forge:
         try:
             if existing and existing["state"] in ("open", "opened"):
                 if refresh:
-                    if self.kind == "github":
-                        run([self._tool(), "pr", "edit", branch, "--title", title, "--body-file", body_file],
-                            cwd=self.git.cwd)
-                    else:
-                        run([self._tool(), "mr", "update", branch, "--title", title,
-                             "--description", body], cwd=self.git.cwd)
+                    self._rewrite(existing["url"], title, body_file, body)
                 return existing["url"]
             if self.kind == "github":
                 proc = run([self._tool(), "pr", "create", "--base", target, "--head", branch,
@@ -246,6 +241,19 @@ class Forge:
         finally:
             Path(body_file).unlink(missing_ok=True)
         return proc.stdout.strip().splitlines()[-1] if proc.stdout.strip() else ""
+
+    def _rewrite(self, url: str, title: str, body_file: str, body: str) -> None:
+        """Rewrite the title and description of an open merge request. Through the REST API on
+        GitHub: `gh pr edit` reads fields some GitHub versions no longer serve, and fails there. A
+        refusal is only a note: the branch is pushed, the description is not what a GO waits for."""
+        if self.kind == "github":
+            path = self.repo()["path"] or "{owner}/{repo}"
+            proc = self._call(["api", "-X", "PATCH", f"repos/{path}/pulls/{url.rstrip('/').rsplit('/', 1)[-1]}",
+                               "-f", f"title={title}", "-F", f"body=@{body_file}"])
+        else:
+            proc = self._call(["mr", "update", self.git.branch(), "--title", title, "--description", body])
+        if proc.returncode != 0:
+            print(f"note: {_refusal('the description of ' + url, proc)}; it stays as it was", flush=True)
 
     def merge(self, card_id: str, subject: str, trailers: list[tuple[str, str]], head: str = "") -> str:
         """Merge a story whose merge request is green, by a merge commit of the checked head;
