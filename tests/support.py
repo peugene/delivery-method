@@ -106,6 +106,15 @@ elif args[:1] == ["api"]:
                 out["restrictions"] = {k: [{"login" if k == "users" else "slug": v} for v in put["restrictions"][k]]
                                        for k in ("users", "teams", "apps")}
             print(json.dumps(out))
+    elif method == "PATCH" and "/pulls/" in path:
+        if (home / "edit_refused").exists():
+            sys.exit("HTTP 422: Validation Failed")
+        number = path.rsplit("/", 1)[-1]
+        fields = dict(a.split("=", 1) for a in args if "=" in a and not a.startswith("-"))
+        for req in requests.values():
+            if req["url"].endswith("/pr/" + number):
+                req.update(title=fields["title"], body=Path(fields["body"][1:]).read_text())
+        store.write_text(json.dumps(requests))
     elif method == "PATCH" and path.startswith("repos/"):
         (home / "repo_settings.json").write_text(json.dumps(body))
     else:
@@ -126,8 +135,7 @@ elif args[:2] == ["pr", "create"]:
     store.write_text(json.dumps(requests))
     print(url)
 elif args[:2] == ["pr", "edit"]:
-    requests[args[2]].update(title=opt("--title"), body=Path(opt("--body-file")).read_text())
-    store.write_text(json.dumps(requests))
+    sys.exit("GraphQL: Projects (classic) is being deprecated (repository.pullRequests.nodes.0.projectCards)")
 elif args[:2] == ["pr", "merge"]:
     branch = args[2]
     req = requests[branch]
