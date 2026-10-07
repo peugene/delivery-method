@@ -41,6 +41,11 @@ changement de contrat monte la version mineure ; après 1.0.0, la version majeur
   `init --upgrade` fait de même sur une branche protégée (`delivery-method/upgrade-<version>`).
 - Les contrôles de CI deviennent obligatoires dans la protection après la première fusion à CI
   verte de `merge` ; dans un dépôt `spec`, dès la création.
+- La description d'une demande de fusion déjà ouverte se réécrit par l'API REST de GitHub :
+  `gh pr edit` échoue avec certaines versions de `gh` ; un refus n'est plus qu'une note.
+- `init impl <spec>` lit un nom court sur la forge même quand un dossier du même nom est à côté ;
+  un chemin local s'écrit comme tel (`./`, `../`, `/`, `~`), car `delivery.toml` est partagé.
+- `doctor` ne parle plus de l'exécutant cloud dans un dépôt `spec`, qui n'implémente aucune story.
 - Documentation remise d'accord avec le plugin : équipement, phase de spécification, `spec_source`,
   réglages de machine, verbes et options (README, `CONTRACTS.md` §12.2, guide) ; plus de mention des
   anciennes questions ni de « `init` ne commite rien ».
