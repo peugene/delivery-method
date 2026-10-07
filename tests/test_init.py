@@ -340,6 +340,14 @@ class InitTest(RepoCase):
         local = self.tmp / "todo-spec"
         local.mkdir()
         self.assertEqual(init.spec_address(self.repo, str(local), "github"), str(local))
+        here = os.getcwd()
+        os.chdir(self.tmp)                  # a folder named like the spec repository, next to it
+        try:
+            self.assertEqual(init.spec_address(self.repo, "todo-spec", "github"),
+                             "https://github.com/acme/todo-spec.git")
+            self.assertEqual(init.spec_address(self.repo, "./todo-spec", "github"), str(local.resolve()))
+        finally:
+            os.chdir(here)
         git(self.repo, "remote", "set-url", "origin", "git@forge.example.org:acme/todo-kotlin.git")
         self.assertEqual(init.spec_address(self.repo, "todo-spec", "github"), "git@forge.example.org:acme/todo-spec.git")
         git(self.repo, "config", f"url.{self.origin}.pushInsteadOf", "git@forge.example.org:acme/todo-kotlin.git")

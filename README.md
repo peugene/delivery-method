@@ -75,7 +75,7 @@ mkdir todo-spec && cd todo-spec && deliveryctl init spec
 ```
 
 La disposition est l'argument : `single` (par défaut), `spec`, ou `impl <spec>` avec le dépôt de
-spec (nom court, `propriétaire/nom`, URL ou chemin local, écrit dans `spec_source`) ; un nom
+spec (nom court ou `propriétaire/nom`, lus sur la forge, URL, ou chemin local écrit comme tel : `./`, `/`, `~`), écrit dans `spec_source`) ; un nom
 supplémentaire crée le dossier et le dépôt (`deliveryctl init impl todo-spec todo-kotlin`). Dans
 une session Claude, `/delivery-method:init spec` fait de même. `init` ne pose aucune question : il
 déduit le reste (langue et visibilité des réglages de machine, forge de `origin`, commandes du
